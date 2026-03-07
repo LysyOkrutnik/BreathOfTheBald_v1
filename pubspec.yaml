@@ -1,0 +1,69 @@
+name: okrutnik_breath
+description: "Breath of the Bald - Mindfulness App"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # --- STATE MANAGEMENT ---
+  flutter_riverpod: ^2.6.1
+  riverpod_annotation: ^2.6.1
+  freezed_annotation: ^2.4.4
+  json_annotation: ^4.9.0
+  shared_preferences: ^2.3.2
+
+  # --- AUDIO & HAPTICS ---
+  just_audio: ^0.9.46
+  audio_session: ^0.1.21
+  vibration: ^2.0.1
+
+  # --- SYSTEM & HEALTH ---
+  wakelock_plus: ^1.2.8
+  flutter_background_service: ^5.0.10
+  permission_handler: ^11.4.0
+  health: ^13.0.0
+
+  # --- UI & ANIMATIONS ---
+  flutter_animate: ^4.5.2
+  auto_size_text: ^3.0.0
+  google_fonts: ^6.2.1
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+  # --- CODE GENERATORS ---
+  build_runner: ^2.4.13
+  riverpod_generator: ^2.6.3
+  freezed: ^2.5.7
+  json_serializable: ^6.9.0
+
+  # --- APP ICON ---
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/audio/
+    - assets/images/
+
+# --- LAUNCHER ICON CONFIG ---
+# Maintain flush left indentation to prevent YAML parsing errors.
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/images/icon.png"
+  min_sdk_android: 21
+
+  adaptive_icon_background: "#000000"
+  adaptive_icon_foreground: "assets/images/icon.png"
