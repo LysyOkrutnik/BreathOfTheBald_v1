@@ -40,7 +40,7 @@ class _FerrofluidWidgetState extends State<FerrofluidWidget>
   @override
   Widget build(BuildContext context) {
     const Color inhaleColor = AppTheme.breathInhale;
-    // Derive a darker, less saturated color for the exhale state.
+    // Derive a darker, less saturated color for the exhale state to create a visual contrast.
     final Color exhaleColor = Color.lerp(inhaleColor, Colors.black, 0.4)!;
 
     final Color targetColor = widget.isInhaling ? inhaleColor : exhaleColor;
@@ -53,10 +53,10 @@ class _FerrofluidWidgetState extends State<FerrofluidWidget>
         child: SizedBox(
           width: widget.size,
           height: widget.size,
-          // Animate the color transition smoothly between breathing phases.
+          // Use TweenAnimationBuilder to smoothly animate the color transition between breathing phases.
           child: TweenAnimationBuilder<Color?>(
             tween: ColorTween(end: targetColor),
-            // Synchronize the color transition duration with the scale animation.
+            // Synchronize the color transition to match the scale animation duration.
             duration: widget.duration ~/ 2,
             curve: Curves.easeInOut,
             builder: (context, animatedColor, _) {
@@ -119,39 +119,19 @@ class FerrofluidPainter extends CustomPainter {
       center: Alignment.topLeft,
       radius: 1.2,
       colors: [
-        color.withOpacity(0.9),
-        color.withOpacity(0.6),
-        color.withOpacity(0.3),
+        color.withAlpha(150),
+        color.withAlpha(80),
+        color.withAlpha(30),
       ],
       stops: const [0.0, 0.6, 1.0],
     );
 
     final paint = Paint()
       ..shader = gradient.createShader(rect)
-      ..style = PaintingStyle.fill;
+      ..style = PaintingStyle.fill
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20);
 
     canvas.drawPath(path, paint);
-
-    // Simulate a wet, glossy surface with a radial gradient overlay.
-    final reflectionPaint = Paint()
-      ..shader = RadialGradient(
-        // Position the virtual light source at the top-left.
-        center: const Alignment(-0.5, -0.5),
-        radius: 0.7,
-        colors: [
-          Colors.white.withOpacity(0.4),
-          Colors.white.withOpacity(0.0),
-        ],
-        stops: const [0.0, 0.7],
-      ).createShader(rect);
-
-    canvas.save();
-    canvas.translate(center.dx, center.dy);
-    // Scale the reflection down slightly to prevent edge bleeding outside the base path.
-    canvas.scale(0.95, 0.95);
-    canvas.translate(-center.dx, -center.dy);
-    canvas.drawPath(path, reflectionPaint);
-    canvas.restore();
   }
 
   @override

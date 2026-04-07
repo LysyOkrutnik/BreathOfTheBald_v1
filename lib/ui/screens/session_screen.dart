@@ -19,7 +19,7 @@ class SessionScreen extends ConsumerWidget {
     final state = ref.watch(sessionProvider);
     final notifier = ref.read(sessionProvider.notifier);
 
-    // Listen for the finished state to trigger navigation to the summary screen.
+    // Navigate to the summary screen when the session is marked as finished.
     ref.listen(sessionProvider, (prev, next) {
       if (next.phase == const SessionPhase.finished()) {
         Navigator.of(context).pushReplacement(
@@ -31,19 +31,19 @@ class SessionScreen extends ConsumerWidget {
     void showExitDialog() {
       showDialog(
         context: context,
-        barrierColor: Colors.black.withAlpha((255 * 0.6).round()),
+        barrierColor: Colors.black.withAlpha(153),
         builder: (context) => BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
           child: Dialog(
             backgroundColor: Colors.transparent,
             insetPadding: const EdgeInsets.all(20),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
               decoration: BoxDecoration(
-                color: const Color(0xFF121212),
+                color: Colors.white.withAlpha(13),
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: Colors.white10),
-                boxShadow: [BoxShadow(color: Colors.black.withAlpha((255 * 0.8).round()), blurRadius: 30, spreadRadius: 10)],
+                border: Border.all(color: Colors.white.withAlpha(26)),
+                boxShadow: [BoxShadow(color: Colors.black.withAlpha(204), blurRadius: 30, spreadRadius: 10)],
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -65,7 +65,7 @@ class SessionScreen extends ConsumerWidget {
       );
     }
 
-    // Calculate the scale and duration parameters for the central breathing animation.
+    // Determine the scale and duration for the central breathing animation based on the current session phase.
     bool shouldBeBig = false;
     Duration currentDuration = const Duration(seconds: 2);
     if (state.customIsBig != null) {
@@ -90,10 +90,10 @@ class SessionScreen extends ConsumerWidget {
             final bool isLandscape = orientation == Orientation.landscape;
             return Stack(
               children: [
-                // Render the particle background consistently across all viewing modes.
+                // Render the particle background, which is visible in all modes.
                 const Positioned.fill(child: ParticleBackground()),
 
-                // Route to the appropriate layout based on current state and device orientation.
+                // Conditionally render the UI based on ghost mode status and device orientation.
                 if (state.isGhostMode)
                   _buildGhostModeUI(context, notifier, shouldBeBig, currentDuration)
                 else
@@ -124,7 +124,7 @@ class SessionScreen extends ConsumerWidget {
                 height: 250,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white.withOpacity(0.05), width: 1.5),
+                  border: Border.all(color: Colors.white.withAlpha(13), width: 1.5),
                 ),
               ),
             ),
@@ -156,12 +156,10 @@ class SessionScreen extends ConsumerWidget {
               onDoubleTap: notifier.toggleGhostMode,
               onTap: () { state.phase.maybeWhen(retention: (_) => notifier.finishRetention(), orElse: () {}); },
               onLongPress: showExitDialog,
-              // Use a FittedBox to prevent clipping and ensure correct scaling in landscape bounds.
+              // Use a FittedBox to ensure the animation scales correctly within the landscape layout without clipping.
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
-                child: FittedBox(
-                  child: FerrofluidWidget(size: 300, isInhaling: shouldBeBig, duration: currentDuration),
-                ),
+                child: FerrofluidWidget(size: 300, isInhaling: shouldBeBig, duration: currentDuration),
               ),
             ),
           ),
@@ -190,6 +188,11 @@ class SessionScreen extends ConsumerWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           IconButton(icon: const Icon(Icons.close, color: Colors.white30, size: 28), onPressed: showExitDialog),
+          if (kDebugMode)
+            TextButton(
+              onPressed: notifier.finishSession,
+              child: const Text('SKIP', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            ),
           if (state.totalRounds > 1)
             Text("${L10n.get(context, 'session_round')} ${state.currentRound} / ${state.totalRounds}", style: const TextStyle(color: Colors.white54, fontSize: 12, letterSpacing: 1.2)),
         ],
@@ -205,10 +208,15 @@ class SessionScreen extends ConsumerWidget {
     if (state.customLabel != null) {
       mainText = L10n.get(context, state.customLabel!);
       subText = state.customDescription != null ? L10n.get(context, state.customDescription!) : "";
-      if (state.customLabel!.contains("inhale")) color = AppTheme.breathInhale;
-      else if (state.customLabel!.contains("exhale")) color = AppTheme.breathExhale;
-      else if (state.customLabel!.contains("fire")) color = AppTheme.danger;
-      else color = AppTheme.primary;
+      if (state.customLabel!.contains("inhale")) {
+        color = AppTheme.breathInhale;
+      } else if (state.customLabel!.contains("exhale")) {
+        color = AppTheme.breathExhale;
+      } else if (state.customLabel!.contains("fire")) {
+        color = AppTheme.danger;
+      } else {
+        color = AppTheme.primary;
+      }
     } else {
       state.phase.when(
         idle: () {},
@@ -236,7 +244,7 @@ class SessionScreen extends ConsumerWidget {
         Text(
           mainText,
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 32, fontWeight: FontWeight.w300, color: color, letterSpacing: 4.0, shadows: [Shadow(color: color.withAlpha((255 * 0.5).round()), blurRadius: 20)]),
+          style: TextStyle(fontSize: 32, fontWeight: FontWeight.w300, color: color, letterSpacing: 4.0, shadows: [Shadow(color: color.withAlpha(128), blurRadius: 20)]),
         ),
         const SizedBox(height: 10),
         Text(subText, textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white30, letterSpacing: 2.0)),
@@ -247,7 +255,7 @@ class SessionScreen extends ConsumerWidget {
             onTap: () => notifier.finishRetention(),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-              decoration: BoxDecoration(border: Border.all(color: AppTheme.primary.withAlpha((255 * 0.5).round())), borderRadius: BorderRadius.circular(30), color: AppTheme.primary.withAlpha((255 * 0.1).round())),
+              decoration: BoxDecoration(border: Border.all(color: AppTheme.primary.withAlpha(128)), borderRadius: BorderRadius.circular(30), color: AppTheme.primary.withAlpha(26)),
               child: Text(L10n.get(context, 'session_tap_to_inhale'), style: const TextStyle(color: AppTheme.primary, letterSpacing: 1.5, fontWeight: FontWeight.bold, fontSize: 12)),
             ),
           ),

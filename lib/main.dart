@@ -3,14 +3,21 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/theme.dart';
+import 'package:okrutnik_breath/core/notifications/notification_service.dart';
 import 'package:okrutnik_breath/logic/providers/locale_provider.dart';
 import 'package:okrutnik_breath/ui/screens/splash_screen.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
-void main() {
+final notificationServiceProvider = Provider((ref) => NotificationService());
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Force immersive fullscreen to prevent system UI distractions during breathing sessions.
+  // Initialize notifications
+  final notificationService = NotificationService();
+  await notificationService.init();
+
+  // Enforce immersive fullscreen to hide system UI and minimize distractions during sessions.
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
   SystemChrome.setPreferredOrientations([

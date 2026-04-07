@@ -23,7 +23,7 @@ class _ParticleBackgroundState extends State<ParticleBackground>
 
     _controller = AnimationController(
       vsync: this,
-      // Provide an arbitrary duration; particle movement relies on continuous ticker updates rather than tweening.
+      // The duration is arbitrary as the animation is continuous and not time-bound.
       duration: const Duration(seconds: 10),
     )..repeat();
   }
@@ -80,13 +80,13 @@ class _ParticlePainter extends CustomPainter {
       particle.x += particle.speedX;
       particle.y += particle.speedY;
 
-      // Wrap particles around screen boundaries to maintain a continuous visual flow.
+      // If a particle moves off-screen, wrap it to the opposite side for a seamless effect.
       if (particle.x > 1.0) particle.x = 0.0;
       if (particle.x < 0.0) particle.x = 1.0;
       if (particle.y > 1.0) particle.y = 0.0;
       if (particle.y < 0.0) particle.y = 1.0;
 
-      paint.color = Colors.white.withOpacity(particle.opacity);
+      paint.color = Colors.white.withAlpha((255 * particle.opacity).round());
       canvas.drawCircle(
         Offset(particle.x * size.width, particle.y * size.height),
         particle.size,

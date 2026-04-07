@@ -1,21 +1,25 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:okrutnik_breath/config/levels.dart';
 import 'package:okrutnik_breath/core/audio/audio_manager.dart';
 import 'package:okrutnik_breath/core/haptic/haptic_engine.dart';
 import 'package:okrutnik_breath/logic/notifiers/ramp_up_calculator.dart';
+import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/logic/states/session_state.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 final sessionProvider = StateNotifierProvider<SessionNotifier, SessionState>((ref) {
   final audioManager = ref.read(audioManagerProvider);
-  return SessionNotifier(audioManager);
+  return SessionNotifier(audioManager, ref);
 });
 
 class SessionNotifier extends StateNotifier<SessionState> {
   final AudioManager _audioManager;
   final HapticEngine _hapticEngine = HapticEngine();
+  final Ref _ref;
 
   final Stopwatch _sessionTimer = Stopwatch();
 
@@ -23,9 +27,9 @@ class SessionNotifier extends StateNotifier<SessionState> {
   bool _isSessionActive = false;
   Timer? _phaseTimer;
 
-  SessionNotifier(this._audioManager) : super(SessionState.initial());
+  SessionNotifier(this._audioManager, this._ref) : super(SessionState.initial());
 
-  /// Skip the active session and proceed directly to the summary for debugging.
+  /// Skips the current session and navigates directly to the summary screen. For debug purposes only.
   void debugSkip() {
     _finishSession();
   }
@@ -34,7 +38,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
     _isSessionActive = true;
     _currentLevel = level;
 
-    // Prevent timer duplication when rapidly restarting sessions.
+    // Prevent timer duplication if a new session is started before the old one is fully disposed.
     _phaseTimer?.cancel();
     _sessionTimer.reset();
 
@@ -50,7 +54,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
     int totalBreaths = level.totalBreaths;
     if (level.type == ExerciseType.fireBreathing) {
       final duration = level.totalDuration ?? const Duration(minutes: 3);
-      // Calculate approximate full breaths for the progress bar based on a ~700ms pace per phase.
+      // Approximate the breath count for the progress bar, assuming a ~700ms pace per phase.
       totalBreaths = (duration.inMilliseconds / 1400).floor();
     } else if (level.type == ExerciseType.boxBreathing) {
       totalBreaths = level.loopCount ?? 16;
@@ -124,20 +128,20 @@ class SessionNotifier extends StateNotifier<SessionState> {
     for (int i = 1; i <= _currentLevel!.totalBreaths; i++) {
       if (!_isSessionActive) return;
 
-      // Ensure the phase hasn't been manually overridden before proceeding.
+      // Ensure the phase has not been manually advanced (e.g., by finishing retention early).
       if (!state.phase.maybeMap(breathing: (_) => true, orElse: () => false)) return;
 
       final Duration duration = RampUpCalculator.getDuration(i - 1, pace);
       final half = duration ~/ 2;
 
       state = state.copyWith(phase: SessionPhase.breathing(breathIndex: i, isInhaling: true, currentBreathDuration: duration));
-      _playSignal(isInhale: true);
+      _playBreathSignal(isInhale: true, progress: i / _currentLevel!.totalBreaths);
       await Future.delayed(half);
 
       if (!_isSessionActive) return;
 
       state = state.copyWith(phase: SessionPhase.breathing(breathIndex: i, isInhaling: false, currentBreathDuration: duration));
-      _playSignal(isInhale: false);
+      _playBreathSignal(isInhale: false, progress: 1.0);
       await Future.delayed(half);
     }
 
@@ -145,7 +149,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
   }
 
   void _startRetention() {
-    try { _hapticEngine.playHeavyImpact(); _audioManager.playGong(); _audioManager.duckDrone(); } catch (_) {}
+    try { _hapticEngine.playRetentionPeak(); _audioManager.playGong(); _audioManager.duckDrone(); } catch (_) {}
 
     final start = DateTime.now();
     state = state.copyWith(phase: SessionPhase.retention(elapsed: Duration.zero));
@@ -216,7 +220,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
       state = state.copyWith(currentRound: 1, totalRounds: 1);
 
       _updateCustomState("session_inhale", "session_box_inhale_desc", isBig: true, isInhaling: true, duration: const Duration(seconds: 4), index: i);
-      _playSignal(isInhale: true);
+      _playBreathSignal(isInhale: true, progress: 1.0);
       await Future.delayed(const Duration(seconds: 4));
       if (!_isSessionActive) return;
 
@@ -225,7 +229,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
       if (!_isSessionActive) return;
 
       _updateCustomState("session_exhale", "session_box_exhale_desc", isBig: false, isInhaling: false, duration: const Duration(seconds: 4), index: i);
-      _playSignal(isInhale: false);
+      _playBreathSignal(isInhale: false, progress: 1.0);
       await Future.delayed(const Duration(seconds: 4));
       if (!_isSessionActive) return;
 
@@ -245,7 +249,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
       if (!_isSessionActive) return;
 
       _updateCustomState("session_inhale", "session_relax_inhale_desc", isBig: true, isInhaling: true, duration: const Duration(seconds: 4), index: i);
-      _playSignal(isInhale: true);
+      _playBreathSignal(isInhale: true, progress: 1.0);
       await Future.delayed(const Duration(seconds: 4));
       if (!_isSessionActive) return;
 
@@ -254,7 +258,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
       if (!_isSessionActive) return;
 
       _updateCustomState("session_exhale", "session_relax_exhale_desc", isBig: false, isInhaling: false, duration: const Duration(seconds: 8), index: i);
-      _playSignal(isInhale: false);
+      _playBreathSignal(isInhale: false, progress: 1.0);
       await Future.delayed(const Duration(seconds: 8));
     }
     _finishSession();
@@ -271,7 +275,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
     int cycle = 1;
     bool isInhaling = true;
 
-    // Utilize Timer.periodic to ensure timeline stability and smooth UI updates over rapid intervals.
+    // Use Timer.periodic for a stable timeline and smooth UI updates during rapid intervals.
     _phaseTimer?.cancel();
     _phaseTimer = Timer.periodic(tickDuration, (timer) {
       if (!_isSessionActive) {
@@ -288,8 +292,6 @@ class SessionNotifier extends StateNotifier<SessionState> {
         return;
       }
 
-      final timeStr = "${remaining.inMinutes}:${(remaining.inSeconds % 60).toString().padLeft(2, '0')}";
-
       state = state.copyWith(
         customLabel: isInhaling ? "session_inhale" : "session_exhale",
         customDescription: isInhaling ? "session_fire_inhale_desc" : "session_fire_exhale_desc",
@@ -302,14 +304,17 @@ class SessionNotifier extends StateNotifier<SessionState> {
       );
 
       if (isInhaling) {
-        _hapticEngine.playLightImpact();
+        _hapticEngine.playInhalePulse(cycle / (totalDuration.inMilliseconds / 700));
         try { _audioManager.playInhale(); } catch (_) {}
       } else {
+        _hapticEngine.playTick();
         try { _audioManager.playExhale(); } catch (_) {}
       }
 
       isInhaling = !isInhaling;
-      if (isInhaling) cycle++;
+      if (isInhaling) {
+        cycle++;
+      }
     });
   }
 
@@ -335,16 +340,38 @@ class SessionNotifier extends StateNotifier<SessionState> {
     );
   }
 
-  void _playSignal({required bool isInhale}) {
+  void _playBreathSignal({required bool isInhale, required double progress}) {
     try {
-      _hapticEngine.playLightImpact();
-      if (isInhale) _audioManager.playInhale(); else _audioManager.playExhale();
+      if (isInhale) {
+        _hapticEngine.playInhalePulse(progress);
+        _audioManager.playInhale();
+      } else {
+        _hapticEngine.playTick();
+        _audioManager.playExhale();
+      }
     } catch (_) {}
   }
 
-  // Handle successful session completion and transition to the summary view.
+  // Finalize the session and prepare for navigation to the summary screen.
   void _finishSession() {
     _sessionTimer.stop();
+
+    // Update gamification stats
+    if (_currentLevel != null) {
+      final gamificationService = _ref.read(gamificationServiceProvider);
+      final totalRetention = state.retentionLogs.fold<int>(0, (prev, dur) => prev + dur.inSeconds);
+
+      gamificationService.updateXpAndLevel(
+        breathCount: _currentLevel!.totalBreaths * state.totalRounds,
+        retentionSeconds: totalRetention,
+        multiplier: 1.5,
+      );
+      gamificationService.updateStreak();
+
+      // Save session to database
+      _saveSessionToDatabase(totalRetention);
+    }
+
     state = state.copyWith(
       phase: const SessionPhase.finished(),
       sessionDuration: _sessionTimer.elapsed,
@@ -352,7 +379,36 @@ class SessionNotifier extends StateNotifier<SessionState> {
     stopSession(resetState: false);
   }
 
-  // Clean up the active state and gracefully return to the menu when explicitly cancelled.
+  Future<void> _saveSessionToDatabase(int totalRetention) async {
+    try {
+      if (_currentLevel == null || state.sessionDuration == null) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      final sessionsList = prefs.getStringList('sessions') ?? [];
+
+      final sessionData = {
+        'levelKey': _currentLevel!.key,
+        'timestamp': DateTime.now().toIso8601String(),
+        'duration': state.sessionDuration!.inSeconds,
+        'rounds': state.totalRounds,
+        'retentionSeconds': totalRetention,
+      };
+
+      sessionsList.add(jsonEncode(sessionData));
+      final success = await prefs.setStringList('sessions', sessionsList);
+
+      if (kDebugMode) {
+        print('Session saved: $success, Total sessions: ${sessionsList.length}');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error saving session: $e');
+      }
+    }
+  }
+
+
+  // Clean up resources and timers when the session is explicitly stopped or cancelled.
   void stopSession({bool resetState = true}) {
     _isSessionActive = false;
     _sessionTimer.stop();
@@ -360,7 +416,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
     WakelockPlus.disable();
     _audioManager.stopDrone();
 
-    // Trigger UI removal by resetting to the initial state.
+    // Reset the state to clear the UI and prevent stale data from persisting.
     if (resetState) state = SessionState.initial();
   }
 

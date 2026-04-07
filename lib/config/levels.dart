@@ -9,17 +9,18 @@ class LevelData {
   final String title;
   final String subtitle;
   final ExerciseType type;
+  final String key;
 
-  // Configure parameters specific to the Wim Hof method.
+  // Parameters specific to the Wim Hof method.
   final int totalRounds;
   final int totalBreaths;
   final Duration breathPace;
 
-  // Configure parameters for loop-based or time-boxed exercises.
+  // Parameters for loop-based or time-boxed exercises.
   final int? loopCount;
   final Duration? totalDuration;
 
-  // Define UI presentation mapping.
+  // UI presentation mapping.
   final Color color;
   final String instructionTitleKey;
   final String instructionDescriptionKey;
@@ -29,6 +30,7 @@ class LevelData {
     required this.title,
     required this.subtitle,
     required this.type,
+    required this.key,
     this.totalRounds = 0,
     this.totalBreaths = 0,
     this.breathPace = Duration.zero,
@@ -43,6 +45,7 @@ class LevelData {
   static const Map<String, LevelData> levels = {
     // --- WIM HOF ---
     'mild': LevelData(
+      key: 'mild',
       title: "level_novice",
       subtitle: "pace_calm",
       type: ExerciseType.wimHof,
@@ -62,6 +65,7 @@ class LevelData {
       ],
     ),
     'strong': LevelData(
+      key: 'strong',
       title: "level_warrior",
       subtitle: "pace_power",
       type: ExerciseType.wimHof,
@@ -81,6 +85,7 @@ class LevelData {
       ],
     ),
     'beast': LevelData(
+      key: 'beast',
       title: "level_beast",
       subtitle: "pace_fire",
       type: ExerciseType.wimHof,
@@ -100,6 +105,7 @@ class LevelData {
       ],
     ),
     'guru': LevelData(
+      key: 'guru',
       title: "level_okrutnik",
       subtitle: "pace_extreme",
       type: ExerciseType.wimHof,
@@ -119,8 +125,9 @@ class LevelData {
     ),
 
     // --- AUTOMATED EXERCISES ---
-    // Group automated sessions that require no user input during execution.
+    // Sessions that run automatically without user input.
     'box': LevelData(
+      key: 'box',
       title: "level_sniper",
       subtitle: "desc_focus",
       type: ExerciseType.boxBreathing,
@@ -139,10 +146,11 @@ class LevelData {
       ],
     ),
     'relax': LevelData(
+      key: 'relax',
       title: "level_relax",
       subtitle: "desc_sleep",
       type: ExerciseType.relax478,
-      loopCount: 32, // Target an approximate 10-minute session length.
+      loopCount: 32, // Approximate a 10-minute session.
       color: Color(0xFFBA68C8),
       instructionTitleKey: "intro_title_relax",
       instructionDescriptionKey: "intro_desc_relax",
@@ -156,6 +164,7 @@ class LevelData {
       ],
     ),
     'fire': LevelData(
+      key: 'fire',
       title: "level_bhastrika",
       subtitle: "desc_fire",
       type: ExerciseType.fireBreathing,

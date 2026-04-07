@@ -11,7 +11,7 @@ class SummaryScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Read the state once, as the session is finished and the state is now immutable.
+    // Use ref.read for immutable state, as the session is finished and will not change.
     final state = ref.read(sessionProvider);
 
     final duration = state.sessionDuration ?? Duration.zero;
@@ -43,12 +43,21 @@ class SummaryScreen extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  Text(
-                    L10n.get(context, 'summary_subtitle'),
+                  RichText(
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.6),
-                      fontSize: 16,
+                    text: TextSpan(
+                      style: TextStyle(
+                        color: Colors.white.withAlpha(153),
+                        fontSize: 16,
+                      ),
+                      children: [
+                        TextSpan(text: "${L10n.get(context, 'summary_great_job')}, "),
+                        TextSpan(
+                          text: L10n.get(context, 'summary_okrutnik'),
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primary),
+                        ),
+                        const TextSpan(text: "."),
+                      ],
                     ),
                   ),
 
@@ -56,13 +65,13 @@ class SummaryScreen extends ConsumerWidget {
 
                   _buildStatRow(context, Icons.timer, 'summary_stat_duration', durationStr),
 
-                  // Hide the round counter for single-round exercises.
+                  // Conditionally display the round counter only for multi-round sessions.
                   if (state.totalRounds > 1) ...[
                     const SizedBox(height: 20),
                     _buildStatRow(context, Icons.all_inclusive, 'summary_stat_rounds', "${state.totalRounds}"),
                   ],
 
-                  // Render retention logs for exercises that track breath holds.
+                  // Display retention times only if the session included breath holds.
                   if (state.retentionLogs.isNotEmpty) ...[
                     const SizedBox(height: 30),
                     Text(
@@ -82,7 +91,7 @@ class SummaryScreen extends ConsumerWidget {
                         return Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.05),
+                            color: Colors.white.withAlpha(13),
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(color: Colors.white10),
                           ),
@@ -125,7 +134,7 @@ class SummaryScreen extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: Colors.white.withAlpha(13),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(

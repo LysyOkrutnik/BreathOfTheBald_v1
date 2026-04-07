@@ -4,36 +4,40 @@ import 'package:vibration/vibration.dart';
 
 class HapticEngine {
   Future<bool> get hasVibrator async {
-    // Safeguard against potential null returns from the Vibration plugin.
-    return (await Vibration.hasVibrator()) ?? false;
+    try {
+      final result = await Vibration.hasVibrator();
+      return result == true;
+    } catch (_) {
+      return false;
+    }
   }
 
-  /// Trigger a light haptic impact for inhale/exhale cues.
-  Future<void> playLightImpact() async {
+  /// Triggers a light haptic impact, suitable for inhale/exhale cues.
+  Future<void> playTick() async {
     try {
-      HapticFeedback.lightImpact();
       if (await hasVibrator) {
-        // Provide a short vibration fallback for devices lacking native haptic engine support.
-        Vibration.vibrate(duration: 50);
+        Vibration.vibrate(duration: 20, amplitude: 80);
+      } else {
+        HapticFeedback.lightImpact();
       }
     } catch (e) {
       debugPrint("Vibration error: $e");
     }
   }
 
-  /// Trigger a heavy haptic impact for round-end or retention start cues.
-  Future<void> playHeavyImpact() async {
+  /// Triggers a heavy haptic impact, suitable for round-end or retention start cues.
+  Future<void> playRetentionPeak() async {
     try {
       HapticFeedback.heavyImpact();
       if (await hasVibrator) {
-        Vibration.vibrate(duration: 500);
+        Vibration.vibrate(duration: 400, amplitude: 255);
       }
     } catch (e) {
       debugPrint("Vibration error: $e");
     }
   }
 
-  /// Trigger a heartbeat vibration pattern for Ghost Mode.
+  /// Triggers a heartbeat vibration pattern, used as a periodic cue in Ghost Mode.
   Future<void> playHeartbeat() async {
     try {
       HapticFeedback.mediumImpact();
@@ -46,7 +50,19 @@ class HapticEngine {
   }
 
   Future<void> vibrateBreath(double progress) async {
-    // Ignore the progress parameter and default to a simple light impact.
-    playLightImpact();
+    // The 'progress' parameter is ignored in favor of a simple light impact for this implementation.
+    playTick();
+  }
+
+  Future<void> playInhalePulse(double progress) async {
+    try {
+      if (await hasVibrator) {
+        // Scale intensity from 50 to 150 based on inhale progress.
+        final amplitude = (50 + (progress * 100)).clamp(50, 150).toInt();
+        Vibration.vibrate(duration: 100, amplitude: amplitude);
+      }
+    } catch (e) {
+      debugPrint("Vibration error: $e");
+    }
   }
 }

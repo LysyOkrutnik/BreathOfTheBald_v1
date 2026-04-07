@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:okrutnik_breath/config/theme.dart';
+import 'package:okrutnik_breath/core/notifications/notification_service.dart';
 import 'package:okrutnik_breath/ui/screens/menu_screen.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -17,6 +19,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
+    _initApp();
 
     _animationController = AnimationController(
       vsync: this,
@@ -29,7 +32,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
     _animationController.forward();
 
-    // Automatically transition to the MenuScreen after the splash duration completes.
+    // Navigate to MenuScreen after the splash animation completes.
     Timer(const Duration(seconds: 4), () {
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -43,6 +46,16 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         );
       }
     });
+  }
+
+  Future<void> _initApp() async {
+    // Request notification permission
+    final status = await Permission.notification.request();
+    if (status.isGranted) {
+      final notificationService = NotificationService();
+      await notificationService.init();
+      await notificationService.scheduleDailyReminder();
+    }
   }
 
   @override
@@ -63,16 +76,16 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
             fit: BoxFit.cover,
           ),
 
-          // Apply a subtle gradient overlay to ensure text legibility against potentially bright backgrounds.
+          // Add a gradient overlay to enhance text visibility over the background image.
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Colors.black.withOpacity(0.3),
+                  Colors.black.withAlpha(77),
                   Colors.transparent,
-                  Colors.black.withOpacity(0.6),
+                  Colors.black.withAlpha(153),
                 ],
               ),
             ),
@@ -97,7 +110,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                       height: 1.2,
                       shadows: [
                         Shadow(
-                          color: Colors.black.withOpacity(0.8),
+                          color: Colors.black.withAlpha(204),
                           offset: const Offset(0, 4),
                           blurRadius: 12,
                         ),
@@ -118,7 +131,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                       letterSpacing: 2.0,
                       shadows: [
                         Shadow(
-                          color: Colors.black.withOpacity(0.8),
+                          color: Colors.black.withAlpha(204),
                           offset: const Offset(0, 2),
                           blurRadius: 6,
                         ),

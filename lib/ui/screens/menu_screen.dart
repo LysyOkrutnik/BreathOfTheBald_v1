@@ -6,6 +6,8 @@ import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/logic/providers/locale_provider.dart';
 import 'package:okrutnik_breath/ui/screens/instruction_screen.dart';
 import 'package:okrutnik_breath/ui/screens/intro_screen.dart';
+import 'package:okrutnik_breath/ui/screens/history_screen.dart';
+import 'package:okrutnik_breath/ui/screens/scheduler_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/particle_background.dart';
 
 class MenuScreen extends ConsumerWidget {
@@ -27,9 +29,9 @@ class MenuScreen extends ConsumerWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withOpacity(0.3),
+                    Colors.black.withAlpha(77),
                     Colors.transparent,
-                    Colors.black.withOpacity(0.6),
+                    Colors.black.withAlpha(153),
                   ],
                 ),
               ),
@@ -151,7 +153,7 @@ class MenuScreen extends ConsumerWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 10),
                       decoration: BoxDecoration(
-                        border: Border.all(color: AppTheme.textDim.withOpacity(0.3)),
+                        border: Border.all(color: AppTheme.textDim.withAlpha(77)),
                         borderRadius: BorderRadius.circular(30),
                       ),
                       child: Row(
@@ -165,6 +167,54 @@ class MenuScreen extends ConsumerWidget {
                     ),
                   ),
                 ],
+              ),
+            ),
+
+            const SizedBox(height: 15),
+
+            Center(
+              child: InkWell(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (context) => const HistoryScreen()),
+                  );
+                },
+                borderRadius: BorderRadius.circular(30),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 10),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.history, color: AppTheme.textDim, size: 16),
+                      SizedBox(width: 8),
+                      Text("HISTORIA", style: TextStyle(color: AppTheme.textDim, fontSize: 12, letterSpacing: 1.0)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 15),
+
+            Center(
+              child: InkWell(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (context) => const SchedulerScreen()),
+                  );
+                },
+                borderRadius: BorderRadius.circular(30),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 10),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.schedule, color: AppTheme.textDim, size: 16),
+                      SizedBox(width: 8),
+                      Text("HARMONOGRAM", style: TextStyle(color: AppTheme.textDim, fontSize: 12, letterSpacing: 1.0)),
+                    ],
+                  ),
+                ),
               ),
             ),
 
@@ -230,7 +280,7 @@ class MenuScreen extends ConsumerWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                       decoration: BoxDecoration(
-                        border: Border.all(color: AppTheme.textDim.withOpacity(0.3)),
+                        border: Border.all(color: AppTheme.textDim.withAlpha(77)),
                         borderRadius: BorderRadius.circular(30),
                       ),
                       child: Row(
@@ -307,75 +357,81 @@ class MenuScreen extends ConsumerWidget {
       desc = "3 min • ${L10n.get(context, 'desc_pure_energy')}";
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            level.color.withOpacity(0.15),
-            Colors.transparent,
-          ],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: level.color.withOpacity(0.3), width: 1),
-      ),
+    return Hero(
+      tag: 'level_card_${level.key}',
       child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (context) => IntroScreen(level: level)),
-            );
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
-            child: Row(
-              children: [
-                Container(
-                  width: 8, height: 8,
-                  decoration: BoxDecoration(color: level.color, shape: BoxShape.circle, boxShadow: [BoxShadow(color: level.color, blurRadius: 6)]),
-                ),
-                const SizedBox(width: 20),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        type: MaterialType.transparency,
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                level.color.withAlpha(38),
+                Colors.transparent,
+              ],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: level.color.withAlpha(77), width: 1),
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (context) => IntroScreen(level: level)),
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 8, height: 8,
+                      decoration: BoxDecoration(color: level.color, shape: BoxShape.circle, boxShadow: [BoxShadow(color: level.color, blurRadius: 6)]),
+                    ),
+                    const SizedBox(width: 20),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                              title,
-                              style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w500,
-                                  color: AppTheme.textLight,
-                                  letterSpacing: 2.0
-                              )
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                  title,
+                                  style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppTheme.textLight,
+                                      letterSpacing: 2.0
+                                  )
+                              ),
+                              Text(
+                                  pace,
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: level.color
+                                  )
+                              ),
+                            ],
                           ),
+                          const SizedBox(height: 4),
                           Text(
-                              pace,
-                              style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: level.color
-                              )
+                            desc,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.textDim.withAlpha(179),
+                            ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        desc,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppTheme.textDim.withOpacity(0.7),
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),

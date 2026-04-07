@@ -4,5 +4,5 @@ class AppAssets {
   static const String background = '$_audioBase/background.mp3';
   static const String inhale = '$_audioBase/inhale.mp3';
   static const String exhale = '$_audioBase/exhale.mp3';
-  static const String gong = '$_audioBase/gong.mp3';             // Signal the end of a round.
+  static const String gong = '$_audioBase/gong.mp3'; // Signals the end of a round.
 }

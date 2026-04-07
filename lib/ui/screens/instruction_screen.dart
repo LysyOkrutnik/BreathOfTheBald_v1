@@ -20,9 +20,9 @@ class InstructionScreen extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withOpacity(0.3),
+                    Colors.black.withAlpha(77),
                     Colors.transparent,
-                    Colors.black.withOpacity(0.8),
+                    Colors.black.withAlpha(204),
                   ],
                 ),
               ),
@@ -256,9 +256,9 @@ class InstructionScreen extends StatelessWidget {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: Colors.white.withAlpha(13),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withAlpha(77)),
       ),
       child: Theme(
         data: ThemeData(dividerColor: Colors.transparent),
@@ -270,7 +270,7 @@ class InstructionScreen extends StatelessWidget {
           leading: Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
+              color: color.withAlpha(38),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: color, size: 28),
@@ -286,7 +286,7 @@ class InstructionScreen extends StatelessWidget {
           ),
           subtitle: Text(
             L10n.get(context, subtitleKey),
-            style: TextStyle(color: color.withOpacity(0.8), fontSize: 12),
+            style: TextStyle(color: color.withAlpha(204), fontSize: 12),
           ),
           children: [
             Text(L10n.get(context, descriptionKey), style: const TextStyle(color: Colors.white70, height: 1.5, fontSize: 14)),

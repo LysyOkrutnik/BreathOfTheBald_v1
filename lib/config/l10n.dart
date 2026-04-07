@@ -16,12 +16,12 @@ class L10n {
     }
   }
 
-  static String get(BuildContext context, String key) {
+    static String get(BuildContext context, String key) {
     final locale = Localizations.localeOf(context).languageCode;
     final map = locale == 'en' ? _en : _pl;
-    // Fall back to returning the key itself if the translation mapping is missing.
+    // Fallback to the key itself if a translation is missing.
     return map[key] ?? key;
-  }
+    }
 
   static final Map<String, String> _pl = {
     'menu_title_1': "BREATH",
@@ -219,6 +219,20 @@ class L10n {
     'summary_retention_times': "CZASY RETENCJI",
     'summary_retention_round': "Runda",
     'summary_back_to_menu': "WRÓĆ DO MENU",
+    'summary_great_job': "Świetna robota",
+    'summary_okrutnik': "Okrutniku",
+    'history_title': "HISTORIA SESJI",
+    'history_empty': "Brak zapisanych sesji",
+    'history_stat_level': "POZIOM",
+    'history_stat_time': "CZAS",
+    'history_stat_date': "DATA",
+    'scheduler_title': "PLANOWANIE ĆWICZEŃ",
+    'scheduler_select_exercise': "WYBIERZ ĆWICZENIE",
+    'scheduler_choose_level': "Wybierz ćwiczenie",
+    'scheduler_select_time': "GODZINA ALARMU",
+    'scheduler_enable_notifications': "Włącz powiadomienia",
+    'scheduler_save': "ZAPISZ HARMONOGRAM",
+    'scheduler_saved': "Harmonogram zapisany",
   };
 
   static final Map<String, String> _en = {
@@ -417,5 +431,22 @@ class L10n {
     'summary_retention_times': "RETENTION TIMES",
     'summary_retention_round': "Round",
     'summary_back_to_menu': "BACK TO MENU",
+    'summary_great_job': "Great job",
+    'summary_okrutnik': "Okrutnik",
+    'history_title': "SESSION HISTORY",
+    'history_empty': "No recorded sessions",
+    'history_stat_level': "LEVEL",
+    'history_stat_time': "TIME",
+    'history_stat_date': "DATE",
+    'scheduler_title': "SCHEDULE EXERCISES",
+    'scheduler_select_exercise': "SELECT EXERCISE",
+    'scheduler_choose_level': "Choose an exercise",
+    'scheduler_select_time': "ALARM TIME",
+    'scheduler_enable_notifications': "Enable notifications",
+    'scheduler_save': "SAVE SCHEDULE",
+    'scheduler_saved': "Schedule saved",
   };
 }
+
+
+
