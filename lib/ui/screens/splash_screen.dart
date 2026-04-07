@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/core/notifications/notification_service.dart';
 import 'package:okrutnik_breath/ui/screens/menu_screen.dart';
@@ -19,7 +20,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
-    _initApp();
+    // Start initialization without blocking the UI thread or navigation timer.
+    unawaited(_initApp());
 
     _animationController = AnimationController(
       vsync: this,
@@ -33,7 +35,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     _animationController.forward();
 
     // Navigate to MenuScreen after the splash animation completes.
-    Timer(const Duration(seconds: 4), () {
+    Timer(const Duration(seconds: 2), () {
       if (mounted) {
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
@@ -49,12 +51,25 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   }
 
   Future<void> _initApp() async {
-    // Request notification permission
-    final status = await Permission.notification.request();
-    if (status.isGranted) {
+    try {
       final notificationService = NotificationService();
       await notificationService.init();
-      await notificationService.scheduleDailyReminder();
+      
+      // Use the new robust internal permission request method
+      final status = await notificationService.requestPermissions();
+
+      if (status) {
+        await notificationService.scheduleDailyReminder();
+        
+        // Force register app in Android settings by sending a welcome notification if it's the first run
+        final prefs = await SharedPreferences.getInstance();
+        if (prefs.getBool('first_run_notification') != true) {
+          await notificationService.showWelcomeNotification();
+          await prefs.setBool('first_run_notification', true);
+        }
+      }
+    } catch (e) {
+      debugPrint("⚠️ INIT ERROR: $e");
     }
   }
 

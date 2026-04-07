@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,10 +13,6 @@ final notificationServiceProvider = Provider((ref) => NotificationService());
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Initialize notifications
-  final notificationService = NotificationService();
-  await notificationService.init();
 
   // Enforce immersive fullscreen to hide system UI and minimize distractions during sessions.
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
@@ -32,6 +29,9 @@ void main() async {
       child: MyApp(),
     ),
   );
+
+  // Initialize notification service early in the background to register channels with Android.
+  unawaited(NotificationService().init());
 }
 
 class MyApp extends ConsumerWidget {

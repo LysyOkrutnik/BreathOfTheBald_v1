@@ -16,12 +16,11 @@ class L10n {
     }
   }
 
-    static String get(BuildContext context, String key) {
-    final locale = Localizations.localeOf(context).languageCode;
+  static String get(BuildContext context, String key) {
+    final locale = Localizations.maybeLocaleOf(context)?.languageCode ?? 'pl';
     final map = locale == 'en' ? _en : _pl;
-    // Fallback to the key itself if a translation is missing.
     return map[key] ?? key;
-    }
+  }
 
   static final Map<String, String> _pl = {
     'menu_title_1': "BREATH",
@@ -31,6 +30,8 @@ class L10n {
     'menu_section_classic': "METODA KLASYCZNA",
     'menu_section_special': "ĆWICZENIA SPECJALNE",
     'menu_guide_button': "PRZEWODNIK",
+    'menu_history_button': "HISTORIA",
+    'menu_schedule_button': "HARMONOGRAM",
     'level_novice': "NOWICJUSZ",
     'level_warrior': "WOJOWNIK",
     'level_beast': "BESTIA",
@@ -65,6 +66,7 @@ class L10n {
     'session_exit_dialog_finish': "ZAKOŃCZ",
     'session_ghost_mode_title': "TRYB DUCHA",
     'session_ghost_mode_subtitle': "Naciśnij dwukrotnie, aby wybudzić",
+    'session_skip_button': "POMIŃ",
     'start_session_button': "ROZPOCZNIJ SESJĘ",
     'guide_title': "KOMPENDIUM WIEDZY",
     'guide_select_topic': "Wybierz temat, aby poznać szczegóły:",
@@ -76,7 +78,7 @@ class L10n {
     'guide_app_usage_benefit3': "Intuicyjna wizualizacja płuc",
     'guide_app_usage_step1': "GHOST MODE: Kliknij dwukrotnie (Double Tap) w dowolnym miejscu, aby wygasić ekran. Powtórz, aby wybudzić.",
     'guide_app_usage_step2': "STEROWANIE: W Metodzie Klasycznej (Wim Hof) czas wstrzymania zależy od Ciebie. DOTKNIJ EKRANU, gdy poczujesz potrzebę wdechu.",
-    'guide_app_usage_step3': "GLUTEK: Jego rozmiar imituje objętość płuc. Rośnie = Wdech, Maleje = Wydech.",
+    'guide_app_usage_step3': "GLUTEK: Jego rozmiar imituje objtość płuc. Rośnie = Wdech, Maleje = Wydech.",
     'guide_app_usage_step4': "WYJŚCIE: Przytrzymaj ekran (Long Press) lub kliknij 'X', aby przerwać sesję.",
     'guide_classic_method_title': "METODA KLASYCZNA",
     'guide_classic_method_subtitle': "Odporność • Energia • Reset",
@@ -226,13 +228,32 @@ class L10n {
     'history_stat_level': "POZIOM",
     'history_stat_time': "CZAS",
     'history_stat_date': "DATA",
+    'history_weekly_activity': "TYGODNIOWA AKTYWNOŚĆ",
+    'history_last_7_days': "Ostatnie 7 dni",
+    'history_stat_hold': "Wstrzymanie",
+    'day_m': "P",
+    'day_t': "W",
+    'day_w': "Ś",
+    'day_th': "C",
+    'day_f': "P",
+    'day_sa': "S",
+    'day_su': "N",
     'scheduler_title': "PLANOWANIE ĆWICZEŃ",
     'scheduler_select_exercise': "WYBIERZ ĆWICZENIE",
     'scheduler_choose_level': "Wybierz ćwiczenie",
     'scheduler_select_time': "GODZINA ALARMU",
+    'scheduler_select_date': "DATA ALARMU",
     'scheduler_enable_notifications': "Włącz powiadomienia",
     'scheduler_save': "ZAPISZ HARMONOGRAM",
     'scheduler_saved': "Harmonogram zapisany",
+    'scheduler_no_schedules': "Brak zaplanowanych treningów",
+    'scheduler_at': "o",
+    'notification_title': "CZAS NA ODDECH, BESTIO!",
+    'notification_body': "Twoja sesja czeka. Gotowy na głęboki reset?",
+    'exit_dialog_title': "OPUŚCIĆ APLIKACJĘ?",
+    'exit_dialog_message': "Czy na pewno chcesz wyjść z Breath of the Bald?",
+    'exit_dialog_cancel': "ZOSTAŃ",
+    'exit_dialog_confirm': "WYJDŹ",
   };
 
   static final Map<String, String> _en = {
@@ -243,6 +264,8 @@ class L10n {
     'menu_section_classic': "CLASSIC METHOD",
     'menu_section_special': "SPECIAL EXERCISES",
     'menu_guide_button': "GUIDE",
+    'menu_history_button': "HISTORY",
+    'menu_schedule_button': "SCHEDULE",
     'level_novice': "NOVICE",
     'level_warrior': "WARRIOR",
     'level_beast': "BEAST",
@@ -277,6 +300,7 @@ class L10n {
     'session_exit_dialog_finish': "FINISH",
     'session_ghost_mode_title': "GHOST MODE",
     'session_ghost_mode_subtitle': "Double tap to wake",
+    'session_skip_button': "SKIP",
     'start_session_button': "START SESSION",
     'guide_title': "KNOWLEDGE COMPENDIUM",
     'guide_select_topic': "Select a topic to learn more:",
@@ -438,15 +462,31 @@ class L10n {
     'history_stat_level': "LEVEL",
     'history_stat_time': "TIME",
     'history_stat_date': "DATE",
+    'history_weekly_activity': "WEEKLY ACTIVITY",
+    'history_last_7_days': "Last 7 days",
+    'history_stat_hold': "Hold",
+    'day_m': "M",
+    'day_t': "T",
+    'day_w': "W",
+    'day_th': "T",
+    'day_f': "F",
+    'day_sa': "S",
+    'day_su': "S",
     'scheduler_title': "SCHEDULE EXERCISES",
     'scheduler_select_exercise': "SELECT EXERCISE",
     'scheduler_choose_level': "Choose an exercise",
     'scheduler_select_time': "ALARM TIME",
+    'scheduler_select_date': "ALARM DATE",
     'scheduler_enable_notifications': "Enable notifications",
     'scheduler_save': "SAVE SCHEDULE",
     'scheduler_saved': "Schedule saved",
+    'scheduler_no_schedules': "No scheduled sessions",
+    'scheduler_at': "at",
+    'notification_title': "TIME TO BREATHE, BEAST!",
+    'notification_body': "Your session is waiting. Ready for a deep reset?",
+    'exit_dialog_title': "EXIT APP?",
+    'exit_dialog_message': "Are you sure you want to exit Breath of the Bald?",
+    'exit_dialog_cancel': "STAY",
+    'exit_dialog_confirm': "EXIT",
   };
 }
-
-
-

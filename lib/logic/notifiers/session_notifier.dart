@@ -368,7 +368,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
       );
       gamificationService.updateStreak();
 
-      // Save session to database
+      // Save session to database (this is the final, full save)
       _saveSessionToDatabase(totalRetention);
     }
 
@@ -376,12 +376,16 @@ class SessionNotifier extends StateNotifier<SessionState> {
       phase: const SessionPhase.finished(),
       sessionDuration: _sessionTimer.elapsed,
     );
-    stopSession(resetState: false);
+    // Call stopSession but with saveProgress: false to avoid double saving.
+    stopSession(resetState: false, saveProgress: false);
   }
 
   Future<void> _saveSessionToDatabase(int totalRetention) async {
     try {
-      if (_currentLevel == null || state.sessionDuration == null) return;
+      if (_currentLevel == null) return;
+      
+      final actualDuration = state.sessionDuration ?? _sessionTimer.elapsed;
+      if (actualDuration.inSeconds < 5) return; // Don't save very short accidental sessions
 
       final prefs = await SharedPreferences.getInstance();
       final sessionsList = prefs.getStringList('sessions') ?? [];
@@ -389,8 +393,8 @@ class SessionNotifier extends StateNotifier<SessionState> {
       final sessionData = {
         'levelKey': _currentLevel!.key,
         'timestamp': DateTime.now().toIso8601String(),
-        'duration': state.sessionDuration!.inSeconds,
-        'rounds': state.totalRounds,
+        'duration': actualDuration.inSeconds,
+        'rounds': state.currentRound, // Use current round for interrupted sessions
         'retentionSeconds': totalRetention,
       };
 
@@ -409,7 +413,13 @@ class SessionNotifier extends StateNotifier<SessionState> {
 
 
   // Clean up resources and timers when the session is explicitly stopped or cancelled.
-  void stopSession({bool resetState = true}) {
+  void stopSession({bool resetState = true, bool saveProgress = true}) {
+    if (_isSessionActive && saveProgress) {
+      // Save partial progress before stopping
+      final totalRetention = state.retentionLogs.fold<int>(0, (prev, dur) => prev + dur.inSeconds);
+      _saveSessionToDatabase(totalRetention);
+    }
+
     _isSessionActive = false;
     _sessionTimer.stop();
     _phaseTimer?.cancel();

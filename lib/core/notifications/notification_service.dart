@@ -1,14 +1,27 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
+import 'dart:math';
 
 class NotificationService {
+  static final NotificationService _instance = NotificationService._internal();
+  factory NotificationService() => _instance;
+  NotificationService._internal();
+
   final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
+  bool _isInitialized = false;
 
   Future<void> init() async {
+    if (_isInitialized) return;
+
+    tz_data.initializeTimeZones();
+
+    // Use ic_launcher as the resource name. This MUST exist in mipmap folders.
     const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+        AndroidInitializationSettings('ic_launcher');
 
     final DarwinInitializationSettings initializationSettingsIOS =
         DarwinInitializationSettings(
@@ -27,12 +40,110 @@ class NotificationService {
       },
     );
 
-    // Initialize timezone data
-    tz_data.initializeTimeZones();
+    await _createNotificationChannels();
+
+    _isInitialized = true;
+    debugPrint('✅ Notification Service Initialized');
+  }
+
+  Future<void> _createNotificationChannels() async {
+    final androidPlugin = _notificationsPlugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+
+    if (androidPlugin == null) return;
+
+    const AndroidNotificationChannel workoutChannel = AndroidNotificationChannel(
+      'scheduled_workout_channel_id',
+      'Scheduled Workouts',
+      description: 'Alerts for your planned breathing sessions.',
+      importance: Importance.max,
+      playSound: true,
+      enableVibration: true,
+      showBadge: true,
+    );
+
+    const AndroidNotificationChannel dailyChannel = AndroidNotificationChannel(
+      'daily_reminder_channel_id',
+      'Daily Reminders',
+      description: 'Daily motivation to breathe.',
+      importance: Importance.high,
+      playSound: true,
+      enableVibration: true,
+      showBadge: true,
+    );
+
+    await androidPlugin.createNotificationChannel(workoutChannel);
+    await androidPlugin.createNotificationChannel(dailyChannel);
+  }
+
+  Future<bool> requestPermissions() async {
+    // 1. Request POST_NOTIFICATIONS (Android 13+)
+    final notificationStatus = await Permission.notification.request();
+    
+    // 2. Request EXACT_ALARM (Android 12+)
+    if (await Permission.scheduleExactAlarm.isDenied) {
+      await Permission.scheduleExactAlarm.request();
+    }
+
+    // 3. Request IGNORE_BATTERY_OPTIMIZATIONS
+    if (await Permission.ignoreBatteryOptimizations.isDenied) {
+      await Permission.ignoreBatteryOptimizations.request();
+    }
+    
+    return notificationStatus.isGranted;
+  }
+
+  Future<void> scheduleReminderAtDateTime(DateTime dateTime, String title, String body, int id) async {
+    try {
+      if (!_isInitialized) await init();
+      
+      final scheduledDate = tz.TZDateTime.from(dateTime, tz.local);
+      if (scheduledDate.isBefore(tz.TZDateTime.now(tz.local))) return;
+
+      final Int64List vibrationPattern = Int64List.fromList([0, 500, 200, 500]);
+
+      await _notificationsPlugin.zonedSchedule(
+        id,
+        title,
+        body,
+        scheduledDate,
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            'scheduled_workout_channel_id',
+            'Scheduled Workouts',
+            channelDescription: 'Alerts for your planned breathing sessions.',
+            importance: Importance.max,
+            priority: Priority.max,
+            autoCancel: true,
+            fullScreenIntent: true,
+            category: AndroidNotificationCategory.alarm,
+            visibility: NotificationVisibility.public,
+            vibrationPattern: vibrationPattern,
+            enableLights: true,
+            color: Color(0xFF4DB6AC),
+            ledColor: Color(0xFF4DB6AC),
+            ledOnMs: 1000,
+            ledOffMs: 500,
+            styleInformation: BigTextStyleInformation(body),
+          ),
+          iOS: const DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+            interruptionLevel: InterruptionLevel.critical,
+          ),
+        ),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      );
+    } catch (e) {
+      debugPrint('❌ Error scheduling: $e');
+    }
   }
 
   Future<void> scheduleDailyReminder() async {
     try {
+      if (!_isInitialized) await init();
       await _notificationsPlugin.zonedSchedule(
         0,
         'The void is calling.',
@@ -41,69 +152,51 @@ class NotificationService {
         const NotificationDetails(
           android: AndroidNotificationDetails(
             'daily_reminder_channel_id',
-            'Daily Reminder',
-            channelDescription: 'This channel is used for daily reminders.',
-            importance: Importance.max,
+            'Daily Reminders',
+            channelDescription: 'Daily motivation to breathe.',
+            importance: Importance.high,
             priority: Priority.high,
             autoCancel: true,
           ),
           iOS: DarwinNotificationDetails(),
         ),
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.time,
       );
-      debugPrint('Daily reminder scheduled');
     } catch (e) {
-      debugPrint('Error scheduling reminder: $e');
-    }
-  }
-
-  Future<void> scheduleReminderAtTime(int hour, int minute) async {
-    try {
-      await _notificationsPlugin.zonedSchedule(
-        0,
-        'The void is calling.',
-        'Breathe, Beast.',
-        _nextInstanceOfTime(hour, minute),
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'daily_reminder_channel_id',
-            'Daily Reminder',
-            channelDescription: 'This channel is used for daily reminders.',
-            importance: Importance.max,
-            priority: Priority.high,
-            autoCancel: true,
-          ),
-          iOS: DarwinNotificationDetails(),
-        ),
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: DateTimeComponents.time,
-      );
-      debugPrint('Reminder scheduled for $hour:${minute.toString().padLeft(2, '0')}');
-    } catch (e) {
-      debugPrint('Error scheduling reminder: $e');
+      debugPrint('❌ Error: $e');
     }
   }
 
   tz.TZDateTime _nextInstanceOfTenAM() {
     final tz.TZDateTime now = tz.TZDateTime.now(tz.local);
-    tz.TZDateTime scheduledDate =
-        tz.TZDateTime(tz.local, now.year, now.month, now.day, 10);
-    if (scheduledDate.isBefore(now)) {
-      scheduledDate = scheduledDate.add(const Duration(days: 1));
-    }
+    tz.TZDateTime scheduledDate = tz.TZDateTime(tz.local, now.year, now.month, now.day, 10);
+    if (scheduledDate.isBefore(now)) scheduledDate = scheduledDate.add(const Duration(days: 1));
     return scheduledDate;
   }
 
-  tz.TZDateTime _nextInstanceOfTime(int hour, int minute) {
-    final tz.TZDateTime now = tz.TZDateTime.now(tz.local);
-    tz.TZDateTime scheduledDate =
-        tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
-    if (scheduledDate.isBefore(now)) {
-      scheduledDate = scheduledDate.add(const Duration(days: 1));
+  Future<void> cancelNotification(int id) async {
+    await _notificationsPlugin.cancel(id);
+  }
+
+  Future<void> cancelAll() async {
+    await _notificationsPlugin.cancelAll();
+  }
+
+  Future<void> showWelcomeNotification() async {
+    try {
+      if (!_isInitialized) await init();
+      const androidDetails = AndroidNotificationDetails(
+        'scheduled_workout_channel_id',
+        'System Initialization',
+        channelDescription: 'Used to initialize notification system.',
+        importance: Importance.max,
+        priority: Priority.max,
+      );
+      await _notificationsPlugin.show(999, 'Breath of the Bald', 'System powiadomień aktywny. Powodzenia Okrutniku!', const NotificationDetails(android: androidDetails));
+    } catch (e) {
+      debugPrint('❌ Error: $e');
     }
-    return scheduledDate;
   }
 }

@@ -191,7 +191,7 @@ class SessionScreen extends ConsumerWidget {
           if (kDebugMode)
             TextButton(
               onPressed: notifier.finishSession,
-              child: const Text('SKIP', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+              child: Text(L10n.get(context, 'session_skip_button'), style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
             ),
           if (state.totalRounds > 1)
             Text("${L10n.get(context, 'session_round')} ${state.currentRound} / ${state.totalRounds}", style: const TextStyle(color: Colors.white54, fontSize: 12, letterSpacing: 1.2)),

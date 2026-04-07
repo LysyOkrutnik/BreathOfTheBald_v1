@@ -35,6 +35,7 @@ dependencies:
   auto_size_text: ^3.0.0
   google_fonts: ^6.2.1
   cupertino_icons: ^1.0.8
+  fl_chart: ^0.70.2
 
   # --- DATABASE ---
   drift: ^2.18.0

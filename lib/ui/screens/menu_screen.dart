@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/levels.dart';
@@ -17,30 +18,66 @@ class MenuScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
 
-    return Scaffold(
-      backgroundColor: AppTheme.background,
-      body: Stack(
-        children: [
-          const Positioned.fill(child: ParticleBackground()),
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withAlpha(77),
-                    Colors.transparent,
-                    Colors.black.withAlpha(153),
-                  ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldExit = await _showExitDialog(context);
+        if (shouldExit == true) {
+          SystemNavigator.pop();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppTheme.background,
+        body: Stack(
+          children: [
+            const Positioned.fill(child: ParticleBackground()),
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withAlpha(77),
+                      Colors.transparent,
+                      Colors.black.withAlpha(153),
+                    ],
+                  ),
                 ),
               ),
             ),
+            SafeArea(
+              child: isLandscape
+                  ? _buildLandscapeLayout(context, ref)
+                  : _buildPortraitLayout(context, ref),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<bool?> _showExitDialog(BuildContext context) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.background,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: Colors.white10),
+        ),
+        title: Text(L10n.get(context, 'exit_dialog_title'), style: const TextStyle(color: Colors.white, letterSpacing: 2, fontSize: 18)),
+        content: Text(L10n.get(context, 'exit_dialog_message'), style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(L10n.get(context, 'exit_dialog_cancel'), style: const TextStyle(color: Colors.white30)),
           ),
-          SafeArea(
-            child: isLandscape
-                ? _buildLandscapeLayout(context, ref)
-                : _buildPortraitLayout(context, ref),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            child: Text(L10n.get(context, 'exit_dialog_confirm'), style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -135,7 +172,7 @@ class MenuScreen extends ConsumerWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                       child: Text(
-                        Localizations.localeOf(context).languageCode == 'pl' ? 'EN' : 'PL',
+                        (Localizations.maybeLocaleOf(context)?.languageCode ?? 'pl') == 'pl' ? 'EN' : 'PL',
                         style: const TextStyle(color: AppTheme.textDim, fontSize: 12, fontWeight: FontWeight.bold),
                       ),
                     ),
@@ -182,12 +219,12 @@ class MenuScreen extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(30),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 10),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.history, color: AppTheme.textDim, size: 16),
-                      SizedBox(width: 8),
-                      Text("HISTORIA", style: TextStyle(color: AppTheme.textDim, fontSize: 12, letterSpacing: 1.0)),
+                      const Icon(Icons.history, color: AppTheme.textDim, size: 16),
+                      const SizedBox(width: 8),
+                      Text(L10n.get(context, 'menu_history_button'), style: const TextStyle(color: AppTheme.textDim, fontSize: 12, letterSpacing: 1.0)),
                     ],
                   ),
                 ),
@@ -206,12 +243,12 @@ class MenuScreen extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(30),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 10),
-                  child: const Row(
+                  child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.schedule, color: AppTheme.textDim, size: 16),
-                      SizedBox(width: 8),
-                      Text("HARMONOGRAM", style: TextStyle(color: AppTheme.textDim, fontSize: 12, letterSpacing: 1.0)),
+                      const Icon(Icons.schedule, color: AppTheme.textDim, size: 16),
+                      const SizedBox(width: 8),
+                      Text(L10n.get(context, 'menu_schedule_button'), style: const TextStyle(color: AppTheme.textDim, fontSize: 12, letterSpacing: 1.0)),
                     ],
                   ),
                 ),
@@ -264,7 +301,7 @@ class MenuScreen extends ConsumerWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                       child: Text(
-                        Localizations.localeOf(context).languageCode == 'pl' ? 'EN' : 'PL',
+                        (Localizations.maybeLocaleOf(context)?.languageCode ?? 'pl') == 'pl' ? 'EN' : 'PL',
                         style: const TextStyle(color: AppTheme.textDim, fontSize: 12, fontWeight: FontWeight.bold),
                       ),
                     ),
