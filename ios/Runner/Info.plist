@@ -49,5 +49,23 @@
 		<true/>
 		<key>UIViewControllerBasedStatusBarAppearance</key>
 		<false/>
-	</dict>
-</plist>
+
+		<!-- CALENDAR PERMISSION -->
+		<key>NSCalendarsUsageDescription</key>
+		<string>Breath of the Bald needs access to your calendar to schedule breathing sessions and reminders.</string>
+
+		<!-- HEALTH PERMISSION (if health package is used) -->
+		<key>NSHealthShareUsageDescription</key>
+		<string>We need access to your health data to track your breathing exercises and heart rate.</string>
+		<key>NSHealthUpdateUsageDescription</key>
+		<string>We need to update your health data with your breathing exercise results.</string>
+
+		<!-- BACKGROUND AUDIO PERMISSION -->
+		<key>UIBackgroundModes</key>
+		<array>
+			<string>audio</string>
+			<string>fetch</string>
+			<string>remote-notification</string>
+		</array>
+		</dict>
+		</plist>
