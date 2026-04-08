@@ -23,7 +23,7 @@ class _ParticleBackgroundState extends State<ParticleBackground>
 
     _controller = AnimationController(
       vsync: this,
-      // The duration is arbitrary as the animation is continuous and not time-bound.
+      
       duration: const Duration(seconds: 10),
     )..repeat();
   }
@@ -80,7 +80,7 @@ class _ParticlePainter extends CustomPainter {
       particle.x += particle.speedX;
       particle.y += particle.speedY;
 
-      // If a particle moves off-screen, wrap it to the opposite side for a seamless effect.
+      
       if (particle.x > 1.0) particle.x = 0.0;
       if (particle.x < 0.0) particle.x = 1.0;
       if (particle.y > 1.0) particle.y = 0.0;

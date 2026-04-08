@@ -8,13 +8,34 @@ import 'package:okrutnik_breath/core/notifications/notification_service.dart';
 import 'package:okrutnik_breath/logic/providers/locale_provider.dart';
 import 'package:okrutnik_breath/ui/screens/splash_screen.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:timezone/data/latest.dart' as tz_data;
+import 'package:timezone/timezone.dart' as tz;
 
 final notificationServiceProvider = Provider((ref) => NotificationService());
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Enforce immersive fullscreen to hide system UI and minimize distractions during sessions.
+  
+  tz_data.initializeTimeZones();
+  try {
+    const MethodChannel channel = MethodChannel('flutter_native_timezone');
+    
+    
+    final String? timezoneName = await const MethodChannel('android_timezone').invokeMethod('getTimezone');
+    if (timezoneName != null) {
+      tz.setLocalLocation(tz.getLocation(timezoneName));
+    } else {
+      tz.setLocalLocation(tz.getLocation('Europe/Warsaw'));
+    }
+  } catch (e) {
+    
+    try {
+      tz.setLocalLocation(tz.getLocation('Europe/Warsaw'));
+    } catch (_) {}
+  }
+
+  
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
   SystemChrome.setPreferredOrientations([
@@ -30,7 +51,6 @@ void main() async {
     ),
   );
 
-  // Initialize notification service early in the background to register channels with Android.
   unawaited(NotificationService().init());
 }
 

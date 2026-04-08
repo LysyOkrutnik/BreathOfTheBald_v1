@@ -36,6 +36,7 @@ dependencies:
   google_fonts: ^6.2.1
   cupertino_icons: ^1.0.8
   fl_chart: ^0.70.2
+  add_2_calendar: ^3.0.1
 
   # --- DATABASE ---
   drift: ^2.18.0

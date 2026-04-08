@@ -14,11 +14,11 @@ class GamificationService {
   }) async {
     final profile = await _profileRepository.getUserProfile();
 
-    // Calculate XP earned for the session.
+    
     final int xpEarned = (breathCount * multiplier).round() + (retentionSeconds * 2);
     final int newTotalXp = profile.totalXp + xpEarned;
 
-    // Check for level up.
+    
     int newLevel = profile.level;
     int xpForNextLevel = newLevel * 500;
 
@@ -47,11 +47,11 @@ class GamificationService {
       if (difference.inHours > 24 && difference.inHours <= 48) {
         newStreak++;
       } else if (difference.inHours > 48) {
-        newStreak = 1; // Reset streak
+        newStreak = 1; 
       }
-      // If less than 24h, streak remains the same.
+      
     } else {
-      newStreak = 1; // First session
+      newStreak = 1; 
     }
 
     await _profileRepository.updateUserProfile(

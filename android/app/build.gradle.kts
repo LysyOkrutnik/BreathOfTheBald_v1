@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.okrutnik.okrutnik_breath"
+    namespace = "com.lysyokrutnik.breath_of_the_bald"
 
     // WYMUSZAMY ANDROID 16 (API 36)
     compileSdk = 36
@@ -25,7 +25,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.okrutnik.okrutnik_breath"
+        applicationId = "com.lysyokrutnik.breath_of_the_bald"
 
         // Ustawienia wersji
         minSdk = 26       // Minimum Android 8.0 (wymagane przez Health)

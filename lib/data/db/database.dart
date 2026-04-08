@@ -6,7 +6,7 @@ import 'package:path/path.dart' as p;
 
 part 'database.g.dart';
 
-// Define tables
+
 class Sessions extends Table {
   TextColumn get id => text()();
   DateTimeColumn get timestamp => dateTime()();

@@ -55,6 +55,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+
     return Scaffold(
       backgroundColor: AppTheme.background,
       body: Stack(
@@ -66,6 +68,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
               builder: (context, snapshot) {
                 final sessions = snapshot.data ?? [];
                 
+                if (isLandscape) {
+                  return _buildLandscapeContent(context, sessions, snapshot.connectionState == ConnectionState.waiting);
+                }
+
                 return CustomScrollView(
                   physics: const BouncingScrollPhysics(),
                   slivers: [
@@ -84,21 +90,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         ),
                       ),
                     ] else if (snapshot.connectionState != ConnectionState.waiting)
-                      SliverFillRemaining(
-                        child: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.history_toggle_off, color: Colors.white10, size: 64),
-                              const SizedBox(height: 16),
-                              Text(
-                                L10n.get(context, 'history_empty'),
-                                style: TextStyle(color: AppTheme.textDim, fontSize: 16),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
+                      _buildEmptyState()
                     else
                       const SliverFillRemaining(
                         child: Center(child: CircularProgressIndicator(color: AppTheme.primary)),
@@ -108,6 +100,69 @@ class _HistoryScreenState extends State<HistoryScreen> {
               },
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLandscapeContent(BuildContext context, List<Map<String, dynamic>> sessions, bool isLoading) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white70, size: 20),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+              const Spacer(),
+              Text(
+                L10n.get(context, 'history_title'),
+                style: const TextStyle(color: AppTheme.textLight, fontWeight: FontWeight.w200, fontSize: 18, letterSpacing: 4.0),
+              ),
+              const Spacer(),
+              const SizedBox(width: 48),
+            ],
+          ),
+        ),
+        Expanded(
+          child: isLoading 
+            ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
+            : sessions.isEmpty 
+              ? _buildEmptyStateWidget()
+              : Row(
+                  children: [
+                    Expanded(
+                      flex: 4,
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(16),
+                        child: _buildProgressChart(sessions),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 5,
+                      child: ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: sessions.length,
+                        itemBuilder: (context, index) => _buildPremiumSessionCard(sessions[index], index, sessions.length),
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyStateWidget() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.history_toggle_off, color: Colors.white10, size: 64),
+          const SizedBox(height: 16),
+          Text(L10n.get(context, 'history_empty'), style: const TextStyle(color: AppTheme.textDim, fontSize: 16)),
         ],
       ),
     );
@@ -135,8 +190,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
+  Widget _buildEmptyState() {
+    return SliverFillRemaining(
+      child: _buildEmptyStateWidget(),
+    );
+  }
+
   Widget _buildProgressChart(List<Map<String, dynamic>> sessions) {
-    // Group last 7 days
     final now = DateTime.now();
     final Map<int, double> dailySeconds = {};
     for (int i = 0; i < 7; i++) {
@@ -152,13 +212,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
 
     final List<BarChartGroupData> barGroups = [];
-    final weekdays = [1, 2, 3, 4, 5, 6, 7]; // Mon to Sun
-    
-    // Reorder to match current week flow (7 days ago to today)
     for (int i = 6; i >= 0; i--) {
       final dayDt = now.subtract(Duration(days: i));
       final day = dayDt.weekday;
-      final val = (dailySeconds[day] ?? 0) / 60.0; // Minutes
+      final val = (dailySeconds[day] ?? 0) / 60.0;
       
       barGroups.add(
         BarChartGroupData(
@@ -171,7 +228,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               borderRadius: BorderRadius.circular(4),
               backDrawRodData: BackgroundBarChartRodData(
                 show: true,
-                toY: 20, // 20 min goal
+                toY: 20,
                 color: Colors.white.withAlpha(13),
               ),
             ),
@@ -182,7 +239,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     return Container(
       height: 220,
-      margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white.withAlpha(13),
@@ -195,8 +251,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("WEEKLY ACTIVITY", style: TextStyle(color: AppTheme.textDim, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-              Text("Last 7 Days", style: TextStyle(color: Colors.white.withAlpha(51), fontSize: 10)),
+              Text(L10n.get(context, 'history_weekly_activity'), style: const TextStyle(color: AppTheme.textDim, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+              Text(L10n.get(context, 'history_last_7_days'), style: TextStyle(color: Colors.white.withAlpha(51), fontSize: 10)),
             ],
           ),
           const SizedBox(height: 20),
@@ -236,32 +292,21 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final date = DateTime.tryParse(session['timestamp'] ?? '') ?? DateTime.now();
     final duration = session['duration'] ?? 0;
     final rounds = session['rounds'] ?? 0;
-    
     final color = level?.color ?? AppTheme.primary;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 12),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white.withAlpha(13),
-            border: Border.all(color: Colors.white.withAlpha(26)),
-          ),
+          decoration: BoxDecoration(color: Colors.white.withAlpha(13), border: Border.all(color: Colors.white.withAlpha(26))),
           child: IntrinsicHeight(
             child: Row(
               children: [
-                // Level Indicator Bar
-                Container(
-                  width: 6,
-                  decoration: BoxDecoration(
-                    color: color,
-                    boxShadow: [BoxShadow(color: color.withAlpha(128), blurRadius: 10)],
-                  ),
-                ),
+                Container(width: 4, decoration: BoxDecoration(color: color, boxShadow: [BoxShadow(color: color.withAlpha(128), blurRadius: 8)])),
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(12),
                     child: Column(
                       children: [
                         Row(
@@ -270,29 +315,25 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  L10n.get(context, level?.title ?? levelKey).toUpperCase(),
-                                  style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  DateFormat('EEEE, MMM d • HH:mm').format(date),
-                                  style: TextStyle(color: Colors.white.withAlpha(77), fontSize: 11),
-                                ),
+                                Text(L10n.get(context, level?.title ?? levelKey).toUpperCase(), style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                                const SizedBox(height: 2),
+                                Text(DateFormat('MMM d • HH:mm').format(date), style: TextStyle(color: Colors.white.withAlpha(77), fontSize: 10)),
                               ],
                             ),
                             IconButton(
-                              icon: const Icon(Icons.delete_sweep_outlined, color: AppTheme.danger, size: 20),
+                              icon: const Icon(Icons.delete_sweep_outlined, color: AppTheme.danger, size: 18),
                               onPressed: () => _deleteSession(index),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceAround,
                           children: [
                             _buildMiniStat(Icons.timer_outlined, "${duration ~/ 60}m ${duration % 60}s"),
-                            _buildMiniStat(Icons.refresh_rounded, "$rounds ${L10n.get(context, 'summary_stat_rounds').toLowerCase()}"),
+                            _buildMiniStat(Icons.refresh_rounded, "$rounds ${L10n.get(context, 'desc_rounds_pl').toLowerCase()}"),
                             _buildMiniStat(Icons.favorite_border_rounded, "${session['retentionSeconds'] ?? 0}s ${L10n.get(context, 'history_stat_hold')}"),
                           ],
                         ),
@@ -311,9 +352,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Widget _buildMiniStat(IconData icon, String label) {
     return Column(
       children: [
-        Icon(icon, color: Colors.white30, size: 16),
+        Icon(icon, color: Colors.white30, size: 14),
         const SizedBox(height: 4),
-        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500)),
+        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w500)),
       ],
     );
   }
@@ -331,9 +372,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       });
 
       await prefs.setStringList('sessions', sessionStrings);
-      setState(() {
-        _sessionsFuture = _loadSessions();
-      });
+      setState(() => _sessionsFuture = _loadSessions());
     } catch (e) {
       debugPrint('Error deleting session: $e');
     }

@@ -20,7 +20,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
-    // Start initialization without blocking the UI thread or navigation timer.
+    
     unawaited(_initApp());
 
     _animationController = AnimationController(
@@ -34,7 +34,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
     _animationController.forward();
 
-    // Navigate to MenuScreen after the splash animation completes.
+    
     Timer(const Duration(seconds: 2), () {
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -55,13 +55,13 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       final notificationService = NotificationService();
       await notificationService.init();
       
-      // Use the new robust internal permission request method
+      
       final status = await notificationService.requestPermissions();
 
       if (status) {
         await notificationService.scheduleDailyReminder();
         
-        // Force register app in Android settings by sending a welcome notification if it's the first run
+        
         final prefs = await SharedPreferences.getInstance();
         if (prefs.getBool('first_run_notification') != true) {
           await notificationService.showWelcomeNotification();
@@ -91,7 +91,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
             fit: BoxFit.cover,
           ),
 
-          // Add a gradient overlay to enhance text visibility over the background image.
+          
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(

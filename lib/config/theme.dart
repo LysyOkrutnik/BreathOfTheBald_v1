@@ -2,26 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
-  // --- PALETTE ---
+  
 
   static const Color background = Color(0xFF101820);
 
-  // Use true black for session backgrounds to maximize immersion and minimize screen glare.
+  
   static const Color sessionBackground = Colors.black;
 
   static const Color primary = Color(0xFF81C784);
   static const Color accent = Color(0xFF4DD0E1);
   static const Color danger = Color(0xFFE57373);
 
-  // Use an off-white color to reduce eye strain in dark mode.
+  
   static const Color textLight = Color(0xFFF5F5F5);
   static const Color textDim = Color(0xFFB0BEC5);
 
-  // Define colors for the breathing animation.
+  
   static const Color breathInhale = Color(0xFF29B6F6);
   static const Color breathExhale = Colors.white;
 
-  // --- STYLES ---
+  
 
   static final TextStyle displayLarge = TextStyle(
     fontSize: 32,
@@ -40,7 +40,7 @@ class AppTheme {
     fontSize: 70,
     fontWeight: FontWeight.w100,
     color: textLight,
-    // Use tabular figures to prevent horizontal jitter during timer updates.
+    
     fontFeatures: const [FontFeature.tabularFigures()],
   );
 

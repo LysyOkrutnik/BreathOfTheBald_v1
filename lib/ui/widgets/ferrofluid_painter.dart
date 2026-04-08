@@ -40,7 +40,7 @@ class _FerrofluidWidgetState extends State<FerrofluidWidget>
   @override
   Widget build(BuildContext context) {
     const Color inhaleColor = AppTheme.breathInhale;
-    // Derive a darker, less saturated color for the exhale state to create a visual contrast.
+    
     final Color exhaleColor = Color.lerp(inhaleColor, Colors.black, 0.4)!;
 
     final Color targetColor = widget.isInhaling ? inhaleColor : exhaleColor;
@@ -53,10 +53,10 @@ class _FerrofluidWidgetState extends State<FerrofluidWidget>
         child: SizedBox(
           width: widget.size,
           height: widget.size,
-          // Use TweenAnimationBuilder to smoothly animate the color transition between breathing phases.
+          
           child: TweenAnimationBuilder<Color?>(
             tween: ColorTween(end: targetColor),
-            // Synchronize the color transition to match the scale animation duration.
+            
             duration: widget.duration ~/ 2,
             curve: Curves.easeInOut,
             builder: (context, animatedColor, _) {

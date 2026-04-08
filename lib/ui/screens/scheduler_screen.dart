@@ -6,6 +6,7 @@ import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/core/notifications/notification_service.dart';
 import 'package:okrutnik_breath/ui/widgets/particle_background.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:add_2_calendar/add_2_calendar.dart';
 
 class SchedulerScreen extends StatefulWidget {
   const SchedulerScreen({super.key});
@@ -46,18 +47,6 @@ class _SchedulerScreenState extends State<SchedulerScreen> {
     if (_selectedLevel == null) return;
 
     try {
-      // Ensure we have permissions before proceeding
-      final hasPermission = await _notificationService.requestPermissions();
-      if (!hasPermission) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Permissions required for notifications!")),
-          );
-        }
-        // Even if not granted, we try to open settings for exact alarms if on Android 12+
-        return;
-      }
-
       final prefs = await SharedPreferences.getInstance();
       final scheduledDateTime = DateTime(
         _selectedDate.year,
@@ -87,14 +76,8 @@ class _SchedulerScreenState extends State<SchedulerScreen> {
       final strings = _schedules.map((s) => jsonEncode(s)).toList();
       await prefs.setStringList('workout_schedules', strings);
 
-      // Schedule notification with custom content
-      final levelTitle = L10n.get(context, _selectedLevel!.title);
-      await _notificationService.scheduleReminderAtDateTime(
-        scheduledDateTime,
-        L10n.get(context, 'notification_title'),
-        "${L10n.get(context, 'notification_body')} ($levelTitle)",
-        id,
-      );
+      
+      await _addToSystemCalendar(newSchedule);
 
       setState(() {});
       if (mounted) {
@@ -107,18 +90,30 @@ class _SchedulerScreenState extends State<SchedulerScreen> {
     }
   }
 
+  Future<void> _addToSystemCalendar(Map<String, dynamic> schedule) async {
+    final level = LevelData.levels[schedule['levelKey']];
+    final dt = DateTime.parse(schedule['dateTime']);
+    
+    final Event event = Event(
+      title: 'Breath of the Bald: ${L10n.get(context, level?.title ?? 'Session')}',
+      description: 'Time for your breathing workout. Stay focused, stay bald.',
+      location: 'Mindfulness Space',
+      startDate: dt,
+      endDate: dt.add(const Duration(minutes: 15)),
+      iosParams: const IOSParams(reminder: Duration(minutes: 5)),
+      androidParams: const AndroidParams(emailInvites: []),
+    );
+
+    
+    await Add2Calendar.addEvent2Cal(event);
+  }
+
   Future<void> _deleteSchedule(int index) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final schedule = _schedules[index];
-      final id = schedule['id'];
-
-      await _notificationService.cancelNotification(id);
-      
       _schedules.removeAt(index);
       final strings = _schedules.map((s) => jsonEncode(s)).toList();
       await prefs.setStringList('workout_schedules', strings);
-
       setState(() {});
     } catch (e) {
       debugPrint('Error deleting schedule: $e');
@@ -142,6 +137,8 @@ class _SchedulerScreenState extends State<SchedulerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+
     return Scaffold(
       backgroundColor: AppTheme.background,
       body: Stack(
@@ -150,21 +147,9 @@ class _SchedulerScreenState extends State<SchedulerScreen> {
           SafeArea(
             child: Column(
               children: [
-                _buildHeader(context),
+                _buildHeader(context, isLandscape),
                 Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildForm(),
-                        const SizedBox(height: 40),
-                        const Divider(color: Colors.white10),
-                        const SizedBox(height: 20),
-                        _buildScheduleList(),
-                      ],
-                    ),
-                  ),
+                  child: isLandscape ? _buildLandscapeLayout() : _buildPortraitLayout(),
                 ),
               ],
             ),
@@ -174,9 +159,9 @@ class _SchedulerScreenState extends State<SchedulerScreen> {
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildHeader(BuildContext context, bool isLandscape) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 20),
+      padding: EdgeInsets.symmetric(horizontal: 10.0, vertical: isLandscape ? 10 : 20),
       child: Row(
         children: [
           IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white70), onPressed: () => Navigator.of(context).pop()),
@@ -184,12 +169,53 @@ class _SchedulerScreenState extends State<SchedulerScreen> {
             child: Text(
               L10n.get(context, 'scheduler_title'),
               textAlign: TextAlign.center,
-              style: const TextStyle(color: AppTheme.textLight, fontWeight: FontWeight.w300, fontSize: 20, letterSpacing: 2.0),
+              style: TextStyle(color: AppTheme.textLight, fontWeight: FontWeight.w300, fontSize: isLandscape ? 18 : 20, letterSpacing: 2.0),
             ),
           ),
           const SizedBox(width: 48),
         ],
       ),
+    );
+  }
+
+  Widget _buildPortraitLayout() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildForm(),
+          const SizedBox(height: 40),
+          const Divider(color: Colors.white10),
+          const SizedBox(height: 20),
+          _buildScheduleList(),
+          const SizedBox(height: 40),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLandscapeLayout() {
+    return Row(
+      children: [
+        Expanded(
+          flex: 5,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            child: _buildForm(),
+          ),
+        ),
+        VerticalDivider(color: Colors.white.withAlpha(13), width: 1),
+        Expanded(
+          flex: 4,
+          child: ListView(
+            padding: const EdgeInsets.all(24.0),
+            children: [
+              _buildScheduleList(),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -265,13 +291,13 @@ class _SchedulerScreenState extends State<SchedulerScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(L10n.get(context, level?.title ?? 'Unknown'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    Text(L10n.get(context, level?.title ?? 'Unknown'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
                     const SizedBox(height: 4),
-                    Text("${dt.day}.${dt.month}.${dt.year} ${L10n.get(context, 'scheduler_at')} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}", style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                    Text("${dt.day}.${dt.month}.${dt.year} ${L10n.get(context, 'scheduler_at')} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}", style: const TextStyle(color: Colors.white54, fontSize: 11)),
                   ],
                 ),
               ),
-              IconButton(icon: const Icon(Icons.delete_outline, color: AppTheme.danger, size: 20), onPressed: () => _deleteSchedule(index)),
+              IconButton(icon: const Icon(Icons.delete_outline, color: AppTheme.danger, size: 18), onPressed: () => _deleteSchedule(index), padding: EdgeInsets.zero, constraints: const BoxConstraints()),
             ],
           ),
         );

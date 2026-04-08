@@ -11,16 +11,16 @@ class LevelData {
   final ExerciseType type;
   final String key;
 
-  // Parameters specific to the Wim Hof method.
+  
   final int totalRounds;
   final int totalBreaths;
   final Duration breathPace;
 
-  // Parameters for loop-based or time-boxed exercises.
+  
   final int? loopCount;
   final Duration? totalDuration;
 
-  // UI presentation mapping.
+  
   final Color color;
   final String instructionTitleKey;
   final String instructionDescriptionKey;
@@ -43,7 +43,7 @@ class LevelData {
   });
 
   static const Map<String, LevelData> levels = {
-    // --- WIM HOF ---
+    
     'mild': LevelData(
       key: 'mild',
       title: "level_novice",
@@ -124,8 +124,8 @@ class LevelData {
       ],
     ),
 
-    // --- AUTOMATED EXERCISES ---
-    // Sessions that run automatically without user input.
+    
+    
     'box': LevelData(
       key: 'box',
       title: "level_sniper",
@@ -150,7 +150,7 @@ class LevelData {
       title: "level_relax",
       subtitle: "desc_sleep",
       type: ExerciseType.relax478,
-      loopCount: 32, // Approximate a 10-minute session.
+      loopCount: 32, 
       color: Color(0xFFBA68C8),
       instructionTitleKey: "intro_title_relax",
       instructionDescriptionKey: "intro_desc_relax",

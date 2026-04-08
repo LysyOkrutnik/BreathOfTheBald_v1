@@ -7,7 +7,7 @@ class UserProfileRepository {
   UserProfileRepository(this._db);
 
   Future<UserProfileData> getUserProfile() async {
-    // Ensure a profile exists, creating one if it doesn't.
+    
     final profile = await (_db.select(_db.userProfile)..limit(1)).getSingleOrNull();
     if (profile == null) {
       final newProfile = UserProfileCompanion.insert(id: const Value(1));
@@ -26,4 +26,4 @@ class UserProfileRepository {
   }
 }
 
-// Provider for the repository will be added later.
+

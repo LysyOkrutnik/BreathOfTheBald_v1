@@ -1,20 +1,20 @@
-// coverage:ignore-file
-// GENERATED CODE - DO NOT MODIFY BY HAND
-// ignore_for_file: type=lint
-// ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
+
+
+
+
 
 part of 'session_state.dart';
 
-// **************************************************************************
-// FreezedGenerator
-// **************************************************************************
+
+
+
 
 T _$identity<T>(T value) => value;
 
 final _privateConstructorUsedError = UnsupportedError(
     'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models');
 
-/// @nodoc
+
 mixin _$SessionPhase {
   @optionalTypeArgs
   TResult when<TResult extends Object?>({
@@ -80,46 +80,46 @@ mixin _$SessionPhase {
       throw _privateConstructorUsedError;
 }
 
-/// @nodoc
+
 abstract class $SessionPhaseCopyWith<$Res> {
   factory $SessionPhaseCopyWith(
           SessionPhase value, $Res Function(SessionPhase) then) =
       _$SessionPhaseCopyWithImpl<$Res, SessionPhase>;
 }
 
-/// @nodoc
+
 class _$SessionPhaseCopyWithImpl<$Res, $Val extends SessionPhase>
     implements $SessionPhaseCopyWith<$Res> {
   _$SessionPhaseCopyWithImpl(this._value, this._then);
 
-  // ignore: unused_field
+  
   final $Val _value;
-  // ignore: unused_field
+  
   final $Res Function($Val) _then;
 
-  /// Create a copy of SessionPhase
-  /// with the given fields replaced by the non-null parameter values.
+  
+  
 }
 
-/// @nodoc
+
 abstract class _$$IdleImplCopyWith<$Res> {
   factory _$$IdleImplCopyWith(
           _$IdleImpl value, $Res Function(_$IdleImpl) then) =
       __$$IdleImplCopyWithImpl<$Res>;
 }
 
-/// @nodoc
+
 class __$$IdleImplCopyWithImpl<$Res>
     extends _$SessionPhaseCopyWithImpl<$Res, _$IdleImpl>
     implements _$$IdleImplCopyWith<$Res> {
   __$$IdleImplCopyWithImpl(_$IdleImpl _value, $Res Function(_$IdleImpl) _then)
       : super(_value, _then);
 
-  /// Create a copy of SessionPhase
-  /// with the given fields replaced by the non-null parameter values.
+  
+  
 }
 
-/// @nodoc
+
 
 class _$IdleImpl implements _Idle {
   const _$IdleImpl();
@@ -229,7 +229,7 @@ abstract class _Idle implements SessionPhase {
   const factory _Idle() = _$IdleImpl;
 }
 
-/// @nodoc
+
 abstract class _$$BreathingImplCopyWith<$Res> {
   factory _$$BreathingImplCopyWith(
           _$BreathingImpl value, $Res Function(_$BreathingImpl) then) =
@@ -238,7 +238,7 @@ abstract class _$$BreathingImplCopyWith<$Res> {
   $Res call({int breathIndex, bool isInhaling, Duration currentBreathDuration});
 }
 
-/// @nodoc
+
 class __$$BreathingImplCopyWithImpl<$Res>
     extends _$SessionPhaseCopyWithImpl<$Res, _$BreathingImpl>
     implements _$$BreathingImplCopyWith<$Res> {
@@ -246,8 +246,8 @@ class __$$BreathingImplCopyWithImpl<$Res>
       _$BreathingImpl _value, $Res Function(_$BreathingImpl) _then)
       : super(_value, _then);
 
-  /// Create a copy of SessionPhase
-  /// with the given fields replaced by the non-null parameter values.
+  
+  
   @pragma('vm:prefer-inline')
   @override
   $Res call({
@@ -258,21 +258,21 @@ class __$$BreathingImplCopyWithImpl<$Res>
     return _then(_$BreathingImpl(
       breathIndex: null == breathIndex
           ? _value.breathIndex
-          : breathIndex // ignore: cast_nullable_to_non_nullable
+          : breathIndex 
               as int,
       isInhaling: null == isInhaling
           ? _value.isInhaling
-          : isInhaling // ignore: cast_nullable_to_non_nullable
+          : isInhaling 
               as bool,
       currentBreathDuration: null == currentBreathDuration
           ? _value.currentBreathDuration
-          : currentBreathDuration // ignore: cast_nullable_to_non_nullable
+          : currentBreathDuration 
               as Duration,
     ));
   }
 }
 
-/// @nodoc
+
 
 class _$BreathingImpl implements _Breathing {
   const _$BreathingImpl(
@@ -309,8 +309,8 @@ class _$BreathingImpl implements _Breathing {
   int get hashCode =>
       Object.hash(runtimeType, breathIndex, isInhaling, currentBreathDuration);
 
-  /// Create a copy of SessionPhase
-  /// with the given fields replaced by the non-null parameter values.
+  
+  
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   @pragma('vm:prefer-inline')
@@ -414,14 +414,14 @@ abstract class _Breathing implements SessionPhase {
   bool get isInhaling;
   Duration get currentBreathDuration;
 
-  /// Create a copy of SessionPhase
-  /// with the given fields replaced by the non-null parameter values.
+  
+  
   @JsonKey(includeFromJson: false, includeToJson: false)
   _$$BreathingImplCopyWith<_$BreathingImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }
 
-/// @nodoc
+
 abstract class _$$RetentionImplCopyWith<$Res> {
   factory _$$RetentionImplCopyWith(
           _$RetentionImpl value, $Res Function(_$RetentionImpl) then) =
@@ -430,7 +430,7 @@ abstract class _$$RetentionImplCopyWith<$Res> {
   $Res call({Duration elapsed});
 }
 
-/// @nodoc
+
 class __$$RetentionImplCopyWithImpl<$Res>
     extends _$SessionPhaseCopyWithImpl<$Res, _$RetentionImpl>
     implements _$$RetentionImplCopyWith<$Res> {
@@ -438,8 +438,8 @@ class __$$RetentionImplCopyWithImpl<$Res>
       _$RetentionImpl _value, $Res Function(_$RetentionImpl) _then)
       : super(_value, _then);
 
-  /// Create a copy of SessionPhase
-  /// with the given fields replaced by the non-null parameter values.
+  
+  
   @pragma('vm:prefer-inline')
   @override
   $Res call({
@@ -448,13 +448,13 @@ class __$$RetentionImplCopyWithImpl<$Res>
     return _then(_$RetentionImpl(
       elapsed: null == elapsed
           ? _value.elapsed
-          : elapsed // ignore: cast_nullable_to_non_nullable
+          : elapsed 
               as Duration,
     ));
   }
 }
 
-/// @nodoc
+
 
 class _$RetentionImpl implements _Retention {
   const _$RetentionImpl({required this.elapsed});
@@ -478,8 +478,8 @@ class _$RetentionImpl implements _Retention {
   @override
   int get hashCode => Object.hash(runtimeType, elapsed);
 
-  /// Create a copy of SessionPhase
-  /// with the given fields replaced by the non-null parameter values.
+  
+  
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   @pragma('vm:prefer-inline')
@@ -578,14 +578,14 @@ abstract class _Retention implements SessionPhase {
 
   Duration get elapsed;
 
-  /// Create a copy of SessionPhase
-  /// with the given fields replaced by the non-null parameter values.
+  
+  
   @JsonKey(includeFromJson: false, includeToJson: false)
   _$$RetentionImplCopyWith<_$RetentionImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }
 
-/// @nodoc
+
 abstract class _$$RecoveryImplCopyWith<$Res> {
   factory _$$RecoveryImplCopyWith(
           _$RecoveryImpl value, $Res Function(_$RecoveryImpl) then) =
@@ -594,7 +594,7 @@ abstract class _$$RecoveryImplCopyWith<$Res> {
   $Res call({Duration remaining});
 }
 
-/// @nodoc
+
 class __$$RecoveryImplCopyWithImpl<$Res>
     extends _$SessionPhaseCopyWithImpl<$Res, _$RecoveryImpl>
     implements _$$RecoveryImplCopyWith<$Res> {
@@ -602,8 +602,8 @@ class __$$RecoveryImplCopyWithImpl<$Res>
       _$RecoveryImpl _value, $Res Function(_$RecoveryImpl) _then)
       : super(_value, _then);
 
-  /// Create a copy of SessionPhase
-  /// with the given fields replaced by the non-null parameter values.
+  
+  
   @pragma('vm:prefer-inline')
   @override
   $Res call({
@@ -612,13 +612,13 @@ class __$$RecoveryImplCopyWithImpl<$Res>
     return _then(_$RecoveryImpl(
       remaining: null == remaining
           ? _value.remaining
-          : remaining // ignore: cast_nullable_to_non_nullable
+          : remaining 
               as Duration,
     ));
   }
 }
 
-/// @nodoc
+
 
 class _$RecoveryImpl implements _Recovery {
   const _$RecoveryImpl({required this.remaining});
@@ -643,8 +643,8 @@ class _$RecoveryImpl implements _Recovery {
   @override
   int get hashCode => Object.hash(runtimeType, remaining);
 
-  /// Create a copy of SessionPhase
-  /// with the given fields replaced by the non-null parameter values.
+  
+  
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   @pragma('vm:prefer-inline')
@@ -743,21 +743,21 @@ abstract class _Recovery implements SessionPhase {
 
   Duration get remaining;
 
-  /// Create a copy of SessionPhase
-  /// with the given fields replaced by the non-null parameter values.
+  
+  
   @JsonKey(includeFromJson: false, includeToJson: false)
   _$$RecoveryImplCopyWith<_$RecoveryImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }
 
-/// @nodoc
+
 abstract class _$$FinishedImplCopyWith<$Res> {
   factory _$$FinishedImplCopyWith(
           _$FinishedImpl value, $Res Function(_$FinishedImpl) then) =
       __$$FinishedImplCopyWithImpl<$Res>;
 }
 
-/// @nodoc
+
 class __$$FinishedImplCopyWithImpl<$Res>
     extends _$SessionPhaseCopyWithImpl<$Res, _$FinishedImpl>
     implements _$$FinishedImplCopyWith<$Res> {
@@ -765,11 +765,11 @@ class __$$FinishedImplCopyWithImpl<$Res>
       _$FinishedImpl _value, $Res Function(_$FinishedImpl) _then)
       : super(_value, _then);
 
-  /// Create a copy of SessionPhase
-  /// with the given fields replaced by the non-null parameter values.
+  
+  
 }
 
-/// @nodoc
+
 
 class _$FinishedImpl implements _Finished {
   const _$FinishedImpl();
@@ -879,7 +879,7 @@ abstract class _Finished implements SessionPhase {
   const factory _Finished() = _$FinishedImpl;
 }
 
-/// @nodoc
+
 mixin _$SessionState {
   SessionPhase get phase => throw _privateConstructorUsedError;
   int get currentRound => throw _privateConstructorUsedError;
@@ -890,19 +890,19 @@ mixin _$SessionState {
   List<Duration> get retentionLogs => throw _privateConstructorUsedError;
   DateTime? get startTime => throw _privateConstructorUsedError;
   Duration? get sessionDuration =>
-      throw _privateConstructorUsedError; // Override the default phase UI with custom text and sizing for specialized exercises like Box Breathing.
+      throw _privateConstructorUsedError; 
   String? get customLabel => throw _privateConstructorUsedError;
   String? get customDescription => throw _privateConstructorUsedError;
   bool? get customIsBig => throw _privateConstructorUsedError;
 
-  /// Create a copy of SessionState
-  /// with the given fields replaced by the non-null parameter values.
+  
+  
   @JsonKey(includeFromJson: false, includeToJson: false)
   $SessionStateCopyWith<SessionState> get copyWith =>
       throw _privateConstructorUsedError;
 }
 
-/// @nodoc
+
 abstract class $SessionStateCopyWith<$Res> {
   factory $SessionStateCopyWith(
           SessionState value, $Res Function(SessionState) then) =
@@ -925,18 +925,18 @@ abstract class $SessionStateCopyWith<$Res> {
   $SessionPhaseCopyWith<$Res> get phase;
 }
 
-/// @nodoc
+
 class _$SessionStateCopyWithImpl<$Res, $Val extends SessionState>
     implements $SessionStateCopyWith<$Res> {
   _$SessionStateCopyWithImpl(this._value, this._then);
 
-  // ignore: unused_field
+  
   final $Val _value;
-  // ignore: unused_field
+  
   final $Res Function($Val) _then;
 
-  /// Create a copy of SessionState
-  /// with the given fields replaced by the non-null parameter values.
+  
+  
   @pragma('vm:prefer-inline')
   @override
   $Res call({
@@ -956,57 +956,57 @@ class _$SessionStateCopyWithImpl<$Res, $Val extends SessionState>
     return _then(_value.copyWith(
       phase: null == phase
           ? _value.phase
-          : phase // ignore: cast_nullable_to_non_nullable
+          : phase 
               as SessionPhase,
       currentRound: null == currentRound
           ? _value.currentRound
-          : currentRound // ignore: cast_nullable_to_non_nullable
+          : currentRound 
               as int,
       totalRounds: null == totalRounds
           ? _value.totalRounds
-          : totalRounds // ignore: cast_nullable_to_non_nullable
+          : totalRounds 
               as int,
       totalBreathsInRound: null == totalBreathsInRound
           ? _value.totalBreathsInRound
-          : totalBreathsInRound // ignore: cast_nullable_to_non_nullable
+          : totalBreathsInRound 
               as int,
       isGhostMode: null == isGhostMode
           ? _value.isGhostMode
-          : isGhostMode // ignore: cast_nullable_to_non_nullable
+          : isGhostMode 
               as bool,
       isPanicMode: null == isPanicMode
           ? _value.isPanicMode
-          : isPanicMode // ignore: cast_nullable_to_non_nullable
+          : isPanicMode 
               as bool,
       retentionLogs: null == retentionLogs
           ? _value.retentionLogs
-          : retentionLogs // ignore: cast_nullable_to_non_nullable
+          : retentionLogs 
               as List<Duration>,
       startTime: freezed == startTime
           ? _value.startTime
-          : startTime // ignore: cast_nullable_to_non_nullable
+          : startTime 
               as DateTime?,
       sessionDuration: freezed == sessionDuration
           ? _value.sessionDuration
-          : sessionDuration // ignore: cast_nullable_to_non_nullable
+          : sessionDuration 
               as Duration?,
       customLabel: freezed == customLabel
           ? _value.customLabel
-          : customLabel // ignore: cast_nullable_to_non_nullable
+          : customLabel 
               as String?,
       customDescription: freezed == customDescription
           ? _value.customDescription
-          : customDescription // ignore: cast_nullable_to_non_nullable
+          : customDescription 
               as String?,
       customIsBig: freezed == customIsBig
           ? _value.customIsBig
-          : customIsBig // ignore: cast_nullable_to_non_nullable
+          : customIsBig 
               as bool?,
     ) as $Val);
   }
 
-  /// Create a copy of SessionState
-  /// with the given fields replaced by the non-null parameter values.
+  
+  
   @override
   @pragma('vm:prefer-inline')
   $SessionPhaseCopyWith<$Res> get phase {
@@ -1016,7 +1016,7 @@ class _$SessionStateCopyWithImpl<$Res, $Val extends SessionState>
   }
 }
 
-/// @nodoc
+
 abstract class _$$SessionStateImplCopyWith<$Res>
     implements $SessionStateCopyWith<$Res> {
   factory _$$SessionStateImplCopyWith(
@@ -1042,7 +1042,7 @@ abstract class _$$SessionStateImplCopyWith<$Res>
   $SessionPhaseCopyWith<$Res> get phase;
 }
 
-/// @nodoc
+
 class __$$SessionStateImplCopyWithImpl<$Res>
     extends _$SessionStateCopyWithImpl<$Res, _$SessionStateImpl>
     implements _$$SessionStateImplCopyWith<$Res> {
@@ -1050,8 +1050,8 @@ class __$$SessionStateImplCopyWithImpl<$Res>
       _$SessionStateImpl _value, $Res Function(_$SessionStateImpl) _then)
       : super(_value, _then);
 
-  /// Create a copy of SessionState
-  /// with the given fields replaced by the non-null parameter values.
+  
+  
   @pragma('vm:prefer-inline')
   @override
   $Res call({
@@ -1071,57 +1071,57 @@ class __$$SessionStateImplCopyWithImpl<$Res>
     return _then(_$SessionStateImpl(
       phase: null == phase
           ? _value.phase
-          : phase // ignore: cast_nullable_to_non_nullable
+          : phase 
               as SessionPhase,
       currentRound: null == currentRound
           ? _value.currentRound
-          : currentRound // ignore: cast_nullable_to_non_nullable
+          : currentRound 
               as int,
       totalRounds: null == totalRounds
           ? _value.totalRounds
-          : totalRounds // ignore: cast_nullable_to_non_nullable
+          : totalRounds 
               as int,
       totalBreathsInRound: null == totalBreathsInRound
           ? _value.totalBreathsInRound
-          : totalBreathsInRound // ignore: cast_nullable_to_non_nullable
+          : totalBreathsInRound 
               as int,
       isGhostMode: null == isGhostMode
           ? _value.isGhostMode
-          : isGhostMode // ignore: cast_nullable_to_non_nullable
+          : isGhostMode 
               as bool,
       isPanicMode: null == isPanicMode
           ? _value.isPanicMode
-          : isPanicMode // ignore: cast_nullable_to_non_nullable
+          : isPanicMode 
               as bool,
       retentionLogs: null == retentionLogs
           ? _value._retentionLogs
-          : retentionLogs // ignore: cast_nullable_to_non_nullable
+          : retentionLogs 
               as List<Duration>,
       startTime: freezed == startTime
           ? _value.startTime
-          : startTime // ignore: cast_nullable_to_non_nullable
+          : startTime 
               as DateTime?,
       sessionDuration: freezed == sessionDuration
           ? _value.sessionDuration
-          : sessionDuration // ignore: cast_nullable_to_non_nullable
+          : sessionDuration 
               as Duration?,
       customLabel: freezed == customLabel
           ? _value.customLabel
-          : customLabel // ignore: cast_nullable_to_non_nullable
+          : customLabel 
               as String?,
       customDescription: freezed == customDescription
           ? _value.customDescription
-          : customDescription // ignore: cast_nullable_to_non_nullable
+          : customDescription 
               as String?,
       customIsBig: freezed == customIsBig
           ? _value.customIsBig
-          : customIsBig // ignore: cast_nullable_to_non_nullable
+          : customIsBig 
               as bool?,
     ));
   }
 }
 
-/// @nodoc
+
 
 class _$SessionStateImpl implements _SessionState {
   const _$SessionStateImpl(
@@ -1155,7 +1155,7 @@ class _$SessionStateImpl implements _SessionState {
   @override
   List<Duration> get retentionLogs {
     if (_retentionLogs is EqualUnmodifiableListView) return _retentionLogs;
-    // ignore: implicit_dynamic_type
+    
     return EqualUnmodifiableListView(_retentionLogs);
   }
 
@@ -1163,7 +1163,7 @@ class _$SessionStateImpl implements _SessionState {
   final DateTime? startTime;
   @override
   final Duration? sessionDuration;
-// Override the default phase UI with custom text and sizing for specialized exercises like Box Breathing.
+
   @override
   final String? customLabel;
   @override
@@ -1222,8 +1222,8 @@ class _$SessionStateImpl implements _SessionState {
       customDescription,
       customIsBig);
 
-  /// Create a copy of SessionState
-  /// with the given fields replaced by the non-null parameter values.
+  
+  
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   @pragma('vm:prefer-inline')
@@ -1264,7 +1264,7 @@ abstract class _SessionState implements SessionState {
   DateTime? get startTime;
   @override
   Duration?
-      get sessionDuration; // Override the default phase UI with custom text and sizing for specialized exercises like Box Breathing.
+      get sessionDuration; 
   @override
   String? get customLabel;
   @override
@@ -1272,8 +1272,8 @@ abstract class _SessionState implements SessionState {
   @override
   bool? get customIsBig;
 
-  /// Create a copy of SessionState
-  /// with the given fields replaced by the non-null parameter values.
+  
+  
   @override
   @JsonKey(includeFromJson: false, includeToJson: false)
   _$$SessionStateImplCopyWith<_$SessionStateImpl> get copyWith =>

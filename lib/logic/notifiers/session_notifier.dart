@@ -29,7 +29,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
 
   SessionNotifier(this._audioManager, this._ref) : super(SessionState.initial());
 
-  /// Skips the current session and navigates directly to the summary screen. For debug purposes only.
+  
   void debugSkip() {
     _finishSession();
   }
@@ -38,7 +38,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
     _isSessionActive = true;
     _currentLevel = level;
 
-    // Prevent timer duplication if a new session is started before the old one is fully disposed.
+    
     _phaseTimer?.cancel();
     _sessionTimer.reset();
 
@@ -54,7 +54,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
     int totalBreaths = level.totalBreaths;
     if (level.type == ExerciseType.fireBreathing) {
       final duration = level.totalDuration ?? const Duration(minutes: 3);
-      // Approximate the breath count for the progress bar, assuming a ~700ms pace per phase.
+      
       totalBreaths = (duration.inMilliseconds / 1400).floor();
     } else if (level.type == ExerciseType.boxBreathing) {
       totalBreaths = level.loopCount ?? 16;
@@ -77,7 +77,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
       customIsBig: false,
     );
 
-    // --- COUNTDOWN ---
+    
     for (int i = 3; i > 0; i--) {
       if (!_isSessionActive) return;
       if (i == 1) {
@@ -103,9 +103,9 @@ class SessionNotifier extends StateNotifier<SessionState> {
     }
   }
 
-  // ==========================================================
-  // 1. WIM HOF
-  // ==========================================================
+  
+  
+  
   void _startWimHof(LevelData level) {
     state = state.copyWith(
       customLabel: null,
@@ -128,7 +128,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
     for (int i = 1; i <= _currentLevel!.totalBreaths; i++) {
       if (!_isSessionActive) return;
 
-      // Ensure the phase has not been manually advanced (e.g., by finishing retention early).
+      
       if (!state.phase.maybeMap(breathing: (_) => true, orElse: () => false)) return;
 
       final Duration duration = RampUpCalculator.getDuration(i - 1, pace);
@@ -209,9 +209,9 @@ class SessionNotifier extends StateNotifier<SessionState> {
     }
   }
 
-  // ==========================================================
-  // 2. BOX BREATHING (SNIPER)
-  // ==========================================================
+  
+  
+  
   Future<void> _startBoxBreathing(LevelData level) async {
     final int loops = level.loopCount ?? 16;
 
@@ -239,9 +239,9 @@ class SessionNotifier extends StateNotifier<SessionState> {
     _finishSession();
   }
 
-  // ==========================================================
-  // 3. RELAX 4-7-8
-  // ==========================================================
+  
+  
+  
   Future<void> _startRelax478(LevelData level) async {
     final int loops = level.loopCount ?? 32;
 
@@ -264,9 +264,9 @@ class SessionNotifier extends StateNotifier<SessionState> {
     _finishSession();
   }
 
-  // ==========================================================
-  // 4. FIRE BREATHING (BHASTRIKA)
-  // ==========================================================
+  
+  
+  
   void _startFireBreathing(LevelData level) {
     final totalDuration = level.totalDuration ?? const Duration(minutes: 3);
     final tickDuration = const Duration(milliseconds: 700);
@@ -275,7 +275,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
     int cycle = 1;
     bool isInhaling = true;
 
-    // Use Timer.periodic for a stable timeline and smooth UI updates during rapid intervals.
+    
     _phaseTimer?.cancel();
     _phaseTimer = Timer.periodic(tickDuration, (timer) {
       if (!_isSessionActive) {
@@ -318,9 +318,9 @@ class SessionNotifier extends StateNotifier<SessionState> {
     });
   }
 
-  // ==========================================================
-  // HELPERS & TEARDOWN
-  // ==========================================================
+  
+  
+  
 
   void _updateCustomState(String labelKey, String descKey, {
     required bool isBig,
@@ -352,11 +352,11 @@ class SessionNotifier extends StateNotifier<SessionState> {
     } catch (_) {}
   }
 
-  // Finalize the session and prepare for navigation to the summary screen.
+  
   void _finishSession() {
     _sessionTimer.stop();
 
-    // Update gamification stats
+    
     if (_currentLevel != null) {
       final gamificationService = _ref.read(gamificationServiceProvider);
       final totalRetention = state.retentionLogs.fold<int>(0, (prev, dur) => prev + dur.inSeconds);
@@ -368,7 +368,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
       );
       gamificationService.updateStreak();
 
-      // Save session to database (this is the final, full save)
+      
       _saveSessionToDatabase(totalRetention);
     }
 
@@ -376,7 +376,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
       phase: const SessionPhase.finished(),
       sessionDuration: _sessionTimer.elapsed,
     );
-    // Call stopSession but with saveProgress: false to avoid double saving.
+    
     stopSession(resetState: false, saveProgress: false);
   }
 
@@ -385,7 +385,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
       if (_currentLevel == null) return;
       
       final actualDuration = state.sessionDuration ?? _sessionTimer.elapsed;
-      if (actualDuration.inSeconds < 5) return; // Don't save very short accidental sessions
+      if (actualDuration.inSeconds < 5) return; 
 
       final prefs = await SharedPreferences.getInstance();
       final sessionsList = prefs.getStringList('sessions') ?? [];
@@ -394,7 +394,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
         'levelKey': _currentLevel!.key,
         'timestamp': DateTime.now().toIso8601String(),
         'duration': actualDuration.inSeconds,
-        'rounds': state.currentRound, // Use current round for interrupted sessions
+        'rounds': state.currentRound, 
         'retentionSeconds': totalRetention,
       };
 
@@ -412,10 +412,10 @@ class SessionNotifier extends StateNotifier<SessionState> {
   }
 
 
-  // Clean up resources and timers when the session is explicitly stopped or cancelled.
+  
   void stopSession({bool resetState = true, bool saveProgress = true}) {
     if (_isSessionActive && saveProgress) {
-      // Save partial progress before stopping
+      
       final totalRetention = state.retentionLogs.fold<int>(0, (prev, dur) => prev + dur.inSeconds);
       _saveSessionToDatabase(totalRetention);
     }
@@ -426,7 +426,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
     WakelockPlus.disable();
     _audioManager.stopDrone();
 
-    // Reset the state to clear the UI and prevent stale data from persisting.
+    
     if (resetState) state = SessionState.initial();
   }
 

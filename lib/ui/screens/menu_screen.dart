@@ -24,7 +24,7 @@ class MenuScreen extends ConsumerWidget {
         if (didPop) return;
         final shouldExit = await _showExitDialog(context);
         if (shouldExit == true) {
-          SystemNavigator.pop();
+          await SystemNavigator.pop();
         }
       },
       child: Scaffold(
@@ -49,8 +49,8 @@ class MenuScreen extends ConsumerWidget {
             ),
             SafeArea(
               child: isLandscape
-                  ? _buildLandscapeLayout(context, ref)
-                  : _buildPortraitLayout(context, ref),
+                  ? _buildLandscapeLayout(context)
+                  : _buildPortraitLayout(context),
             ),
           ],
         ),
@@ -84,7 +84,7 @@ class MenuScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildPortraitLayout(BuildContext context, WidgetRef ref) {
+  Widget _buildPortraitLayout(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final bool isSmallScreen = screenHeight < 700;
 
@@ -131,129 +131,54 @@ class MenuScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 25),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8.0),
-                  child: Text(L10n.get(context, 'menu_section_classic'), style: const TextStyle(color: Colors.white30, fontSize: 10, letterSpacing: 1)),
-                ),
-                _buildZenButton(context, ref, "mild"),
-                const SizedBox(height: 10),
-                _buildZenButton(context, ref, "strong"),
-                const SizedBox(height: 10),
-                _buildZenButton(context, ref, "beast"),
-                const SizedBox(height: 10),
-                _buildZenButton(context, ref, "guru"),
+            
+            
+            _buildSectionLabel(context, 'menu_section_classic'),
+            const SizedBox(height: 15),
+            _buildZenButton(context, 'mild'),
+            const SizedBox(height: 12),
+            _buildZenButton(context, 'strong'),
+            const SizedBox(height: 12),
+            _buildZenButton(context, 'beast'),
+            const SizedBox(height: 12),
+            _buildZenButton(context, 'guru'),
 
-                const SizedBox(height: 30),
+            const SizedBox(height: 30),
 
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8.0),
-                  child: Text(L10n.get(context, 'menu_section_special'), style: const TextStyle(color: Colors.white30, fontSize: 10, letterSpacing: 1)),
-                ),
-                _buildZenButton(context, ref, "box"),
-                const SizedBox(height: 10),
-                _buildZenButton(context, ref, "relax"),
-                const SizedBox(height: 10),
-                _buildZenButton(context, ref, "fire"),
-              ],
-            ),
+            _buildSectionLabel(context, 'menu_section_special'),
+            const SizedBox(height: 15),
+            _buildZenButton(context, 'box'),
+            const SizedBox(height: 12),
+            _buildZenButton(context, 'relax'),
+            const SizedBox(height: 12),
+            _buildZenButton(context, 'fire'),
 
             const SizedBox(height: 40),
 
-            Center(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  InkWell(
-                    onTap: () => ref.read(localeProvider.notifier).toggleLocale(),
-                    borderRadius: BorderRadius.circular(30),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                      child: Text(
-                        (Localizations.maybeLocaleOf(context)?.languageCode ?? 'pl') == 'pl' ? 'EN' : 'PL',
-                        style: const TextStyle(color: AppTheme.textDim, fontSize: 12, fontWeight: FontWeight.bold),
-                      ),
+            
+            _buildWideMenuButton(context, Icons.spa, 'menu_guide_button', () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InstructionScreen()))),
+            const SizedBox(height: 15),
+            _buildWideMenuButton(context, Icons.history, 'menu_history_button', () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HistoryScreen()))),
+            const SizedBox(height: 15),
+            _buildWideMenuButton(context, Icons.schedule, 'menu_schedule_button', () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SchedulerScreen()))),
+
+            const SizedBox(height: 40),
+
+            Consumer(builder: (context, ref, child) {
+              return Center(
+                child: InkWell(
+                  onTap: () => ref.read(localeProvider.notifier).toggleLocale(),
+                  borderRadius: BorderRadius.circular(30),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    child: Text(
+                      (Localizations.maybeLocaleOf(context)?.languageCode ?? 'pl') == 'pl' ? 'EN' : 'PL',
+                      style: const TextStyle(color: AppTheme.textDim, fontSize: 12, fontWeight: FontWeight.bold),
                     ),
                   ),
-
-                  const SizedBox(width: 10),
-
-                  InkWell(
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(builder: (context) => const InstructionScreen()),
-                      );
-                    },
-                    borderRadius: BorderRadius.circular(30),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 10),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: AppTheme.textDim.withAlpha(77)),
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.spa, color: AppTheme.textDim, size: 16),
-                          const SizedBox(width: 8),
-                          Text(L10n.get(context, 'menu_guide_button'), style: const TextStyle(color: AppTheme.textDim, fontSize: 12, letterSpacing: 1.0)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 15),
-
-            Center(
-              child: InkWell(
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (context) => const HistoryScreen()),
-                  );
-                },
-                borderRadius: BorderRadius.circular(30),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 10),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.history, color: AppTheme.textDim, size: 16),
-                      const SizedBox(width: 8),
-                      Text(L10n.get(context, 'menu_history_button'), style: const TextStyle(color: AppTheme.textDim, fontSize: 12, letterSpacing: 1.0)),
-                    ],
-                  ),
                 ),
-              ),
-            ),
-
-            const SizedBox(height: 15),
-
-            Center(
-              child: InkWell(
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (context) => const SchedulerScreen()),
-                  );
-                },
-                borderRadius: BorderRadius.circular(30),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 10),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.schedule, color: AppTheme.textDim, size: 16),
-                      const SizedBox(width: 8),
-                      Text(L10n.get(context, 'menu_schedule_button'), style: const TextStyle(color: AppTheme.textDim, fontSize: 12, letterSpacing: 1.0)),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+              );
+            }),
 
             const SizedBox(height: 30),
           ],
@@ -262,109 +187,67 @@ class MenuScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildLandscapeLayout(BuildContext context, WidgetRef ref) {
+  Widget _buildLandscapeLayout(BuildContext context) {
     return Row(
       children: [
+        
         Expanded(
-          flex: 4,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                "${L10n.get(context, 'menu_title_1')}\n${L10n.get(context, 'menu_title_2')}",
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w300,
-                  color: AppTheme.textLight,
-                  letterSpacing: 4.0,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                L10n.get(context, 'menu_subtitle'),
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w300,
-                  color: AppTheme.primary,
-                  letterSpacing: 2.0,
-                ),
-              ),
-              const SizedBox(height: 30),
-              Row(
+          flex: 2,
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(32.0),
+              child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  InkWell(
-                    onTap: () => ref.read(localeProvider.notifier).toggleLocale(),
-                    borderRadius: BorderRadius.circular(30),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  Text(
+                    "${L10n.get(context, 'menu_title_1')}\n${L10n.get(context, 'menu_title_2')}",
+                    style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w300, color: AppTheme.textLight, letterSpacing: 4.0),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(L10n.get(context, 'menu_subtitle'), style: const TextStyle(fontSize: 10, color: AppTheme.primary, letterSpacing: 2.0)),
+                  const SizedBox(height: 40),
+                  
+                  _buildLandscapeNavButton(context, Icons.spa, 'menu_guide_button', () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InstructionScreen()))),
+                  const SizedBox(height: 12),
+                  _buildLandscapeNavButton(context, Icons.history, 'menu_history_button', () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HistoryScreen()))),
+                  const SizedBox(height: 12),
+                  _buildLandscapeNavButton(context, Icons.schedule, 'menu_schedule_button', () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SchedulerScreen()))),
+                  
+                  const SizedBox(height: 32),
+                  Consumer(builder: (context, ref, child) {
+                    return InkWell(
+                      onTap: () => ref.read(localeProvider.notifier).toggleLocale(),
                       child: Text(
-                        (Localizations.maybeLocaleOf(context)?.languageCode ?? 'pl') == 'pl' ? 'EN' : 'PL',
-                        style: const TextStyle(color: AppTheme.textDim, fontSize: 12, fontWeight: FontWeight.bold),
+                        (Localizations.maybeLocaleOf(context)?.languageCode ?? 'pl') == 'pl' ? 'SWITCH TO ENGLISH' : 'ZMIEŃ NA POLSKI',
+                        style: const TextStyle(color: Colors.white24, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  InkWell(
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(builder: (context) => const InstructionScreen()),
-                      );
-                    },
-                    borderRadius: BorderRadius.circular(30),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: AppTheme.textDim.withAlpha(77)),
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.spa, color: AppTheme.textDim, size: 16),
-                          const SizedBox(width: 8),
-                          Text(L10n.get(context, 'menu_guide_button'), style: const TextStyle(color: AppTheme.textDim, fontSize: 12, letterSpacing: 1.0)),
-                        ],
-                      ),
-                    ),
-                  ),
+                    );
+                  }),
                 ],
               ),
-            ],
+            ),
           ),
         ),
-
-        Container(width: 1, color: Colors.white10, margin: const EdgeInsets.symmetric(vertical: 20)),
-
+        
         Expanded(
-          flex: 6,
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+          flex: 3,
+          child: Container(
+            decoration: BoxDecoration(border: Border(left: BorderSide(color: Colors.white.withAlpha(13)))),
+            child: GridView.count(
+              padding: const EdgeInsets.all(24),
+              crossAxisCount: 2,
+              childAspectRatio: 2.2,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
               children: [
-                Text(L10n.get(context, 'menu_section_classic'), style: const TextStyle(color: Colors.white30, fontSize: 10, letterSpacing: 1)),
-                const SizedBox(height: 5),
-                _buildZenButton(context, ref, "mild"),
-                const SizedBox(height: 10),
-                _buildZenButton(context, ref, "strong"),
-                const SizedBox(height: 10),
-                _buildZenButton(context, ref, "beast"),
-                const SizedBox(height: 10),
-                _buildZenButton(context, ref, "guru"),
-
-                const SizedBox(height: 25),
-
-                Text(L10n.get(context, 'menu_section_special'), style: const TextStyle(color: Colors.white30, fontSize: 10, letterSpacing: 1)),
-                const SizedBox(height: 5),
-                _buildZenButton(context, ref, "box"),
-                const SizedBox(height: 10),
-                _buildZenButton(context, ref, "relax"),
-                const SizedBox(height: 10),
-                _buildZenButton(context, ref, "fire"),
+                _buildZenButton(context, 'mild'),
+                _buildZenButton(context, 'strong'),
+                _buildZenButton(context, 'beast'),
+                _buildZenButton(context, 'guru'),
+                _buildZenButton(context, 'box'),
+                _buildZenButton(context, 'relax'),
+                _buildZenButton(context, 'fire'),
               ],
             ),
           ),
@@ -373,103 +256,95 @@ class MenuScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildZenButton(BuildContext context, WidgetRef ref, String levelKey) {
+  Widget _buildSectionLabel(BuildContext context, String key) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 10),
+      child: Text(
+        L10n.get(context, key),
+        style: const TextStyle(color: Colors.white24, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 2),
+      ),
+    );
+  }
+
+  Widget _buildWideMenuButton(BuildContext context, IconData icon, String key, VoidCallback onTap) {
+    return Center(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(30),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: AppTheme.textDim, size: 16),
+              const SizedBox(width: 8),
+              Text(L10n.get(context, key), style: const TextStyle(color: AppTheme.textDim, fontSize: 12, letterSpacing: 1.0)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLandscapeNavButton(BuildContext context, IconData icon, String key, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(color: Colors.white.withAlpha(13), borderRadius: BorderRadius.circular(12)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: AppTheme.textDim, size: 16),
+            const SizedBox(width: 12),
+            Text(L10n.get(context, key), style: const TextStyle(color: AppTheme.textDim, fontSize: 11, letterSpacing: 1.0)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildZenButton(BuildContext context, String levelKey) {
     final level = LevelData.levels[levelKey]!;
     final title = L10n.get(context, level.title);
+    
     final pace = level.type == ExerciseType.wimHof
         ? level.breathPace.inMilliseconds / 1000 == 3.0
         ? "3.0s"
         : "${level.breathPace.inMilliseconds / 1000}s"
         : L10n.get(context, level.subtitle);
 
-    String desc = "";
-    if (level.type == ExerciseType.wimHof) {
-      final roundsText = level.totalRounds >= 5 ? L10n.get(context, 'desc_rounds_pl') : L10n.get(context, 'desc_rounds');
-      desc = "${level.totalBreaths} ${L10n.get(context, 'desc_breaths')} • ${level.totalRounds} $roundsText";
-    } else if (level.type == ExerciseType.boxBreathing) {
-      desc = "16 ${L10n.get(context, 'desc_cycles')} • ${L10n.get(context, 'desc_steel_nerves')}";
-    } else if (level.type == ExerciseType.relax478) {
-      desc = "~10 min • ${L10n.get(context, 'desc_deep_sleep')}";
-    } else if (level.type == ExerciseType.fireBreathing) {
-      desc = "3 min • ${L10n.get(context, 'desc_pure_energy')}";
-    }
-
-    return Hero(
-      tag: 'level_card_${level.key}',
-      child: Material(
-        type: MaterialType.transparency,
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                level.color.withAlpha(38),
-                Colors.transparent,
-              ],
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-            ),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: level.color.withAlpha(77), width: 1),
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (context) => IntroScreen(level: level)),
-                );
-              },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
-                child: Row(
+    return InkWell(
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (context) => IntroScreen(level: level))),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          color: Colors.white.withAlpha(13),
+          border: Border.all(color: Colors.white.withAlpha(13)),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Stack(
+            children: [
+              Positioned(
+                left: 0, top: 0, bottom: 0,
+                child: Container(width: 4, color: level.color),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 8, height: 8,
-                      decoration: BoxDecoration(color: level.color, shape: BoxShape.circle, boxShadow: [BoxShadow(color: level.color, blurRadius: 6)]),
-                    ),
-                    const SizedBox(width: 20),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                  title,
-                                  style: const TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w500,
-                                      color: AppTheme.textLight,
-                                      letterSpacing: 2.0
-                                  )
-                              ),
-                              Text(
-                                  pace,
-                                  style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: level.color
-                                  )
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            desc,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppTheme.textDim.withAlpha(179),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    Text(title.toUpperCase(), style: TextStyle(color: level.color, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                    const SizedBox(height: 2),
+                    Text(pace, style: const TextStyle(color: Colors.white38, fontSize: 11)),
                   ],
                 ),
               ),
-            ),
+            ],
           ),
         ),
       ),

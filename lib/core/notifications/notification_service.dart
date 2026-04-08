@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -18,10 +20,21 @@ class NotificationService {
     if (_isInitialized) return;
 
     tz_data.initializeTimeZones();
+    
+    
+    
+    try {
+      final String currentTimeZone = DateTime.now().timeZoneName;
+      
+      
+      debugPrint('🌎 System TimeZone detected: $currentTimeZone');
+    } catch (e) {
+      debugPrint('⚠️ Error detecting timezone: $e');
+    }
 
-    // Use ic_launcher as the resource name. This MUST exist in mipmap folders.
+    
     const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('ic_launcher');
+        AndroidInitializationSettings('launcher_icon');
 
     final DarwinInitializationSettings initializationSettingsIOS =
         DarwinInitializationSettings(
@@ -36,14 +49,14 @@ class NotificationService {
     await _notificationsPlugin.initialize(
       initializationSettings,
       onDidReceiveNotificationResponse: (details) async {
-        // Handle notification tap
+        
       },
     );
 
     await _createNotificationChannels();
 
     _isInitialized = true;
-    debugPrint('✅ Notification Service Initialized');
+    debugPrint('✅ Notification Service Fully Initialized');
   }
 
   Future<void> _createNotificationChannels() async {
@@ -60,13 +73,14 @@ class NotificationService {
       playSound: true,
       enableVibration: true,
       showBadge: true,
+      enableLights: true,
     );
 
     const AndroidNotificationChannel dailyChannel = AndroidNotificationChannel(
       'daily_reminder_channel_id',
       'Daily Reminders',
       description: 'Daily motivation to breathe.',
-      importance: Importance.high,
+      importance: Importance.max,
       playSound: true,
       enableVibration: true,
       showBadge: true,
@@ -77,15 +91,22 @@ class NotificationService {
   }
 
   Future<bool> requestPermissions() async {
-    // 1. Request POST_NOTIFICATIONS (Android 13+)
+    
     final notificationStatus = await Permission.notification.request();
     
-    // 2. Request EXACT_ALARM (Android 12+)
-    if (await Permission.scheduleExactAlarm.isDenied) {
-      await Permission.scheduleExactAlarm.request();
+    
+    
+    final androidPlugin = _notificationsPlugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    
+    if (androidPlugin != null) {
+      final bool? canSchedule = await androidPlugin.canScheduleExactNotifications();
+      if (canSchedule == false) {
+        await Permission.scheduleExactAlarm.request();
+      }
     }
 
-    // 3. Request IGNORE_BATTERY_OPTIMIZATIONS
+    
     if (await Permission.ignoreBatteryOptimizations.isDenied) {
       await Permission.ignoreBatteryOptimizations.request();
     }

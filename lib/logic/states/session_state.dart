@@ -29,7 +29,7 @@ class SessionState with _$SessionState {
 
     Duration? sessionDuration,
 
-    // Override the default phase UI with custom text and sizing for specialized exercises like Box Breathing.
+    
     String? customLabel,
     String? customDescription,
     bool? customIsBig,

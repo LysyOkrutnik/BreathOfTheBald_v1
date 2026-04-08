@@ -15,7 +15,7 @@ class AudioManager {
   final AudioPlayer _sfxPlayer = AudioPlayer();
   bool _isInitialized = false;
 
-  // Initialize the audio session and players. Fail silently to prevent crashes if audio assets are missing.
+  
   Future<void> init() async {
     if (_isInitialized) return;
     try {
@@ -40,7 +40,7 @@ class AudioManager {
       _isInitialized = true;
     } catch (e) {
       debugPrint("⚠️ AUDIO ERROR (Init): $e. Verify audio assets exist!");
-      // Mark as initialized to allow the app to function without audio capabilities.
+      
       _isInitialized = true;
     }
   }
@@ -59,7 +59,7 @@ class AudioManager {
     try {
       await _dronePlayer.stop();
     } catch (e) {
-      // Fail silently.
+      
     }
   }
 
@@ -69,7 +69,7 @@ class AudioManager {
 
   Future<void> _safePlay(String path) async {
     try {
-      // Interrupt any currently playing SFX to prioritize the new sound.
+      
       await _sfxPlayer.stop();
       await _sfxPlayer.setAsset(path);
       _sfxPlayer.play();
@@ -82,7 +82,7 @@ class AudioManager {
     try {
       await _dronePlayer.setVolume(AppConstants.volumeMin);
     } catch (e) {
-      // Fail silently.
+      
     }
   }
 
@@ -90,7 +90,7 @@ class AudioManager {
     try {
       await _dronePlayer.setVolume(AppConstants.volumeMax);
     } catch (e) {
-      // Fail silently.
+      
     }
   }
 
