@@ -75,7 +75,6 @@ flutter:
 # Maintain flush left indentation to prevent YAML parsing errors.
 flutter_launcher_icons:
   android: "launcher_icon"
-  ios: true
   image_path: "assets/images/icon.png"
   min_sdk_android: 21
 
