@@ -1,15 +1,16 @@
 import 'dart:ui';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:okrutnik_breath/config/l10n.dart';
+import 'package:okrutnik_breath/config/responsive.dart';
 import 'package:okrutnik_breath/config/theme.dart';
+import 'package:okrutnik_breath/config/transitions.dart';
 import 'package:okrutnik_breath/logic/notifiers/session_notifier.dart';
 import 'package:okrutnik_breath/logic/states/session_state.dart';
 import 'package:okrutnik_breath/ui/screens/menu_screen.dart';
 import 'package:okrutnik_breath/ui/screens/summary_screen.dart';
+import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/ferrofluid_painter.dart';
-import 'package:okrutnik_breath/ui/widgets/particle_background.dart';
 
 class SessionScreen extends ConsumerWidget {
   const SessionScreen({super.key});
@@ -19,96 +20,178 @@ class SessionScreen extends ConsumerWidget {
     final state = ref.watch(sessionProvider);
     final notifier = ref.read(sessionProvider.notifier);
 
-    // Navigate to the summary screen when the session is marked as finished.
     ref.listen(sessionProvider, (prev, next) {
       if (next.phase == const SessionPhase.finished()) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const SummaryScreen()),
-        );
+        Navigator.of(context).pushReplacement(fadeThroughRoute(const SummaryScreen()));
       }
     });
 
-    void showExitDialog() {
-      showDialog(
-        context: context,
-        barrierColor: Colors.black.withAlpha(153),
-        builder: (context) => BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-          child: Dialog(
-            backgroundColor: Colors.transparent,
-            insetPadding: const EdgeInsets.all(20),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-              decoration: BoxDecoration(
-                color: Colors.white.withAlpha(13),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: Colors.white.withAlpha(26)),
-                boxShadow: [BoxShadow(color: Colors.black.withAlpha(204), blurRadius: 30, spreadRadius: 10)],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.priority_high_rounded, color: AppTheme.danger, size: 32),
-                  const SizedBox(height: 24),
-                  Text(L10n.get(context, 'session_exit_dialog_title'), textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w300, letterSpacing: 3.0)),
-                  const SizedBox(height: 32),
-                  Row(children: [
-                    Expanded(child: TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(L10n.get(context, 'session_exit_dialog_back'), style: const TextStyle(color: Colors.white70)))),
-                    const SizedBox(width: 16),
-                    Expanded(child: ElevatedButton(onPressed: () { notifier.stopSession(); Navigator.of(context).pop(); Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const MenuScreen())); }, style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger), child: Text(L10n.get(context, 'session_exit_dialog_finish'), style: const TextStyle(color: Colors.white))))
-                  ]),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    // Determine the scale and duration for the central breathing animation based on the current session phase.
-    bool shouldBeBig = false;
-    Duration currentDuration = const Duration(seconds: 2);
-    if (state.customIsBig != null) {
-      shouldBeBig = state.customIsBig!;
-      state.phase.maybeWhen(breathing: (_, __, dur) => currentDuration = dur, orElse: () {});
-    } else {
-      state.phase.maybeWhen(
-        breathing: (_, isInhaling, duration) { shouldBeBig = isInhaling; currentDuration = duration; },
-        retention: (_) { shouldBeBig = false; currentDuration = const Duration(seconds: 2); },
-        recovery: (remaining) { shouldBeBig = remaining.inSeconds > 2; currentDuration = const Duration(seconds: 2); },
-        orElse: () {},
-      );
-    }
+    final visuals = _Visuals.from(state);
 
     return PopScope(
       canPop: false,
-      onPopInvokedWithResult: (didPop, result) async { if (didPop) return; showExitDialog(); },
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _showExitDialog(context, notifier);
+      },
       child: Scaffold(
         backgroundColor: Colors.black,
-        body: OrientationBuilder(
-          builder: (context, orientation) {
-            final bool isLandscape = orientation == Orientation.landscape;
-            return Stack(
-              children: [
-                // Render the particle background, which is visible in all modes.
-                const Positioned.fill(child: ParticleBackground()),
-
-                // Conditionally render the UI based on ghost mode status and device orientation.
-                if (state.isGhostMode)
-                  _buildGhostModeUI(context, notifier, shouldBeBig, currentDuration)
-                else
-                  isLandscape
-                      ? _buildLandscapeLayout(context, state, notifier, shouldBeBig, currentDuration, showExitDialog)
-                      : _buildPortraitLayout(context, state, notifier, shouldBeBig, currentDuration, showExitDialog),
-              ],
-            );
-          },
+        body: Stack(
+          children: [
+            const Positioned.fill(child: AppBackground(intensity: 0.45)),
+            SafeArea(
+              child: state.isGhostMode
+                  ? _GhostLayout(notifier: notifier, visuals: visuals)
+                  : context.isLandscape
+                      ? _LandscapeLayout(state: state, notifier: notifier, visuals: visuals)
+                      : _PortraitLayout(state: state, notifier: notifier, visuals: visuals),
+            ),
+          ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildGhostModeUI(BuildContext context, SessionNotifier notifier, bool shouldBeBig, Duration currentDuration) {
+/// Resolved animation inputs for the current phase.
+class _Visuals {
+  const _Visuals({required this.isBig, required this.duration});
+  final bool isBig;
+  final Duration duration;
+
+  factory _Visuals.from(SessionState state) {
+    var isBig = false;
+    var duration = const Duration(seconds: 2);
+    if (state.customIsBig != null) {
+      isBig = state.customIsBig!;
+      state.phase.maybeWhen(
+        breathing: (_, __, d) => duration = d,
+        orElse: () {},
+      );
+    } else {
+      state.phase.maybeWhen(
+        breathing: (_, isInhaling, d) {
+          isBig = isInhaling;
+          duration = d;
+        },
+        recovery: (remaining) => isBig = remaining.inSeconds > 2,
+        orElse: () {},
+      );
+    }
+    return _Visuals(isBig: isBig, duration: duration);
+  }
+}
+
+double _blobSize(BuildContext context, BoxConstraints c) {
+  final limit = c.biggest.shortestSide * (context.isTablet ? 0.7 : 0.82);
+  return limit.clamp(200.0, 520.0);
+}
+
+class _PortraitLayout extends StatelessWidget {
+  const _PortraitLayout({required this.state, required this.notifier, required this.visuals});
+  final SessionState state;
+  final SessionNotifier notifier;
+  final _Visuals visuals;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Center(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onDoubleTap: notifier.toggleGhostMode,
+            onTap: () => state.phase.maybeWhen<void>(
+                retention: (_) => notifier.finishRetention(), orElse: () {}),
+            onLongPress: () => _showExitDialog(context, notifier),
+            child: LayoutBuilder(
+              builder: (context, c) => FerrofluidWidget(
+                size: _blobSize(context, c),
+                isInhaling: visuals.isBig,
+                duration: visuals.duration,
+              ),
+            ),
+          ),
+        ),
+        Column(
+          children: [
+            _TopBar(state: state, notifier: notifier),
+            const SizedBox(height: AppSpacing.xl),
+            _PhaseText(state: state, notifier: notifier),
+            const Spacer(),
+            _ProgressBar(state: state),
+            const SizedBox(height: AppSpacing.xl),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _LandscapeLayout extends StatelessWidget {
+  const _LandscapeLayout({required this.state, required this.notifier, required this.visuals});
+  final SessionState state;
+  final SessionNotifier notifier;
+  final _Visuals visuals;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onDoubleTap: notifier.toggleGhostMode,
+            onTap: () => state.phase.maybeWhen<void>(
+                retention: (_) => notifier.finishRetention(), orElse: () {}),
+            onLongPress: () => _showExitDialog(context, notifier),
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: LayoutBuilder(
+                builder: (context, c) => Center(
+                  child: FerrofluidWidget(
+                    size: _blobSize(context, c),
+                    isInhaling: visuals.isBig,
+                    duration: visuals.duration,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: Column(
+            children: [
+              _TopBar(state: state, notifier: notifier),
+              // The phase text scrolls/centres in the middle so a short
+              // landscape phone never overflows during the (taller) retention
+              // phase.
+              Expanded(
+                child: Center(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: _PhaseText(state: state, notifier: notifier),
+                  ),
+                ),
+              ),
+              _ProgressBar(state: state),
+              const SizedBox(height: AppSpacing.xl),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _GhostLayout extends StatelessWidget {
+  const _GhostLayout({required this.notifier, required this.visuals});
+  final SessionNotifier notifier;
+  final _Visuals visuals;
+
+  @override
+  Widget build(BuildContext context) {
+    final ringSize =
+        (context.shortestSide * (context.isTablet ? 0.5 : 0.66)).clamp(180.0, 420.0);
     return GestureDetector(
       onDoubleTap: notifier.toggleGhostMode,
       behavior: HitTestBehavior.opaque,
@@ -116,103 +199,98 @@ class SessionScreen extends ConsumerWidget {
         children: [
           Center(
             child: AnimatedScale(
-              scale: shouldBeBig ? 1.0 : 0.6,
-              duration: currentDuration ~/ 2,
+              scale: visuals.isBig ? 1.0 : 0.6,
+              duration: visuals.duration ~/ 2,
               curve: Curves.easeInOut,
               child: Container(
-                width: 250,
-                height: 250,
+                width: ringSize,
+                height: ringSize,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white.withAlpha(13), width: 1.5),
+                  border: Border.all(color: Colors.white.withAlpha(14), width: 1.5),
                 ),
               ),
             ),
           ),
           Positioned(
-            bottom: 100,
+            bottom: 80,
             left: 0,
             right: 0,
-            child: Center(
-              child: Text(
-                "${L10n.get(context, 'session_ghost_mode_title')}\n${L10n.get(context, 'session_ghost_mode_subtitle')}",
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white12, fontSize: 10, letterSpacing: 2),
-              ),
+            child: Text(
+              "${L10n.get(context, 'session_ghost_mode_title')}\n"
+              "${L10n.get(context, 'session_ghost_mode_subtitle')}",
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white12, fontSize: 10, letterSpacing: 2),
             ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildLandscapeLayout(BuildContext context, SessionState state, SessionNotifier notifier, bool shouldBeBig, Duration currentDuration, VoidCallback showExitDialog) {
-    return SafeArea(
-      child: Row(
-        children: [
-          Expanded(
-            flex: 1,
-            child: GestureDetector(
-              onDoubleTap: notifier.toggleGhostMode,
-              onTap: () { state.phase.maybeWhen(retention: (_) => notifier.finishRetention(), orElse: () {}); },
-              onLongPress: showExitDialog,
-              // Use a FittedBox to ensure the animation scales correctly within the landscape layout without clipping.
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: FerrofluidWidget(size: 300, isInhaling: shouldBeBig, duration: currentDuration),
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 1,
-            child: Column(
-              children: [
-                _buildTopBar(context, state, notifier, showExitDialog),
-                const Spacer(),
-                _buildTopText(context, state, notifier),
-                const Spacer(),
-                _buildBottomProgress(state),
-                const SizedBox(height: 30),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+class _TopBar extends StatelessWidget {
+  const _TopBar({required this.state, required this.notifier});
+  final SessionState state;
+  final SessionNotifier notifier;
 
-  Widget _buildTopBar(BuildContext context, SessionState state, SessionNotifier notifier, VoidCallback showExitDialog) {
+  @override
+  Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          IconButton(icon: const Icon(Icons.close, color: Colors.white30, size: 28), onPressed: showExitDialog),
-          if (kDebugMode)
-            TextButton(
-              onPressed: notifier.finishSession,
-              child: const Text('SKIP', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-            ),
+          IconButton(
+            icon: const Icon(Icons.close_rounded, color: Colors.white38, size: 26),
+            onPressed: () => _showExitDialog(context, notifier),
+          ),
           if (state.totalRounds > 1)
-            Text("${L10n.get(context, 'session_round')} ${state.currentRound} / ${state.totalRounds}", style: const TextStyle(color: Colors.white54, fontSize: 12, letterSpacing: 1.2)),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md, vertical: AppSpacing.xs),
+              decoration: BoxDecoration(
+                color: Colors.white.withAlpha(12),
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+              ),
+              child: Text(
+                "${L10n.get(context, 'session_round')} ${state.currentRound}/${state.totalRounds}",
+                style: const TextStyle(
+                    color: Colors.white60, fontSize: 11, letterSpacing: 1.5),
+              ),
+            )
+          else
+            const SizedBox(width: 44),
         ],
       ),
     );
   }
+}
 
-  Widget _buildTopText(BuildContext context, SessionState state, SessionNotifier notifier) {
-    String mainText = "";
-    String subText = "";
-    Color color = Colors.white;
+class _PhaseText extends StatelessWidget {
+  const _PhaseText({required this.state, required this.notifier});
+  final SessionState state;
+  final SessionNotifier notifier;
+
+  @override
+  Widget build(BuildContext context) {
+    var mainText = '';
+    var subText = '';
+    var color = Colors.white;
+    var showTapHint = false;
 
     if (state.customLabel != null) {
       mainText = L10n.get(context, state.customLabel!);
-      subText = state.customDescription != null ? L10n.get(context, state.customDescription!) : "";
-      if (state.customLabel!.contains("inhale")) {
+      subText = state.customDescription != null
+          ? L10n.get(context, state.customDescription!)
+          : '';
+      final label = state.customLabel!;
+      if (label.contains('inhale')) {
         color = AppTheme.breathInhale;
-      } else if (state.customLabel!.contains("exhale")) {
+      } else if (label.contains('exhale')) {
         color = AppTheme.breathExhale;
-      } else if (state.customLabel!.contains("fire")) {
+      } else if (label.contains('fire')) {
         color = AppTheme.danger;
       } else {
         color = AppTheme.primary;
@@ -221,89 +299,183 @@ class SessionScreen extends ConsumerWidget {
       state.phase.when(
         idle: () {},
         breathing: (index, isInhaling, _) {
-          mainText = isInhaling ? L10n.get(context, 'session_inhale') : L10n.get(context, 'session_exhale');
+          mainText = isInhaling
+              ? L10n.get(context, 'session_inhale')
+              : L10n.get(context, 'session_exhale');
           subText = "$index / ${state.totalBreathsInRound}";
           color = isInhaling ? AppTheme.breathInhale : AppTheme.breathExhale;
         },
         retention: (elapsed) {
           mainText = L10n.get(context, 'session_hold');
-          subText = "${elapsed.inMinutes}:${(elapsed.inSeconds % 60).toString().padLeft(2, '0')}";
+          subText =
+              "${elapsed.inMinutes}:${(elapsed.inSeconds % 60).toString().padLeft(2, '0')}";
           color = AppTheme.textDim;
+          showTapHint = true;
         },
         recovery: (remaining) {
           mainText = L10n.get(context, 'session_recovery');
           subText = "${remaining.inSeconds}";
           color = AppTheme.accent;
         },
-        finished: () { mainText = L10n.get(context, 'session_finished'); },
+        finished: () => mainText = L10n.get(context, 'session_finished'),
       );
     }
 
     return Column(
       children: [
-        Text(
-          mainText,
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 32, fontWeight: FontWeight.w300, color: color, letterSpacing: 4.0, shadows: [Shadow(color: color.withAlpha(128), blurRadius: 20)]),
+        AnimatedDefaultTextStyle(
+          duration: AppMotion.fast,
+          style: TextStyle(
+            fontSize: context.responsive(compact: 34, expanded: 44),
+            fontWeight: FontWeight.w200,
+            color: color,
+            letterSpacing: 6.0,
+            shadows: [Shadow(color: color.withAlpha(120), blurRadius: 24)],
+          ),
+          child: Text(mainText, textAlign: TextAlign.center),
         ),
-        const SizedBox(height: 10),
-        Text(subText, textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white30, letterSpacing: 2.0)),
-
-        if (state.phase.maybeMap(retention: (_) => true, orElse: () => false) && state.customLabel == null) ...[
-          const SizedBox(height: 40),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          subText,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.white30,
+            letterSpacing: 2.0,
+            fontFeatures: [FontFeature.tabularFigures()],
+          ),
+        ),
+        if (showTapHint && state.customLabel == null) ...[
+          const SizedBox(height: AppSpacing.xl),
           GestureDetector(
-            onTap: () => notifier.finishRetention(),
+            onTap: notifier.finishRetention,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-              decoration: BoxDecoration(border: Border.all(color: AppTheme.primary.withAlpha(128)), borderRadius: BorderRadius.circular(30), color: AppTheme.primary.withAlpha(26)),
-              child: Text(L10n.get(context, 'session_tap_to_inhale'), style: const TextStyle(color: AppTheme.primary, letterSpacing: 1.5, fontWeight: FontWeight.bold, fontSize: 12)),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.xl, vertical: AppSpacing.md),
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withAlpha(26),
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                border: Border.all(color: AppTheme.primary.withAlpha(120)),
+              ),
+              child: Text(
+                L10n.get(context, 'session_tap_to_inhale'),
+                style: const TextStyle(
+                  color: AppTheme.primary,
+                  letterSpacing: 1.5,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
             ),
           ),
-        ]
+        ],
       ],
     );
   }
+}
 
-  Widget _buildBottomProgress(SessionState state) {
-    double progress = 0.0;
-    if (state.customLabel != null && state.totalBreathsInRound > 0) {
-      state.phase.maybeWhen(breathing: (index, _, __) { progress = index / state.totalBreathsInRound; }, orElse: () {});
-    } else {
-      state.phase.maybeWhen(breathing: (index, _, __) => progress = index / state.totalBreathsInRound, orElse: () => progress = 0.0);
+class _ProgressBar extends StatelessWidget {
+  const _ProgressBar({required this.state});
+  final SessionState state;
+
+  @override
+  Widget build(BuildContext context) {
+    var progress = 0.0;
+    if (state.totalBreathsInRound > 0) {
+      state.phase.maybeWhen(
+        breathing: (index, _, __) => progress = index / state.totalBreathsInRound,
+        orElse: () {},
+      );
     }
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 40),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(2),
-        child: LinearProgressIndicator(value: progress.clamp(0.0, 1.0), backgroundColor: Colors.white10, valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primary), minHeight: 2),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(end: progress.clamp(0.0, 1.0)),
+          duration: AppMotion.fast,
+          builder: (context, value, _) => LinearProgressIndicator(
+            value: value,
+            backgroundColor: Colors.white10,
+            valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primary),
+            minHeight: 3,
+          ),
+        ),
       ),
     );
   }
+}
 
-  Widget _buildPortraitLayout(BuildContext context, SessionState state, SessionNotifier notifier, bool shouldBeBig, Duration currentDuration, VoidCallback showExitDialog) {
-    return Stack(
-      children: [
-        Center(
-          child: GestureDetector(
-            onDoubleTap: notifier.toggleGhostMode,
-            onTap: () { state.phase.maybeWhen(retention: (_) => notifier.finishRetention(), orElse: () {}); },
-            onLongPress: showExitDialog,
-            child: FerrofluidWidget(size: 300, isInhaling: shouldBeBig, duration: currentDuration),
+void _showExitDialog(BuildContext context, SessionNotifier notifier) {
+  showDialog(
+    context: context,
+    barrierColor: Colors.black.withAlpha(160),
+    builder: (dialogContext) => BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+      child: Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(AppSpacing.lg),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg, vertical: AppSpacing.xl),
+          decoration: BoxDecoration(
+            color: Colors.white.withAlpha(16),
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            border: Border.all(color: Colors.white.withAlpha(28)),
+            boxShadow: const [
+              BoxShadow(color: Colors.black54, blurRadius: 40, spreadRadius: 8),
+            ],
           ),
-        ),
-        SafeArea(
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              _buildTopBar(context, state, notifier, showExitDialog),
-              const SizedBox(height: 40),
-              _buildTopText(context, state, notifier),
-              const Spacer(),
-              _buildBottomProgress(state),
-              const SizedBox(height: 30),
+              const Icon(Icons.priority_high_rounded, color: AppTheme.danger, size: 34),
+              const SizedBox(height: AppSpacing.lg),
+              Text(
+                L10n.get(context, 'session_exit_dialog_title'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w300,
+                  letterSpacing: 2.5,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      child: Text(
+                        L10n.get(context, 'session_exit_dialog_back'),
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
+                      onPressed: () {
+                        notifier.stopSession();
+                        Navigator.of(dialogContext).pop();
+                        Navigator.of(context)
+                            .pushReplacement(fadeThroughRoute(const MenuScreen()));
+                      },
+                      child: Text(
+                        L10n.get(context, 'session_exit_dialog_finish'),
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
-      ],
-    );
-  }
+      ),
+    ),
+  );
 }

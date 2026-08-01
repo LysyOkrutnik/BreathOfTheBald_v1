@@ -3,7 +3,7 @@ import 'package:okrutnik_breath/config/theme.dart';
 
 enum Difficulty { mild, strong, beast, guru }
 
-enum ExerciseType { wimHof, boxBreathing, relax478, fireBreathing }
+enum ExerciseType { wimHof, boxBreathing, relax478, fireBreathing, custom }
 
 class LevelData {
   final String title;
@@ -19,6 +19,13 @@ class LevelData {
   // Parameters for loop-based or time-boxed exercises.
   final int? loopCount;
   final Duration? totalDuration;
+
+  // Per-phase durations (seconds) for custom user-defined patterns. A phase
+  // with 0 seconds is skipped.
+  final int inhaleSec;
+  final int holdInSec;
+  final int exhaleSec;
+  final int holdOutSec;
 
   // UI presentation mapping.
   final Color color;
@@ -36,11 +43,46 @@ class LevelData {
     this.breathPace = Duration.zero,
     this.loopCount,
     this.totalDuration,
+    this.inhaleSec = 0,
+    this.holdInSec = 0,
+    this.exhaleSec = 0,
+    this.holdOutSec = 0,
     required this.color,
     required this.instructionTitleKey,
     required this.instructionDescriptionKey,
     required this.instructionStepKeys,
   });
+
+  /// Builds a runtime [LevelData] for a user-defined custom pattern. [cycles]
+  /// is the number of breaths per round; [rounds] the number of rounds.
+  factory LevelData.custom({
+    required String name,
+    required int inhaleSec,
+    required int holdInSec,
+    required int exhaleSec,
+    required int holdOutSec,
+    required int cycles,
+    required int rounds,
+    Color color = const Color(0xFF4DD0E1),
+  }) {
+    return LevelData(
+      key: 'custom',
+      title: name,
+      subtitle: '',
+      type: ExerciseType.custom,
+      totalRounds: rounds,
+      totalBreaths: cycles,
+      loopCount: cycles,
+      inhaleSec: inhaleSec,
+      holdInSec: holdInSec,
+      exhaleSec: exhaleSec,
+      holdOutSec: holdOutSec,
+      color: color,
+      instructionTitleKey: name,
+      instructionDescriptionKey: '',
+      instructionStepKeys: const [],
+    );
+  }
 
   static const Map<String, LevelData> levels = {
     // --- WIM HOF ---

@@ -7,7 +7,9 @@ class GamificationService {
 
   GamificationService(this._profileRepository);
 
-  Future<void> updateXpAndLevel({
+  /// Applies the XP and level gains for a finished session and returns the
+  /// amount of XP that was earned, so the caller can persist it on the session.
+  Future<int> updateXpAndLevel({
     required int breathCount,
     required int retentionSeconds,
     required double multiplier,
@@ -18,13 +20,12 @@ class GamificationService {
     final int xpEarned = (breathCount * multiplier).round() + (retentionSeconds * 2);
     final int newTotalXp = profile.totalXp + xpEarned;
 
-    // Check for level up.
-    int newLevel = profile.level;
-    int xpForNextLevel = newLevel * 500;
-
-    while (newTotalXp >= xpForNextLevel) {
+    // Each level N is reached at a cumulative total of N * 500 XP. Derive the
+    // level purely from total XP (not the stored level) so it can never drift
+    // out of sync after a missed write.
+    int newLevel = 1;
+    while (newTotalXp >= newLevel * 500) {
       newLevel++;
-      xpForNextLevel = newLevel * 500;
     }
 
     await _profileRepository.updateUserProfile(
@@ -33,6 +34,8 @@ class GamificationService {
         level: Value(newLevel),
       ),
     );
+
+    return xpEarned;
   }
 
   Future<void> updateStreak() async {
@@ -40,18 +43,24 @@ class GamificationService {
     final now = DateTime.now();
     final lastSession = profile.lastSessionDate;
 
-    int newStreak = profile.dailyStreak;
-
-    if (lastSession != null) {
-      final difference = now.difference(lastSession);
-      if (difference.inHours > 24 && difference.inHours <= 48) {
-        newStreak++;
-      } else if (difference.inHours > 48) {
-        newStreak = 1; // Reset streak
-      }
-      // If less than 24h, streak remains the same.
+    int newStreak;
+    if (lastSession == null) {
+      newStreak = 1; // First ever session.
     } else {
-      newStreak = 1; // First session
+      // Compare calendar days, not elapsed hours: a session late one evening
+      // and early the next morning are on consecutive days and must count.
+      final today = DateTime(now.year, now.month, now.day);
+      final lastDay =
+          DateTime(lastSession.year, lastSession.month, lastSession.day);
+      final dayGap = today.difference(lastDay).inDays;
+
+      if (dayGap == 0) {
+        newStreak = profile.dailyStreak; // Another session the same day.
+      } else if (dayGap == 1) {
+        newStreak = profile.dailyStreak + 1; // Consecutive day.
+      } else {
+        newStreak = 1; // A day (or more) was missed; streak resets.
+      }
     }
 
     await _profileRepository.updateUserProfile(

@@ -28,7 +28,6 @@ dependencies:
   wakelock_plus: ^1.2.8
   flutter_background_service: ^5.0.10
   permission_handler: ^11.4.0
-  health: ^13.0.0
 
   # --- UI & ANIMATIONS ---
   flutter_animate: ^4.5.2
@@ -38,7 +37,10 @@ dependencies:
 
   # --- DATABASE ---
   drift: ^2.18.0
-  sqlite3_flutter_libs: ^0.6.0
+  # NOTE: 0.6.0 is an empty "end-of-life" stub that ships no native library,
+  # which leaves libsqlite3.so out of the APK and breaks all DB access. Pin to
+  # the last real 0.5.x release, which provides the sqlite3 2.x native library.
+  sqlite3_flutter_libs: ^0.5.41
   path_provider: ^2.1.3
   path: ^1.9.0
 
@@ -46,6 +48,7 @@ dependencies:
   flutter_local_notifications: ^17.2.1
   timezone: ^0.9.3
   intl: ^0.20.0
+  home_widget: ^0.9.3
 
 dev_dependencies:
   flutter_test:

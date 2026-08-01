@@ -10,40 +10,88 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
   $SessionsTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
-  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
       'id', aliasedName, false,
-      type: DriftSqlType.string, requiredDuringInsert: true);
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
   static const VerificationMeta _timestampMeta =
       const VerificationMeta('timestamp');
   @override
   late final GeneratedColumn<DateTime> timestamp = GeneratedColumn<DateTime>(
       'timestamp', aliasedName, false,
       type: DriftSqlType.dateTime, requiredDuringInsert: true);
-  static const VerificationMeta _modeIdMeta = const VerificationMeta('modeId');
+  static const VerificationMeta _levelKeyMeta =
+      const VerificationMeta('levelKey');
   @override
-  late final GeneratedColumn<String> modeId = GeneratedColumn<String>(
-      'mode_id', aliasedName, false,
+  late final GeneratedColumn<String> levelKey = GeneratedColumn<String>(
+      'level_key', aliasedName, false,
       type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _durationSecMeta =
+      const VerificationMeta('durationSec');
+  @override
+  late final GeneratedColumn<int> durationSec = GeneratedColumn<int>(
+      'duration_sec', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
   static const VerificationMeta _roundsMeta = const VerificationMeta('rounds');
   @override
   late final GeneratedColumn<int> rounds = GeneratedColumn<int>(
       'rounds', aliasedName, false,
       type: DriftSqlType.int, requiredDuringInsert: true);
-  static const VerificationMeta _maxRetentionSecMeta =
-      const VerificationMeta('maxRetentionSec');
+  static const VerificationMeta _retentionSecMeta =
+      const VerificationMeta('retentionSec');
   @override
-  late final GeneratedColumn<int> maxRetentionSec = GeneratedColumn<int>(
-      'max_retention_sec', aliasedName, false,
-      type: DriftSqlType.int, requiredDuringInsert: true);
+  late final GeneratedColumn<int> retentionSec = GeneratedColumn<int>(
+      'retention_sec', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
   static const VerificationMeta _xpEarnedMeta =
       const VerificationMeta('xpEarned');
   @override
   late final GeneratedColumn<int> xpEarned = GeneratedColumn<int>(
       'xp_earned', aliasedName, false,
-      type: DriftSqlType.int, requiredDuringInsert: true);
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _spo2MinMeta =
+      const VerificationMeta('spo2Min');
   @override
-  List<GeneratedColumn> get $columns =>
-      [id, timestamp, modeId, rounds, maxRetentionSec, xpEarned];
+  late final GeneratedColumn<int> spo2Min = GeneratedColumn<int>(
+      'spo2_min', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _spo2AvgMeta =
+      const VerificationMeta('spo2Avg');
+  @override
+  late final GeneratedColumn<int> spo2Avg = GeneratedColumn<int>(
+      'spo2_avg', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _hrMinMeta = const VerificationMeta('hrMin');
+  @override
+  late final GeneratedColumn<int> hrMin = GeneratedColumn<int>(
+      'hr_min', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _hrAvgMeta = const VerificationMeta('hrAvg');
+  @override
+  late final GeneratedColumn<int> hrAvg = GeneratedColumn<int>(
+      'hr_avg', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  @override
+  List<GeneratedColumn> get $columns => [
+        id,
+        timestamp,
+        levelKey,
+        durationSec,
+        rounds,
+        retentionSec,
+        xpEarned,
+        spo2Min,
+        spo2Avg,
+        hrMin,
+        hrAvg
+      ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -56,8 +104,6 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
-    } else if (isInserting) {
-      context.missing(_idMeta);
     }
     if (data.containsKey('timestamp')) {
       context.handle(_timestampMeta,
@@ -65,11 +111,19 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
     } else if (isInserting) {
       context.missing(_timestampMeta);
     }
-    if (data.containsKey('mode_id')) {
-      context.handle(_modeIdMeta,
-          modeId.isAcceptableOrUnknown(data['mode_id']!, _modeIdMeta));
+    if (data.containsKey('level_key')) {
+      context.handle(_levelKeyMeta,
+          levelKey.isAcceptableOrUnknown(data['level_key']!, _levelKeyMeta));
     } else if (isInserting) {
-      context.missing(_modeIdMeta);
+      context.missing(_levelKeyMeta);
+    }
+    if (data.containsKey('duration_sec')) {
+      context.handle(
+          _durationSecMeta,
+          durationSec.isAcceptableOrUnknown(
+              data['duration_sec']!, _durationSecMeta));
+    } else if (isInserting) {
+      context.missing(_durationSecMeta);
     }
     if (data.containsKey('rounds')) {
       context.handle(_roundsMeta,
@@ -77,19 +131,31 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
     } else if (isInserting) {
       context.missing(_roundsMeta);
     }
-    if (data.containsKey('max_retention_sec')) {
+    if (data.containsKey('retention_sec')) {
       context.handle(
-          _maxRetentionSecMeta,
-          maxRetentionSec.isAcceptableOrUnknown(
-              data['max_retention_sec']!, _maxRetentionSecMeta));
-    } else if (isInserting) {
-      context.missing(_maxRetentionSecMeta);
+          _retentionSecMeta,
+          retentionSec.isAcceptableOrUnknown(
+              data['retention_sec']!, _retentionSecMeta));
     }
     if (data.containsKey('xp_earned')) {
       context.handle(_xpEarnedMeta,
           xpEarned.isAcceptableOrUnknown(data['xp_earned']!, _xpEarnedMeta));
-    } else if (isInserting) {
-      context.missing(_xpEarnedMeta);
+    }
+    if (data.containsKey('spo2_min')) {
+      context.handle(_spo2MinMeta,
+          spo2Min.isAcceptableOrUnknown(data['spo2_min']!, _spo2MinMeta));
+    }
+    if (data.containsKey('spo2_avg')) {
+      context.handle(_spo2AvgMeta,
+          spo2Avg.isAcceptableOrUnknown(data['spo2_avg']!, _spo2AvgMeta));
+    }
+    if (data.containsKey('hr_min')) {
+      context.handle(
+          _hrMinMeta, hrMin.isAcceptableOrUnknown(data['hr_min']!, _hrMinMeta));
+    }
+    if (data.containsKey('hr_avg')) {
+      context.handle(
+          _hrAvgMeta, hrAvg.isAcceptableOrUnknown(data['hr_avg']!, _hrAvgMeta));
     }
     return context;
   }
@@ -101,17 +167,27 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return Session(
       id: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}id'])!,
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
       timestamp: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}timestamp'])!,
-      modeId: attachedDatabase.typeMapping
-          .read(DriftSqlType.string, data['${effectivePrefix}mode_id'])!,
+      levelKey: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}level_key'])!,
+      durationSec: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}duration_sec'])!,
       rounds: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}rounds'])!,
-      maxRetentionSec: attachedDatabase.typeMapping
-          .read(DriftSqlType.int, data['${effectivePrefix}max_retention_sec'])!,
+      retentionSec: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}retention_sec'])!,
       xpEarned: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}xp_earned'])!,
+      spo2Min: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}spo2_min']),
+      spo2Avg: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}spo2_avg']),
+      hrMin: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}hr_min']),
+      hrAvg: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}hr_avg']),
     );
   }
 
@@ -122,28 +198,62 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
 }
 
 class Session extends DataClass implements Insertable<Session> {
-  final String id;
+  final int id;
   final DateTime timestamp;
-  final String modeId;
+
+  /// Key of the [LevelData] exercise that was performed (e.g. 'mild', 'box').
+  final String levelKey;
+
+  /// Total wall-clock length of the session, in seconds.
+  final int durationSec;
   final int rounds;
-  final int maxRetentionSec;
+
+  /// Sum of all breath-hold (retention) durations across the session, in seconds.
+  final int retentionSec;
   final int xpEarned;
+
+  /// Blood-oxygen (SpO2 %) read from Health Connect during the session window;
+  /// null when no wearable data was available.
+  final int? spo2Min;
+  final int? spo2Avg;
+
+  /// Heart rate (bpm) read from Health Connect during the session window.
+  final int? hrMin;
+  final int? hrAvg;
   const Session(
       {required this.id,
       required this.timestamp,
-      required this.modeId,
+      required this.levelKey,
+      required this.durationSec,
       required this.rounds,
-      required this.maxRetentionSec,
-      required this.xpEarned});
+      required this.retentionSec,
+      required this.xpEarned,
+      this.spo2Min,
+      this.spo2Avg,
+      this.hrMin,
+      this.hrAvg});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
-    map['id'] = Variable<String>(id);
+    map['id'] = Variable<int>(id);
     map['timestamp'] = Variable<DateTime>(timestamp);
-    map['mode_id'] = Variable<String>(modeId);
+    map['level_key'] = Variable<String>(levelKey);
+    map['duration_sec'] = Variable<int>(durationSec);
     map['rounds'] = Variable<int>(rounds);
-    map['max_retention_sec'] = Variable<int>(maxRetentionSec);
+    map['retention_sec'] = Variable<int>(retentionSec);
     map['xp_earned'] = Variable<int>(xpEarned);
+    if (!nullToAbsent || spo2Min != null) {
+      map['spo2_min'] = Variable<int>(spo2Min);
+    }
+    if (!nullToAbsent || spo2Avg != null) {
+      map['spo2_avg'] = Variable<int>(spo2Avg);
+    }
+    if (!nullToAbsent || hrMin != null) {
+      map['hr_min'] = Variable<int>(hrMin);
+    }
+    if (!nullToAbsent || hrAvg != null) {
+      map['hr_avg'] = Variable<int>(hrAvg);
+    }
     return map;
   }
 
@@ -151,10 +261,21 @@ class Session extends DataClass implements Insertable<Session> {
     return SessionsCompanion(
       id: Value(id),
       timestamp: Value(timestamp),
-      modeId: Value(modeId),
+      levelKey: Value(levelKey),
+      durationSec: Value(durationSec),
       rounds: Value(rounds),
-      maxRetentionSec: Value(maxRetentionSec),
+      retentionSec: Value(retentionSec),
       xpEarned: Value(xpEarned),
+      spo2Min: spo2Min == null && nullToAbsent
+          ? const Value.absent()
+          : Value(spo2Min),
+      spo2Avg: spo2Avg == null && nullToAbsent
+          ? const Value.absent()
+          : Value(spo2Avg),
+      hrMin:
+          hrMin == null && nullToAbsent ? const Value.absent() : Value(hrMin),
+      hrAvg:
+          hrAvg == null && nullToAbsent ? const Value.absent() : Value(hrAvg),
     );
   }
 
@@ -162,52 +283,78 @@ class Session extends DataClass implements Insertable<Session> {
       {ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Session(
-      id: serializer.fromJson<String>(json['id']),
+      id: serializer.fromJson<int>(json['id']),
       timestamp: serializer.fromJson<DateTime>(json['timestamp']),
-      modeId: serializer.fromJson<String>(json['modeId']),
+      levelKey: serializer.fromJson<String>(json['levelKey']),
+      durationSec: serializer.fromJson<int>(json['durationSec']),
       rounds: serializer.fromJson<int>(json['rounds']),
-      maxRetentionSec: serializer.fromJson<int>(json['maxRetentionSec']),
+      retentionSec: serializer.fromJson<int>(json['retentionSec']),
       xpEarned: serializer.fromJson<int>(json['xpEarned']),
+      spo2Min: serializer.fromJson<int?>(json['spo2Min']),
+      spo2Avg: serializer.fromJson<int?>(json['spo2Avg']),
+      hrMin: serializer.fromJson<int?>(json['hrMin']),
+      hrAvg: serializer.fromJson<int?>(json['hrAvg']),
     );
   }
   @override
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
-      'id': serializer.toJson<String>(id),
+      'id': serializer.toJson<int>(id),
       'timestamp': serializer.toJson<DateTime>(timestamp),
-      'modeId': serializer.toJson<String>(modeId),
+      'levelKey': serializer.toJson<String>(levelKey),
+      'durationSec': serializer.toJson<int>(durationSec),
       'rounds': serializer.toJson<int>(rounds),
-      'maxRetentionSec': serializer.toJson<int>(maxRetentionSec),
+      'retentionSec': serializer.toJson<int>(retentionSec),
       'xpEarned': serializer.toJson<int>(xpEarned),
+      'spo2Min': serializer.toJson<int?>(spo2Min),
+      'spo2Avg': serializer.toJson<int?>(spo2Avg),
+      'hrMin': serializer.toJson<int?>(hrMin),
+      'hrAvg': serializer.toJson<int?>(hrAvg),
     };
   }
 
   Session copyWith(
-          {String? id,
+          {int? id,
           DateTime? timestamp,
-          String? modeId,
+          String? levelKey,
+          int? durationSec,
           int? rounds,
-          int? maxRetentionSec,
-          int? xpEarned}) =>
+          int? retentionSec,
+          int? xpEarned,
+          Value<int?> spo2Min = const Value.absent(),
+          Value<int?> spo2Avg = const Value.absent(),
+          Value<int?> hrMin = const Value.absent(),
+          Value<int?> hrAvg = const Value.absent()}) =>
       Session(
         id: id ?? this.id,
         timestamp: timestamp ?? this.timestamp,
-        modeId: modeId ?? this.modeId,
+        levelKey: levelKey ?? this.levelKey,
+        durationSec: durationSec ?? this.durationSec,
         rounds: rounds ?? this.rounds,
-        maxRetentionSec: maxRetentionSec ?? this.maxRetentionSec,
+        retentionSec: retentionSec ?? this.retentionSec,
         xpEarned: xpEarned ?? this.xpEarned,
+        spo2Min: spo2Min.present ? spo2Min.value : this.spo2Min,
+        spo2Avg: spo2Avg.present ? spo2Avg.value : this.spo2Avg,
+        hrMin: hrMin.present ? hrMin.value : this.hrMin,
+        hrAvg: hrAvg.present ? hrAvg.value : this.hrAvg,
       );
   Session copyWithCompanion(SessionsCompanion data) {
     return Session(
       id: data.id.present ? data.id.value : this.id,
       timestamp: data.timestamp.present ? data.timestamp.value : this.timestamp,
-      modeId: data.modeId.present ? data.modeId.value : this.modeId,
+      levelKey: data.levelKey.present ? data.levelKey.value : this.levelKey,
+      durationSec:
+          data.durationSec.present ? data.durationSec.value : this.durationSec,
       rounds: data.rounds.present ? data.rounds.value : this.rounds,
-      maxRetentionSec: data.maxRetentionSec.present
-          ? data.maxRetentionSec.value
-          : this.maxRetentionSec,
+      retentionSec: data.retentionSec.present
+          ? data.retentionSec.value
+          : this.retentionSec,
       xpEarned: data.xpEarned.present ? data.xpEarned.value : this.xpEarned,
+      spo2Min: data.spo2Min.present ? data.spo2Min.value : this.spo2Min,
+      spo2Avg: data.spo2Avg.present ? data.spo2Avg.value : this.spo2Avg,
+      hrMin: data.hrMin.present ? data.hrMin.value : this.hrMin,
+      hrAvg: data.hrAvg.present ? data.hrAvg.value : this.hrAvg,
     );
   }
 
@@ -216,96 +363,132 @@ class Session extends DataClass implements Insertable<Session> {
     return (StringBuffer('Session(')
           ..write('id: $id, ')
           ..write('timestamp: $timestamp, ')
-          ..write('modeId: $modeId, ')
+          ..write('levelKey: $levelKey, ')
+          ..write('durationSec: $durationSec, ')
           ..write('rounds: $rounds, ')
-          ..write('maxRetentionSec: $maxRetentionSec, ')
-          ..write('xpEarned: $xpEarned')
+          ..write('retentionSec: $retentionSec, ')
+          ..write('xpEarned: $xpEarned, ')
+          ..write('spo2Min: $spo2Min, ')
+          ..write('spo2Avg: $spo2Avg, ')
+          ..write('hrMin: $hrMin, ')
+          ..write('hrAvg: $hrAvg')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, timestamp, modeId, rounds, maxRetentionSec, xpEarned);
+  int get hashCode => Object.hash(id, timestamp, levelKey, durationSec, rounds,
+      retentionSec, xpEarned, spo2Min, spo2Avg, hrMin, hrAvg);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is Session &&
           other.id == this.id &&
           other.timestamp == this.timestamp &&
-          other.modeId == this.modeId &&
+          other.levelKey == this.levelKey &&
+          other.durationSec == this.durationSec &&
           other.rounds == this.rounds &&
-          other.maxRetentionSec == this.maxRetentionSec &&
-          other.xpEarned == this.xpEarned);
+          other.retentionSec == this.retentionSec &&
+          other.xpEarned == this.xpEarned &&
+          other.spo2Min == this.spo2Min &&
+          other.spo2Avg == this.spo2Avg &&
+          other.hrMin == this.hrMin &&
+          other.hrAvg == this.hrAvg);
 }
 
 class SessionsCompanion extends UpdateCompanion<Session> {
-  final Value<String> id;
+  final Value<int> id;
   final Value<DateTime> timestamp;
-  final Value<String> modeId;
+  final Value<String> levelKey;
+  final Value<int> durationSec;
   final Value<int> rounds;
-  final Value<int> maxRetentionSec;
+  final Value<int> retentionSec;
   final Value<int> xpEarned;
-  final Value<int> rowid;
+  final Value<int?> spo2Min;
+  final Value<int?> spo2Avg;
+  final Value<int?> hrMin;
+  final Value<int?> hrAvg;
   const SessionsCompanion({
     this.id = const Value.absent(),
     this.timestamp = const Value.absent(),
-    this.modeId = const Value.absent(),
+    this.levelKey = const Value.absent(),
+    this.durationSec = const Value.absent(),
     this.rounds = const Value.absent(),
-    this.maxRetentionSec = const Value.absent(),
+    this.retentionSec = const Value.absent(),
     this.xpEarned = const Value.absent(),
-    this.rowid = const Value.absent(),
+    this.spo2Min = const Value.absent(),
+    this.spo2Avg = const Value.absent(),
+    this.hrMin = const Value.absent(),
+    this.hrAvg = const Value.absent(),
   });
   SessionsCompanion.insert({
-    required String id,
+    this.id = const Value.absent(),
     required DateTime timestamp,
-    required String modeId,
+    required String levelKey,
+    required int durationSec,
     required int rounds,
-    required int maxRetentionSec,
-    required int xpEarned,
-    this.rowid = const Value.absent(),
-  })  : id = Value(id),
-        timestamp = Value(timestamp),
-        modeId = Value(modeId),
-        rounds = Value(rounds),
-        maxRetentionSec = Value(maxRetentionSec),
-        xpEarned = Value(xpEarned);
+    this.retentionSec = const Value.absent(),
+    this.xpEarned = const Value.absent(),
+    this.spo2Min = const Value.absent(),
+    this.spo2Avg = const Value.absent(),
+    this.hrMin = const Value.absent(),
+    this.hrAvg = const Value.absent(),
+  })  : timestamp = Value(timestamp),
+        levelKey = Value(levelKey),
+        durationSec = Value(durationSec),
+        rounds = Value(rounds);
   static Insertable<Session> custom({
-    Expression<String>? id,
+    Expression<int>? id,
     Expression<DateTime>? timestamp,
-    Expression<String>? modeId,
+    Expression<String>? levelKey,
+    Expression<int>? durationSec,
     Expression<int>? rounds,
-    Expression<int>? maxRetentionSec,
+    Expression<int>? retentionSec,
     Expression<int>? xpEarned,
-    Expression<int>? rowid,
+    Expression<int>? spo2Min,
+    Expression<int>? spo2Avg,
+    Expression<int>? hrMin,
+    Expression<int>? hrAvg,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (timestamp != null) 'timestamp': timestamp,
-      if (modeId != null) 'mode_id': modeId,
+      if (levelKey != null) 'level_key': levelKey,
+      if (durationSec != null) 'duration_sec': durationSec,
       if (rounds != null) 'rounds': rounds,
-      if (maxRetentionSec != null) 'max_retention_sec': maxRetentionSec,
+      if (retentionSec != null) 'retention_sec': retentionSec,
       if (xpEarned != null) 'xp_earned': xpEarned,
-      if (rowid != null) 'rowid': rowid,
+      if (spo2Min != null) 'spo2_min': spo2Min,
+      if (spo2Avg != null) 'spo2_avg': spo2Avg,
+      if (hrMin != null) 'hr_min': hrMin,
+      if (hrAvg != null) 'hr_avg': hrAvg,
     });
   }
 
   SessionsCompanion copyWith(
-      {Value<String>? id,
+      {Value<int>? id,
       Value<DateTime>? timestamp,
-      Value<String>? modeId,
+      Value<String>? levelKey,
+      Value<int>? durationSec,
       Value<int>? rounds,
-      Value<int>? maxRetentionSec,
+      Value<int>? retentionSec,
       Value<int>? xpEarned,
-      Value<int>? rowid}) {
+      Value<int?>? spo2Min,
+      Value<int?>? spo2Avg,
+      Value<int?>? hrMin,
+      Value<int?>? hrAvg}) {
     return SessionsCompanion(
       id: id ?? this.id,
       timestamp: timestamp ?? this.timestamp,
-      modeId: modeId ?? this.modeId,
+      levelKey: levelKey ?? this.levelKey,
+      durationSec: durationSec ?? this.durationSec,
       rounds: rounds ?? this.rounds,
-      maxRetentionSec: maxRetentionSec ?? this.maxRetentionSec,
+      retentionSec: retentionSec ?? this.retentionSec,
       xpEarned: xpEarned ?? this.xpEarned,
-      rowid: rowid ?? this.rowid,
+      spo2Min: spo2Min ?? this.spo2Min,
+      spo2Avg: spo2Avg ?? this.spo2Avg,
+      hrMin: hrMin ?? this.hrMin,
+      hrAvg: hrAvg ?? this.hrAvg,
     );
   }
 
@@ -313,25 +496,37 @@ class SessionsCompanion extends UpdateCompanion<Session> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     if (id.present) {
-      map['id'] = Variable<String>(id.value);
+      map['id'] = Variable<int>(id.value);
     }
     if (timestamp.present) {
       map['timestamp'] = Variable<DateTime>(timestamp.value);
     }
-    if (modeId.present) {
-      map['mode_id'] = Variable<String>(modeId.value);
+    if (levelKey.present) {
+      map['level_key'] = Variable<String>(levelKey.value);
+    }
+    if (durationSec.present) {
+      map['duration_sec'] = Variable<int>(durationSec.value);
     }
     if (rounds.present) {
       map['rounds'] = Variable<int>(rounds.value);
     }
-    if (maxRetentionSec.present) {
-      map['max_retention_sec'] = Variable<int>(maxRetentionSec.value);
+    if (retentionSec.present) {
+      map['retention_sec'] = Variable<int>(retentionSec.value);
     }
     if (xpEarned.present) {
       map['xp_earned'] = Variable<int>(xpEarned.value);
     }
-    if (rowid.present) {
-      map['rowid'] = Variable<int>(rowid.value);
+    if (spo2Min.present) {
+      map['spo2_min'] = Variable<int>(spo2Min.value);
+    }
+    if (spo2Avg.present) {
+      map['spo2_avg'] = Variable<int>(spo2Avg.value);
+    }
+    if (hrMin.present) {
+      map['hr_min'] = Variable<int>(hrMin.value);
+    }
+    if (hrAvg.present) {
+      map['hr_avg'] = Variable<int>(hrAvg.value);
     }
     return map;
   }
@@ -341,11 +536,15 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     return (StringBuffer('SessionsCompanion(')
           ..write('id: $id, ')
           ..write('timestamp: $timestamp, ')
-          ..write('modeId: $modeId, ')
+          ..write('levelKey: $levelKey, ')
+          ..write('durationSec: $durationSec, ')
           ..write('rounds: $rounds, ')
-          ..write('maxRetentionSec: $maxRetentionSec, ')
+          ..write('retentionSec: $retentionSec, ')
           ..write('xpEarned: $xpEarned, ')
-          ..write('rowid: $rowid')
+          ..write('spo2Min: $spo2Min, ')
+          ..write('spo2Avg: $spo2Avg, ')
+          ..write('hrMin: $hrMin, ')
+          ..write('hrAvg: $hrAvg')
           ..write(')'))
         .toString();
   }
@@ -935,37 +1134,727 @@ class HealthMetricsCompanion extends UpdateCompanion<HealthMetric> {
   }
 }
 
+class $PlannedSessionsTable extends PlannedSessions
+    with TableInfo<$PlannedSessionsTable, PlannedSession> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PlannedSessionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _scheduledAtMeta =
+      const VerificationMeta('scheduledAt');
+  @override
+  late final GeneratedColumn<DateTime> scheduledAt = GeneratedColumn<DateTime>(
+      'scheduled_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _levelKeyMeta =
+      const VerificationMeta('levelKey');
+  @override
+  late final GeneratedColumn<String> levelKey = GeneratedColumn<String>(
+      'level_key', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [id, scheduledAt, levelKey];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'planned_sessions';
+  @override
+  VerificationContext validateIntegrity(Insertable<PlannedSession> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('scheduled_at')) {
+      context.handle(
+          _scheduledAtMeta,
+          scheduledAt.isAcceptableOrUnknown(
+              data['scheduled_at']!, _scheduledAtMeta));
+    } else if (isInserting) {
+      context.missing(_scheduledAtMeta);
+    }
+    if (data.containsKey('level_key')) {
+      context.handle(_levelKeyMeta,
+          levelKey.isAcceptableOrUnknown(data['level_key']!, _levelKeyMeta));
+    } else if (isInserting) {
+      context.missing(_levelKeyMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  PlannedSession map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return PlannedSession(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      scheduledAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}scheduled_at'])!,
+      levelKey: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}level_key'])!,
+    );
+  }
+
+  @override
+  $PlannedSessionsTable createAlias(String alias) {
+    return $PlannedSessionsTable(attachedDatabase, alias);
+  }
+}
+
+class PlannedSession extends DataClass implements Insertable<PlannedSession> {
+  final int id;
+
+  /// The exact date and time the session is planned for.
+  final DateTime scheduledAt;
+
+  /// Key of the planned [LevelData] exercise.
+  final String levelKey;
+  const PlannedSession(
+      {required this.id, required this.scheduledAt, required this.levelKey});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['scheduled_at'] = Variable<DateTime>(scheduledAt);
+    map['level_key'] = Variable<String>(levelKey);
+    return map;
+  }
+
+  PlannedSessionsCompanion toCompanion(bool nullToAbsent) {
+    return PlannedSessionsCompanion(
+      id: Value(id),
+      scheduledAt: Value(scheduledAt),
+      levelKey: Value(levelKey),
+    );
+  }
+
+  factory PlannedSession.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return PlannedSession(
+      id: serializer.fromJson<int>(json['id']),
+      scheduledAt: serializer.fromJson<DateTime>(json['scheduledAt']),
+      levelKey: serializer.fromJson<String>(json['levelKey']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'scheduledAt': serializer.toJson<DateTime>(scheduledAt),
+      'levelKey': serializer.toJson<String>(levelKey),
+    };
+  }
+
+  PlannedSession copyWith({int? id, DateTime? scheduledAt, String? levelKey}) =>
+      PlannedSession(
+        id: id ?? this.id,
+        scheduledAt: scheduledAt ?? this.scheduledAt,
+        levelKey: levelKey ?? this.levelKey,
+      );
+  PlannedSession copyWithCompanion(PlannedSessionsCompanion data) {
+    return PlannedSession(
+      id: data.id.present ? data.id.value : this.id,
+      scheduledAt:
+          data.scheduledAt.present ? data.scheduledAt.value : this.scheduledAt,
+      levelKey: data.levelKey.present ? data.levelKey.value : this.levelKey,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PlannedSession(')
+          ..write('id: $id, ')
+          ..write('scheduledAt: $scheduledAt, ')
+          ..write('levelKey: $levelKey')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, scheduledAt, levelKey);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PlannedSession &&
+          other.id == this.id &&
+          other.scheduledAt == this.scheduledAt &&
+          other.levelKey == this.levelKey);
+}
+
+class PlannedSessionsCompanion extends UpdateCompanion<PlannedSession> {
+  final Value<int> id;
+  final Value<DateTime> scheduledAt;
+  final Value<String> levelKey;
+  const PlannedSessionsCompanion({
+    this.id = const Value.absent(),
+    this.scheduledAt = const Value.absent(),
+    this.levelKey = const Value.absent(),
+  });
+  PlannedSessionsCompanion.insert({
+    this.id = const Value.absent(),
+    required DateTime scheduledAt,
+    required String levelKey,
+  })  : scheduledAt = Value(scheduledAt),
+        levelKey = Value(levelKey);
+  static Insertable<PlannedSession> custom({
+    Expression<int>? id,
+    Expression<DateTime>? scheduledAt,
+    Expression<String>? levelKey,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (scheduledAt != null) 'scheduled_at': scheduledAt,
+      if (levelKey != null) 'level_key': levelKey,
+    });
+  }
+
+  PlannedSessionsCompanion copyWith(
+      {Value<int>? id, Value<DateTime>? scheduledAt, Value<String>? levelKey}) {
+    return PlannedSessionsCompanion(
+      id: id ?? this.id,
+      scheduledAt: scheduledAt ?? this.scheduledAt,
+      levelKey: levelKey ?? this.levelKey,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (scheduledAt.present) {
+      map['scheduled_at'] = Variable<DateTime>(scheduledAt.value);
+    }
+    if (levelKey.present) {
+      map['level_key'] = Variable<String>(levelKey.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PlannedSessionsCompanion(')
+          ..write('id: $id, ')
+          ..write('scheduledAt: $scheduledAt, ')
+          ..write('levelKey: $levelKey')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CustomPresetsTable extends CustomPresets
+    with TableInfo<$CustomPresetsTable, CustomPreset> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CustomPresetsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+      'name', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _inhaleSecMeta =
+      const VerificationMeta('inhaleSec');
+  @override
+  late final GeneratedColumn<int> inhaleSec = GeneratedColumn<int>(
+      'inhale_sec', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _holdInSecMeta =
+      const VerificationMeta('holdInSec');
+  @override
+  late final GeneratedColumn<int> holdInSec = GeneratedColumn<int>(
+      'hold_in_sec', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _exhaleSecMeta =
+      const VerificationMeta('exhaleSec');
+  @override
+  late final GeneratedColumn<int> exhaleSec = GeneratedColumn<int>(
+      'exhale_sec', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _holdOutSecMeta =
+      const VerificationMeta('holdOutSec');
+  @override
+  late final GeneratedColumn<int> holdOutSec = GeneratedColumn<int>(
+      'hold_out_sec', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
+  static const VerificationMeta _cyclesMeta = const VerificationMeta('cycles');
+  @override
+  late final GeneratedColumn<int> cycles = GeneratedColumn<int>(
+      'cycles', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(8));
+  static const VerificationMeta _roundsMeta = const VerificationMeta('rounds');
+  @override
+  late final GeneratedColumn<int> rounds = GeneratedColumn<int>(
+      'rounds', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(1));
+  static const VerificationMeta _createdAtMeta =
+      const VerificationMeta('createdAt');
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+      'created_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [
+        id,
+        name,
+        inhaleSec,
+        holdInSec,
+        exhaleSec,
+        holdOutSec,
+        cycles,
+        rounds,
+        createdAt
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'custom_presets';
+  @override
+  VerificationContext validateIntegrity(Insertable<CustomPreset> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+          _nameMeta, name.isAcceptableOrUnknown(data['name']!, _nameMeta));
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('inhale_sec')) {
+      context.handle(_inhaleSecMeta,
+          inhaleSec.isAcceptableOrUnknown(data['inhale_sec']!, _inhaleSecMeta));
+    } else if (isInserting) {
+      context.missing(_inhaleSecMeta);
+    }
+    if (data.containsKey('hold_in_sec')) {
+      context.handle(
+          _holdInSecMeta,
+          holdInSec.isAcceptableOrUnknown(
+              data['hold_in_sec']!, _holdInSecMeta));
+    }
+    if (data.containsKey('exhale_sec')) {
+      context.handle(_exhaleSecMeta,
+          exhaleSec.isAcceptableOrUnknown(data['exhale_sec']!, _exhaleSecMeta));
+    } else if (isInserting) {
+      context.missing(_exhaleSecMeta);
+    }
+    if (data.containsKey('hold_out_sec')) {
+      context.handle(
+          _holdOutSecMeta,
+          holdOutSec.isAcceptableOrUnknown(
+              data['hold_out_sec']!, _holdOutSecMeta));
+    }
+    if (data.containsKey('cycles')) {
+      context.handle(_cyclesMeta,
+          cycles.isAcceptableOrUnknown(data['cycles']!, _cyclesMeta));
+    }
+    if (data.containsKey('rounds')) {
+      context.handle(_roundsMeta,
+          rounds.isAcceptableOrUnknown(data['rounds']!, _roundsMeta));
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(_createdAtMeta,
+          createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CustomPreset map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CustomPreset(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      name: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}name'])!,
+      inhaleSec: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}inhale_sec'])!,
+      holdInSec: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}hold_in_sec'])!,
+      exhaleSec: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}exhale_sec'])!,
+      holdOutSec: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}hold_out_sec'])!,
+      cycles: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}cycles'])!,
+      rounds: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}rounds'])!,
+      createdAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+    );
+  }
+
+  @override
+  $CustomPresetsTable createAlias(String alias) {
+    return $CustomPresetsTable(attachedDatabase, alias);
+  }
+}
+
+class CustomPreset extends DataClass implements Insertable<CustomPreset> {
+  final int id;
+  final String name;
+  final int inhaleSec;
+  final int holdInSec;
+  final int exhaleSec;
+  final int holdOutSec;
+  final int cycles;
+  final int rounds;
+  final DateTime createdAt;
+  const CustomPreset(
+      {required this.id,
+      required this.name,
+      required this.inhaleSec,
+      required this.holdInSec,
+      required this.exhaleSec,
+      required this.holdOutSec,
+      required this.cycles,
+      required this.rounds,
+      required this.createdAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['name'] = Variable<String>(name);
+    map['inhale_sec'] = Variable<int>(inhaleSec);
+    map['hold_in_sec'] = Variable<int>(holdInSec);
+    map['exhale_sec'] = Variable<int>(exhaleSec);
+    map['hold_out_sec'] = Variable<int>(holdOutSec);
+    map['cycles'] = Variable<int>(cycles);
+    map['rounds'] = Variable<int>(rounds);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  CustomPresetsCompanion toCompanion(bool nullToAbsent) {
+    return CustomPresetsCompanion(
+      id: Value(id),
+      name: Value(name),
+      inhaleSec: Value(inhaleSec),
+      holdInSec: Value(holdInSec),
+      exhaleSec: Value(exhaleSec),
+      holdOutSec: Value(holdOutSec),
+      cycles: Value(cycles),
+      rounds: Value(rounds),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory CustomPreset.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CustomPreset(
+      id: serializer.fromJson<int>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      inhaleSec: serializer.fromJson<int>(json['inhaleSec']),
+      holdInSec: serializer.fromJson<int>(json['holdInSec']),
+      exhaleSec: serializer.fromJson<int>(json['exhaleSec']),
+      holdOutSec: serializer.fromJson<int>(json['holdOutSec']),
+      cycles: serializer.fromJson<int>(json['cycles']),
+      rounds: serializer.fromJson<int>(json['rounds']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'name': serializer.toJson<String>(name),
+      'inhaleSec': serializer.toJson<int>(inhaleSec),
+      'holdInSec': serializer.toJson<int>(holdInSec),
+      'exhaleSec': serializer.toJson<int>(exhaleSec),
+      'holdOutSec': serializer.toJson<int>(holdOutSec),
+      'cycles': serializer.toJson<int>(cycles),
+      'rounds': serializer.toJson<int>(rounds),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  CustomPreset copyWith(
+          {int? id,
+          String? name,
+          int? inhaleSec,
+          int? holdInSec,
+          int? exhaleSec,
+          int? holdOutSec,
+          int? cycles,
+          int? rounds,
+          DateTime? createdAt}) =>
+      CustomPreset(
+        id: id ?? this.id,
+        name: name ?? this.name,
+        inhaleSec: inhaleSec ?? this.inhaleSec,
+        holdInSec: holdInSec ?? this.holdInSec,
+        exhaleSec: exhaleSec ?? this.exhaleSec,
+        holdOutSec: holdOutSec ?? this.holdOutSec,
+        cycles: cycles ?? this.cycles,
+        rounds: rounds ?? this.rounds,
+        createdAt: createdAt ?? this.createdAt,
+      );
+  CustomPreset copyWithCompanion(CustomPresetsCompanion data) {
+    return CustomPreset(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      inhaleSec: data.inhaleSec.present ? data.inhaleSec.value : this.inhaleSec,
+      holdInSec: data.holdInSec.present ? data.holdInSec.value : this.holdInSec,
+      exhaleSec: data.exhaleSec.present ? data.exhaleSec.value : this.exhaleSec,
+      holdOutSec:
+          data.holdOutSec.present ? data.holdOutSec.value : this.holdOutSec,
+      cycles: data.cycles.present ? data.cycles.value : this.cycles,
+      rounds: data.rounds.present ? data.rounds.value : this.rounds,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CustomPreset(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('inhaleSec: $inhaleSec, ')
+          ..write('holdInSec: $holdInSec, ')
+          ..write('exhaleSec: $exhaleSec, ')
+          ..write('holdOutSec: $holdOutSec, ')
+          ..write('cycles: $cycles, ')
+          ..write('rounds: $rounds, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, name, inhaleSec, holdInSec, exhaleSec,
+      holdOutSec, cycles, rounds, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CustomPreset &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.inhaleSec == this.inhaleSec &&
+          other.holdInSec == this.holdInSec &&
+          other.exhaleSec == this.exhaleSec &&
+          other.holdOutSec == this.holdOutSec &&
+          other.cycles == this.cycles &&
+          other.rounds == this.rounds &&
+          other.createdAt == this.createdAt);
+}
+
+class CustomPresetsCompanion extends UpdateCompanion<CustomPreset> {
+  final Value<int> id;
+  final Value<String> name;
+  final Value<int> inhaleSec;
+  final Value<int> holdInSec;
+  final Value<int> exhaleSec;
+  final Value<int> holdOutSec;
+  final Value<int> cycles;
+  final Value<int> rounds;
+  final Value<DateTime> createdAt;
+  const CustomPresetsCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.inhaleSec = const Value.absent(),
+    this.holdInSec = const Value.absent(),
+    this.exhaleSec = const Value.absent(),
+    this.holdOutSec = const Value.absent(),
+    this.cycles = const Value.absent(),
+    this.rounds = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  CustomPresetsCompanion.insert({
+    this.id = const Value.absent(),
+    required String name,
+    required int inhaleSec,
+    this.holdInSec = const Value.absent(),
+    required int exhaleSec,
+    this.holdOutSec = const Value.absent(),
+    this.cycles = const Value.absent(),
+    this.rounds = const Value.absent(),
+    required DateTime createdAt,
+  })  : name = Value(name),
+        inhaleSec = Value(inhaleSec),
+        exhaleSec = Value(exhaleSec),
+        createdAt = Value(createdAt);
+  static Insertable<CustomPreset> custom({
+    Expression<int>? id,
+    Expression<String>? name,
+    Expression<int>? inhaleSec,
+    Expression<int>? holdInSec,
+    Expression<int>? exhaleSec,
+    Expression<int>? holdOutSec,
+    Expression<int>? cycles,
+    Expression<int>? rounds,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (inhaleSec != null) 'inhale_sec': inhaleSec,
+      if (holdInSec != null) 'hold_in_sec': holdInSec,
+      if (exhaleSec != null) 'exhale_sec': exhaleSec,
+      if (holdOutSec != null) 'hold_out_sec': holdOutSec,
+      if (cycles != null) 'cycles': cycles,
+      if (rounds != null) 'rounds': rounds,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  CustomPresetsCompanion copyWith(
+      {Value<int>? id,
+      Value<String>? name,
+      Value<int>? inhaleSec,
+      Value<int>? holdInSec,
+      Value<int>? exhaleSec,
+      Value<int>? holdOutSec,
+      Value<int>? cycles,
+      Value<int>? rounds,
+      Value<DateTime>? createdAt}) {
+    return CustomPresetsCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      inhaleSec: inhaleSec ?? this.inhaleSec,
+      holdInSec: holdInSec ?? this.holdInSec,
+      exhaleSec: exhaleSec ?? this.exhaleSec,
+      holdOutSec: holdOutSec ?? this.holdOutSec,
+      cycles: cycles ?? this.cycles,
+      rounds: rounds ?? this.rounds,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (inhaleSec.present) {
+      map['inhale_sec'] = Variable<int>(inhaleSec.value);
+    }
+    if (holdInSec.present) {
+      map['hold_in_sec'] = Variable<int>(holdInSec.value);
+    }
+    if (exhaleSec.present) {
+      map['exhale_sec'] = Variable<int>(exhaleSec.value);
+    }
+    if (holdOutSec.present) {
+      map['hold_out_sec'] = Variable<int>(holdOutSec.value);
+    }
+    if (cycles.present) {
+      map['cycles'] = Variable<int>(cycles.value);
+    }
+    if (rounds.present) {
+      map['rounds'] = Variable<int>(rounds.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CustomPresetsCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('inhaleSec: $inhaleSec, ')
+          ..write('holdInSec: $holdInSec, ')
+          ..write('exhaleSec: $exhaleSec, ')
+          ..write('holdOutSec: $holdOutSec, ')
+          ..write('cycles: $cycles, ')
+          ..write('rounds: $rounds, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $SessionsTable sessions = $SessionsTable(this);
   late final $UserProfileTable userProfile = $UserProfileTable(this);
   late final $HealthMetricsTable healthMetrics = $HealthMetricsTable(this);
+  late final $PlannedSessionsTable plannedSessions =
+      $PlannedSessionsTable(this);
+  late final $CustomPresetsTable customPresets = $CustomPresetsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities =>
-      [sessions, userProfile, healthMetrics];
+      [sessions, userProfile, healthMetrics, plannedSessions, customPresets];
 }
 
 typedef $$SessionsTableCreateCompanionBuilder = SessionsCompanion Function({
-  required String id,
+  Value<int> id,
   required DateTime timestamp,
-  required String modeId,
+  required String levelKey,
+  required int durationSec,
   required int rounds,
-  required int maxRetentionSec,
-  required int xpEarned,
-  Value<int> rowid,
+  Value<int> retentionSec,
+  Value<int> xpEarned,
+  Value<int?> spo2Min,
+  Value<int?> spo2Avg,
+  Value<int?> hrMin,
+  Value<int?> hrAvg,
 });
 typedef $$SessionsTableUpdateCompanionBuilder = SessionsCompanion Function({
-  Value<String> id,
+  Value<int> id,
   Value<DateTime> timestamp,
-  Value<String> modeId,
+  Value<String> levelKey,
+  Value<int> durationSec,
   Value<int> rounds,
-  Value<int> maxRetentionSec,
+  Value<int> retentionSec,
   Value<int> xpEarned,
-  Value<int> rowid,
+  Value<int?> spo2Min,
+  Value<int?> spo2Avg,
+  Value<int?> hrMin,
+  Value<int?> hrAvg,
 });
 
 class $$SessionsTableFilterComposer
@@ -977,24 +1866,38 @@ class $$SessionsTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnFilters<String> get id => $composableBuilder(
+  ColumnFilters<int> get id => $composableBuilder(
       column: $table.id, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<DateTime> get timestamp => $composableBuilder(
       column: $table.timestamp, builder: (column) => ColumnFilters(column));
 
-  ColumnFilters<String> get modeId => $composableBuilder(
-      column: $table.modeId, builder: (column) => ColumnFilters(column));
+  ColumnFilters<String> get levelKey => $composableBuilder(
+      column: $table.levelKey, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get durationSec => $composableBuilder(
+      column: $table.durationSec, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<int> get rounds => $composableBuilder(
       column: $table.rounds, builder: (column) => ColumnFilters(column));
 
-  ColumnFilters<int> get maxRetentionSec => $composableBuilder(
-      column: $table.maxRetentionSec,
-      builder: (column) => ColumnFilters(column));
+  ColumnFilters<int> get retentionSec => $composableBuilder(
+      column: $table.retentionSec, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<int> get xpEarned => $composableBuilder(
       column: $table.xpEarned, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get spo2Min => $composableBuilder(
+      column: $table.spo2Min, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get spo2Avg => $composableBuilder(
+      column: $table.spo2Avg, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get hrMin => $composableBuilder(
+      column: $table.hrMin, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get hrAvg => $composableBuilder(
+      column: $table.hrAvg, builder: (column) => ColumnFilters(column));
 }
 
 class $$SessionsTableOrderingComposer
@@ -1006,24 +1909,39 @@ class $$SessionsTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  ColumnOrderings<String> get id => $composableBuilder(
+  ColumnOrderings<int> get id => $composableBuilder(
       column: $table.id, builder: (column) => ColumnOrderings(column));
 
   ColumnOrderings<DateTime> get timestamp => $composableBuilder(
       column: $table.timestamp, builder: (column) => ColumnOrderings(column));
 
-  ColumnOrderings<String> get modeId => $composableBuilder(
-      column: $table.modeId, builder: (column) => ColumnOrderings(column));
+  ColumnOrderings<String> get levelKey => $composableBuilder(
+      column: $table.levelKey, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get durationSec => $composableBuilder(
+      column: $table.durationSec, builder: (column) => ColumnOrderings(column));
 
   ColumnOrderings<int> get rounds => $composableBuilder(
       column: $table.rounds, builder: (column) => ColumnOrderings(column));
 
-  ColumnOrderings<int> get maxRetentionSec => $composableBuilder(
-      column: $table.maxRetentionSec,
+  ColumnOrderings<int> get retentionSec => $composableBuilder(
+      column: $table.retentionSec,
       builder: (column) => ColumnOrderings(column));
 
   ColumnOrderings<int> get xpEarned => $composableBuilder(
       column: $table.xpEarned, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get spo2Min => $composableBuilder(
+      column: $table.spo2Min, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get spo2Avg => $composableBuilder(
+      column: $table.spo2Avg, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get hrMin => $composableBuilder(
+      column: $table.hrMin, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get hrAvg => $composableBuilder(
+      column: $table.hrAvg, builder: (column) => ColumnOrderings(column));
 }
 
 class $$SessionsTableAnnotationComposer
@@ -1035,23 +1953,38 @@ class $$SessionsTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
-  GeneratedColumn<String> get id =>
+  GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
   GeneratedColumn<DateTime> get timestamp =>
       $composableBuilder(column: $table.timestamp, builder: (column) => column);
 
-  GeneratedColumn<String> get modeId =>
-      $composableBuilder(column: $table.modeId, builder: (column) => column);
+  GeneratedColumn<String> get levelKey =>
+      $composableBuilder(column: $table.levelKey, builder: (column) => column);
+
+  GeneratedColumn<int> get durationSec => $composableBuilder(
+      column: $table.durationSec, builder: (column) => column);
 
   GeneratedColumn<int> get rounds =>
       $composableBuilder(column: $table.rounds, builder: (column) => column);
 
-  GeneratedColumn<int> get maxRetentionSec => $composableBuilder(
-      column: $table.maxRetentionSec, builder: (column) => column);
+  GeneratedColumn<int> get retentionSec => $composableBuilder(
+      column: $table.retentionSec, builder: (column) => column);
 
   GeneratedColumn<int> get xpEarned =>
       $composableBuilder(column: $table.xpEarned, builder: (column) => column);
+
+  GeneratedColumn<int> get spo2Min =>
+      $composableBuilder(column: $table.spo2Min, builder: (column) => column);
+
+  GeneratedColumn<int> get spo2Avg =>
+      $composableBuilder(column: $table.spo2Avg, builder: (column) => column);
+
+  GeneratedColumn<int> get hrMin =>
+      $composableBuilder(column: $table.hrMin, builder: (column) => column);
+
+  GeneratedColumn<int> get hrAvg =>
+      $composableBuilder(column: $table.hrAvg, builder: (column) => column);
 }
 
 class $$SessionsTableTableManager extends RootTableManager<
@@ -1077,40 +2010,56 @@ class $$SessionsTableTableManager extends RootTableManager<
           createComputedFieldComposer: () =>
               $$SessionsTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback: ({
-            Value<String> id = const Value.absent(),
+            Value<int> id = const Value.absent(),
             Value<DateTime> timestamp = const Value.absent(),
-            Value<String> modeId = const Value.absent(),
+            Value<String> levelKey = const Value.absent(),
+            Value<int> durationSec = const Value.absent(),
             Value<int> rounds = const Value.absent(),
-            Value<int> maxRetentionSec = const Value.absent(),
+            Value<int> retentionSec = const Value.absent(),
             Value<int> xpEarned = const Value.absent(),
-            Value<int> rowid = const Value.absent(),
+            Value<int?> spo2Min = const Value.absent(),
+            Value<int?> spo2Avg = const Value.absent(),
+            Value<int?> hrMin = const Value.absent(),
+            Value<int?> hrAvg = const Value.absent(),
           }) =>
               SessionsCompanion(
             id: id,
             timestamp: timestamp,
-            modeId: modeId,
+            levelKey: levelKey,
+            durationSec: durationSec,
             rounds: rounds,
-            maxRetentionSec: maxRetentionSec,
+            retentionSec: retentionSec,
             xpEarned: xpEarned,
-            rowid: rowid,
+            spo2Min: spo2Min,
+            spo2Avg: spo2Avg,
+            hrMin: hrMin,
+            hrAvg: hrAvg,
           ),
           createCompanionCallback: ({
-            required String id,
+            Value<int> id = const Value.absent(),
             required DateTime timestamp,
-            required String modeId,
+            required String levelKey,
+            required int durationSec,
             required int rounds,
-            required int maxRetentionSec,
-            required int xpEarned,
-            Value<int> rowid = const Value.absent(),
+            Value<int> retentionSec = const Value.absent(),
+            Value<int> xpEarned = const Value.absent(),
+            Value<int?> spo2Min = const Value.absent(),
+            Value<int?> spo2Avg = const Value.absent(),
+            Value<int?> hrMin = const Value.absent(),
+            Value<int?> hrAvg = const Value.absent(),
           }) =>
               SessionsCompanion.insert(
             id: id,
             timestamp: timestamp,
-            modeId: modeId,
+            levelKey: levelKey,
+            durationSec: durationSec,
             rounds: rounds,
-            maxRetentionSec: maxRetentionSec,
+            retentionSec: retentionSec,
             xpEarned: xpEarned,
-            rowid: rowid,
+            spo2Min: spo2Min,
+            spo2Avg: spo2Avg,
+            hrMin: hrMin,
+            hrAvg: hrAvg,
           ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -1456,6 +2405,371 @@ typedef $$HealthMetricsTableProcessedTableManager = ProcessedTableManager<
     ),
     HealthMetric,
     PrefetchHooks Function()>;
+typedef $$PlannedSessionsTableCreateCompanionBuilder = PlannedSessionsCompanion
+    Function({
+  Value<int> id,
+  required DateTime scheduledAt,
+  required String levelKey,
+});
+typedef $$PlannedSessionsTableUpdateCompanionBuilder = PlannedSessionsCompanion
+    Function({
+  Value<int> id,
+  Value<DateTime> scheduledAt,
+  Value<String> levelKey,
+});
+
+class $$PlannedSessionsTableFilterComposer
+    extends Composer<_$AppDatabase, $PlannedSessionsTable> {
+  $$PlannedSessionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get scheduledAt => $composableBuilder(
+      column: $table.scheduledAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get levelKey => $composableBuilder(
+      column: $table.levelKey, builder: (column) => ColumnFilters(column));
+}
+
+class $$PlannedSessionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $PlannedSessionsTable> {
+  $$PlannedSessionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get scheduledAt => $composableBuilder(
+      column: $table.scheduledAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get levelKey => $composableBuilder(
+      column: $table.levelKey, builder: (column) => ColumnOrderings(column));
+}
+
+class $$PlannedSessionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $PlannedSessionsTable> {
+  $$PlannedSessionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get scheduledAt => $composableBuilder(
+      column: $table.scheduledAt, builder: (column) => column);
+
+  GeneratedColumn<String> get levelKey =>
+      $composableBuilder(column: $table.levelKey, builder: (column) => column);
+}
+
+class $$PlannedSessionsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $PlannedSessionsTable,
+    PlannedSession,
+    $$PlannedSessionsTableFilterComposer,
+    $$PlannedSessionsTableOrderingComposer,
+    $$PlannedSessionsTableAnnotationComposer,
+    $$PlannedSessionsTableCreateCompanionBuilder,
+    $$PlannedSessionsTableUpdateCompanionBuilder,
+    (
+      PlannedSession,
+      BaseReferences<_$AppDatabase, $PlannedSessionsTable, PlannedSession>
+    ),
+    PlannedSession,
+    PrefetchHooks Function()> {
+  $$PlannedSessionsTableTableManager(
+      _$AppDatabase db, $PlannedSessionsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PlannedSessionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PlannedSessionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$PlannedSessionsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<DateTime> scheduledAt = const Value.absent(),
+            Value<String> levelKey = const Value.absent(),
+          }) =>
+              PlannedSessionsCompanion(
+            id: id,
+            scheduledAt: scheduledAt,
+            levelKey: levelKey,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required DateTime scheduledAt,
+            required String levelKey,
+          }) =>
+              PlannedSessionsCompanion.insert(
+            id: id,
+            scheduledAt: scheduledAt,
+            levelKey: levelKey,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$PlannedSessionsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $PlannedSessionsTable,
+    PlannedSession,
+    $$PlannedSessionsTableFilterComposer,
+    $$PlannedSessionsTableOrderingComposer,
+    $$PlannedSessionsTableAnnotationComposer,
+    $$PlannedSessionsTableCreateCompanionBuilder,
+    $$PlannedSessionsTableUpdateCompanionBuilder,
+    (
+      PlannedSession,
+      BaseReferences<_$AppDatabase, $PlannedSessionsTable, PlannedSession>
+    ),
+    PlannedSession,
+    PrefetchHooks Function()>;
+typedef $$CustomPresetsTableCreateCompanionBuilder = CustomPresetsCompanion
+    Function({
+  Value<int> id,
+  required String name,
+  required int inhaleSec,
+  Value<int> holdInSec,
+  required int exhaleSec,
+  Value<int> holdOutSec,
+  Value<int> cycles,
+  Value<int> rounds,
+  required DateTime createdAt,
+});
+typedef $$CustomPresetsTableUpdateCompanionBuilder = CustomPresetsCompanion
+    Function({
+  Value<int> id,
+  Value<String> name,
+  Value<int> inhaleSec,
+  Value<int> holdInSec,
+  Value<int> exhaleSec,
+  Value<int> holdOutSec,
+  Value<int> cycles,
+  Value<int> rounds,
+  Value<DateTime> createdAt,
+});
+
+class $$CustomPresetsTableFilterComposer
+    extends Composer<_$AppDatabase, $CustomPresetsTable> {
+  $$CustomPresetsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get name => $composableBuilder(
+      column: $table.name, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get inhaleSec => $composableBuilder(
+      column: $table.inhaleSec, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get holdInSec => $composableBuilder(
+      column: $table.holdInSec, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get exhaleSec => $composableBuilder(
+      column: $table.exhaleSec, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get holdOutSec => $composableBuilder(
+      column: $table.holdOutSec, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get cycles => $composableBuilder(
+      column: $table.cycles, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get rounds => $composableBuilder(
+      column: $table.rounds, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$CustomPresetsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CustomPresetsTable> {
+  $$CustomPresetsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get name => $composableBuilder(
+      column: $table.name, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get inhaleSec => $composableBuilder(
+      column: $table.inhaleSec, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get holdInSec => $composableBuilder(
+      column: $table.holdInSec, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get exhaleSec => $composableBuilder(
+      column: $table.exhaleSec, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get holdOutSec => $composableBuilder(
+      column: $table.holdOutSec, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get cycles => $composableBuilder(
+      column: $table.cycles, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get rounds => $composableBuilder(
+      column: $table.rounds, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$CustomPresetsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CustomPresetsTable> {
+  $$CustomPresetsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<int> get inhaleSec =>
+      $composableBuilder(column: $table.inhaleSec, builder: (column) => column);
+
+  GeneratedColumn<int> get holdInSec =>
+      $composableBuilder(column: $table.holdInSec, builder: (column) => column);
+
+  GeneratedColumn<int> get exhaleSec =>
+      $composableBuilder(column: $table.exhaleSec, builder: (column) => column);
+
+  GeneratedColumn<int> get holdOutSec => $composableBuilder(
+      column: $table.holdOutSec, builder: (column) => column);
+
+  GeneratedColumn<int> get cycles =>
+      $composableBuilder(column: $table.cycles, builder: (column) => column);
+
+  GeneratedColumn<int> get rounds =>
+      $composableBuilder(column: $table.rounds, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$CustomPresetsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $CustomPresetsTable,
+    CustomPreset,
+    $$CustomPresetsTableFilterComposer,
+    $$CustomPresetsTableOrderingComposer,
+    $$CustomPresetsTableAnnotationComposer,
+    $$CustomPresetsTableCreateCompanionBuilder,
+    $$CustomPresetsTableUpdateCompanionBuilder,
+    (
+      CustomPreset,
+      BaseReferences<_$AppDatabase, $CustomPresetsTable, CustomPreset>
+    ),
+    CustomPreset,
+    PrefetchHooks Function()> {
+  $$CustomPresetsTableTableManager(_$AppDatabase db, $CustomPresetsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CustomPresetsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CustomPresetsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CustomPresetsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<String> name = const Value.absent(),
+            Value<int> inhaleSec = const Value.absent(),
+            Value<int> holdInSec = const Value.absent(),
+            Value<int> exhaleSec = const Value.absent(),
+            Value<int> holdOutSec = const Value.absent(),
+            Value<int> cycles = const Value.absent(),
+            Value<int> rounds = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+          }) =>
+              CustomPresetsCompanion(
+            id: id,
+            name: name,
+            inhaleSec: inhaleSec,
+            holdInSec: holdInSec,
+            exhaleSec: exhaleSec,
+            holdOutSec: holdOutSec,
+            cycles: cycles,
+            rounds: rounds,
+            createdAt: createdAt,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required String name,
+            required int inhaleSec,
+            Value<int> holdInSec = const Value.absent(),
+            required int exhaleSec,
+            Value<int> holdOutSec = const Value.absent(),
+            Value<int> cycles = const Value.absent(),
+            Value<int> rounds = const Value.absent(),
+            required DateTime createdAt,
+          }) =>
+              CustomPresetsCompanion.insert(
+            id: id,
+            name: name,
+            inhaleSec: inhaleSec,
+            holdInSec: holdInSec,
+            exhaleSec: exhaleSec,
+            holdOutSec: holdOutSec,
+            cycles: cycles,
+            rounds: rounds,
+            createdAt: createdAt,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$CustomPresetsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $CustomPresetsTable,
+    CustomPreset,
+    $$CustomPresetsTableFilterComposer,
+    $$CustomPresetsTableOrderingComposer,
+    $$CustomPresetsTableAnnotationComposer,
+    $$CustomPresetsTableCreateCompanionBuilder,
+    $$CustomPresetsTableUpdateCompanionBuilder,
+    (
+      CustomPreset,
+      BaseReferences<_$AppDatabase, $CustomPresetsTable, CustomPreset>
+    ),
+    CustomPreset,
+    PrefetchHooks Function()>;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -1466,4 +2780,8 @@ class $AppDatabaseManager {
       $$UserProfileTableTableManager(_db, _db.userProfile);
   $$HealthMetricsTableTableManager get healthMetrics =>
       $$HealthMetricsTableTableManager(_db, _db.healthMetrics);
+  $$PlannedSessionsTableTableManager get plannedSessions =>
+      $$PlannedSessionsTableTableManager(_db, _db.plannedSessions);
+  $$CustomPresetsTableTableManager get customPresets =>
+      $$CustomPresetsTableTableManager(_db, _db.customPresets);
 }

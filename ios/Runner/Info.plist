@@ -49,5 +49,17 @@
 		<true/>
 		<key>UIViewControllerBasedStatusBarAppearance</key>
 		<false/>
+		<!-- Keep the background drone / breath cues playing while the screen is
+		     locked during a session. -->
+		<key>UIBackgroundModes</key>
+		<array>
+			<string>audio</string>
+		</array>
+		<!-- Required by the `health` plugin; iOS crashes on first Health access
+		     without these usage strings. -->
+		<key>NSHealthShareUsageDescription</key>
+		<string>Breath of the Bald reads mindfulness data to show your breathing progress.</string>
+		<key>NSHealthUpdateUsageDescription</key>
+		<string>Breath of the Bald saves your completed breathing sessions as mindful minutes.</string>
 	</dict>
 </plist>

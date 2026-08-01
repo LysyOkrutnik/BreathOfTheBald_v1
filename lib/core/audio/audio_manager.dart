@@ -1,30 +1,46 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'package:audio_session/audio_session.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:okrutnik_breath/config/assets.dart';
 import 'package:okrutnik_breath/config/constants.dart';
 
 final audioManagerProvider = Provider<AudioManager>((ref) {
-  return AudioManager();
+  final manager = AudioManager();
+  // Release the underlying platform players when the provider is torn down.
+  ref.onDispose(manager.dispose);
+  return manager;
 });
 
 class AudioManager {
   final AudioPlayer _dronePlayer = AudioPlayer();
-  final AudioPlayer _sfxPlayer = AudioPlayer();
+
+  // Each short cue gets its own pre-loaded player. Cues fire as often as every
+  // ~700ms, so re-decoding an asset on every play (the previous approach) added
+  // latency and GC churn; instead we load once and replay via seek(0).
+  final AudioPlayer _inhalePlayer = AudioPlayer();
+  final AudioPlayer _exhalePlayer = AudioPlayer();
+  final AudioPlayer _gongPlayer = AudioPlayer();
+
   bool _isInitialized = false;
 
-  // Initialize the audio session and players. Fail silently to prevent crashes if audio assets are missing.
+  /// When false, all playback is suppressed (driven by the user's sound setting).
+  bool soundEnabled = true;
+
+  // Initialize the audio session and players. Fail soft so the app still works
+  // (silently) if audio assets are missing or the platform rejects playback.
   Future<void> init() async {
     if (_isInitialized) return;
     try {
       final session = await AudioSession.instance;
       await session.configure(const AudioSessionConfiguration(
         avAudioSessionCategory: AVAudioSessionCategory.playback,
-        avAudioSessionCategoryOptions: AVAudioSessionCategoryOptions.mixWithOthers,
+        avAudioSessionCategoryOptions:
+            AVAudioSessionCategoryOptions.mixWithOthers,
         avAudioSessionMode: AVAudioSessionMode.defaultMode,
-        avAudioSessionRouteSharingPolicy: AVAudioSessionRouteSharingPolicy.defaultPolicy,
+        avAudioSessionRouteSharingPolicy:
+            AVAudioSessionRouteSharingPolicy.defaultPolicy,
         androidAudioAttributes: AndroidAudioAttributes(
           contentType: AndroidAudioContentType.music,
           flags: AndroidAudioFlags.none,
@@ -37,65 +53,80 @@ class AudioManager {
       await _dronePlayer.setLoopMode(LoopMode.one);
       await _dronePlayer.setVolume(AppConstants.volumeMax);
 
+      // Pre-load short cues so playback is instant during a session.
+      await Future.wait([
+        _inhalePlayer.setAsset(AppAssets.inhale),
+        _exhalePlayer.setAsset(AppAssets.exhale),
+        _gongPlayer.setAsset(AppAssets.gong),
+      ]);
+
       _isInitialized = true;
-    } catch (e) {
-      debugPrint("⚠️ AUDIO ERROR (Init): $e. Verify audio assets exist!");
-      // Mark as initialized to allow the app to function without audio capabilities.
+    } catch (e, st) {
+      developer.log('Audio init failed; continuing muted.',
+          name: 'AudioManager', error: e, stackTrace: st);
+      // Mark as initialized so the app functions without audio capabilities.
       _isInitialized = true;
     }
   }
 
   Future<void> startDrone() async {
+    if (!soundEnabled) return;
     try {
       if (!_dronePlayer.playing) {
         await _dronePlayer.play();
       }
-    } catch (e) {
-      debugPrint("⚠️ AUDIO ERROR (Start Drone): $e");
+    } catch (e, st) {
+      developer.log('Drone start failed',
+          name: 'AudioManager', error: e, stackTrace: st);
     }
   }
 
   Future<void> stopDrone() async {
     try {
       await _dronePlayer.stop();
-    } catch (e) {
-      // Fail silently.
+    } catch (_) {
+      // Best-effort; nothing actionable on stop failure.
     }
   }
 
-  Future<void> playInhale() async => _safePlay(AppAssets.inhale);
-  Future<void> playExhale() async => _safePlay(AppAssets.exhale);
-  Future<void> playGong() async => _safePlay(AppAssets.gong);
+  Future<void> playInhale() => _replay(_inhalePlayer);
+  Future<void> playExhale() => _replay(_exhalePlayer);
+  Future<void> playGong() => _replay(_gongPlayer);
 
-  Future<void> _safePlay(String path) async {
+  /// Restarts a pre-loaded cue from the beginning without re-decoding it.
+  Future<void> _replay(AudioPlayer player) async {
+    if (!soundEnabled) return;
     try {
-      // Interrupt any currently playing SFX to prioritize the new sound.
-      await _sfxPlayer.stop();
-      await _sfxPlayer.setAsset(path);
-      _sfxPlayer.play();
-    } catch (e) {
-      debugPrint("⚠️ SFX ERROR ($path): $e");
+      await player.seek(Duration.zero);
+      unawaited(player.play());
+    } catch (e, st) {
+      developer.log('SFX playback failed',
+          name: 'AudioManager', error: e, stackTrace: st);
     }
   }
 
   Future<void> duckDrone() async {
     try {
       await _dronePlayer.setVolume(AppConstants.volumeMin);
-    } catch (e) {
-      // Fail silently.
+    } catch (_) {
+      // Best-effort volume change.
     }
   }
 
   Future<void> unduckDrone() async {
     try {
       await _dronePlayer.setVolume(AppConstants.volumeMax);
-    } catch (e) {
-      // Fail silently.
+    } catch (_) {
+      // Best-effort volume change.
     }
   }
 
-  void dispose() {
-    _dronePlayer.dispose();
-    _sfxPlayer.dispose();
+  Future<void> dispose() async {
+    await Future.wait([
+      _dronePlayer.dispose(),
+      _inhalePlayer.dispose(),
+      _exhalePlayer.dispose(),
+      _gongPlayer.dispose(),
+    ]);
   }
 }

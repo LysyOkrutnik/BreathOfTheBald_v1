@@ -44,11 +44,128 @@ class AppTheme {
     fontFeatures: const [FontFeature.tabularFigures()],
   );
 
+  /// Used for skeleton/shimmer placeholders.
+  static const Color shimmerBase = Color(0xFF1E2730);
+  static const Color shimmerHighlight = Color(0xFF2C3845);
+
+  // --- THEME ---
+
+  static const ColorScheme _colorScheme = ColorScheme.dark(
+    primary: primary,
+    onPrimary: Colors.black,
+    secondary: accent,
+    onSecondary: Colors.black,
+    error: danger,
+    onError: Colors.black,
+    surface: background,
+    onSurface: textLight,
+  );
+
   static final ThemeData darkTheme = ThemeData(
+    useMaterial3: true,
     brightness: Brightness.dark,
+    colorScheme: _colorScheme,
     scaffoldBackgroundColor: background,
     primaryColor: primary,
     fontFamily: GoogleFonts.montserrat().fontFamily,
-    useMaterial3: true,
+    textTheme: GoogleFonts.montserratTextTheme(ThemeData.dark().textTheme)
+        .apply(bodyColor: textLight, displayColor: textLight),
+    appBarTheme: const AppBarTheme(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      foregroundColor: textLight,
+      centerTitle: true,
+    ),
+    progressIndicatorTheme: const ProgressIndicatorThemeData(color: primary),
+    dialogTheme: const DialogThemeData(backgroundColor: background),
+    snackBarTheme: const SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: primary,
+      contentTextStyle: TextStyle(color: Colors.black),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: primary,
+        foregroundColor: Colors.black,
+        elevation: 0,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+    ),
+    switchTheme: SwitchThemeData(
+      thumbColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected) ? primary : null,
+      ),
+      trackColor: WidgetStateProperty.resolveWith(
+        (states) =>
+            states.contains(WidgetState.selected) ? primary.withAlpha(120) : null,
+      ),
+    ),
   );
+
+  // --- DEPTH & SURFACES ---
+
+  /// The app's base vertical gradient — deep, slightly blue-shifted black.
+  static const LinearGradient backgroundGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFF0C141C), Color(0xFF080B10)],
+  );
+
+  /// A soft frosted-glass surface decoration used for cards and dialogs.
+  static BoxDecoration glass({
+    double radius = AppRadius.lg,
+    Color? tint,
+    double borderOpacity = 0.10,
+  }) {
+    return BoxDecoration(
+      color: (tint ?? Colors.white).withAlpha(14),
+      borderRadius: BorderRadius.circular(radius),
+      border: Border.all(color: Colors.white.withAlpha((borderOpacity * 255).round())),
+    );
+  }
+
+  /// A subtle outer glow, e.g. for an accent button or active element.
+  static List<BoxShadow> glow(Color color, {double blur = 24, double spread = 0}) {
+    return [
+      BoxShadow(
+        color: color.withAlpha(90),
+        blurRadius: blur,
+        spreadRadius: spread,
+      ),
+    ];
+  }
+
+  /// A left-to-right tinted gradient for level/stat cards.
+  static LinearGradient cardGradient(Color color) => LinearGradient(
+        colors: [color.withAlpha(46), color.withAlpha(8)],
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+      );
+}
+
+/// 4-pt based spacing scale.
+abstract final class AppSpacing {
+  static const double xs = 4;
+  static const double sm = 8;
+  static const double md = 16;
+  static const double lg = 24;
+  static const double xl = 32;
+  static const double xxl = 48;
+}
+
+/// Corner radius scale.
+abstract final class AppRadius {
+  static const double sm = 12;
+  static const double md = 16;
+  static const double lg = 24;
+  static const double pill = 999;
+}
+
+/// Shared motion durations for a consistent feel.
+abstract final class AppMotion {
+  static const Duration fast = Duration(milliseconds: 220);
+  static const Duration medium = Duration(milliseconds: 420);
+  static const Duration slow = Duration(milliseconds: 700);
+  static const Curve emphasized = Cubic(0.2, 0.0, 0.0, 1.0);
 }

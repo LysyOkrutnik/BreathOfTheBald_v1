@@ -21,6 +21,12 @@ class UserProfileRepository {
     return (_db.select(_db.userProfile)..limit(1)).watchSingle();
   }
 
+  /// Like [watchUserProfile] but emits null instead of throwing when no profile
+  /// row exists yet (e.g. before the first completed session).
+  Stream<UserProfileData?> watchUserProfileOrNull() {
+    return (_db.select(_db.userProfile)..limit(1)).watchSingleOrNull();
+  }
+
   Future<void> updateUserProfile(UserProfileCompanion entry) async {
     await (_db.update(_db.userProfile)..where((tbl) => tbl.id.equals(1))).write(entry);
   }

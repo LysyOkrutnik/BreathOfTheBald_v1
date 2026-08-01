@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:okrutnik_breath/config/l10n.dart';
+import 'package:okrutnik_breath/config/responsive.dart';
 import 'package:okrutnik_breath/config/theme.dart';
-import 'package:okrutnik_breath/ui/widgets/particle_background.dart';
+import 'package:okrutnik_breath/ui/widgets/app_background.dart';
+import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
 
 class InstructionScreen extends StatelessWidget {
   const InstructionScreen({super.key});
@@ -9,58 +11,22 @@ class InstructionScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.background,
       body: Stack(
         children: [
-          const Positioned.fill(child: ParticleBackground()),
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withAlpha(77),
-                    Colors.transparent,
-                    Colors.black.withAlpha(204),
-                  ],
-                ),
-              ),
-            ),
-          ),
+          const Positioned.fill(child: AppBackground()),
           SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 20),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.arrow_back, color: Colors.white70),
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
-                      Expanded(
-                        child: Text(
-                          L10n.get(context, 'guide_title'),
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                              color: AppTheme.textLight,
-                              fontWeight: FontWeight.w300,
-                              fontSize: 20,
-                              letterSpacing: 2.0
-                          ),
-                        ),
-                      ),
-                      // Offset the back button to keep the title perfectly centered.
-                      const SizedBox(width: 48),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: ListView(
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10),
-                    children: [
+            child: Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: context.isTablet ? 760 : double.infinity),
+                child: Column(
+                  children: [
+                    ScreenHeader(title: L10n.get(context, 'guide_title')),
+                    Expanded(
+                      child: ListView(
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+                        children: [
                       Text(
                         L10n.get(context, 'guide_select_topic'),
                         textAlign: TextAlign.center,
@@ -232,10 +198,12 @@ class InstructionScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 30),
-                    ],
-                  ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ],

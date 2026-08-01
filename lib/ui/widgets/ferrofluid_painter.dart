@@ -79,59 +79,150 @@ class _FerrofluidWidgetState extends State<FerrofluidWidget>
   }
 }
 
+/// A single radial harmonic: [angularFreq] (must be an integer for a closed
+/// loop in θ), [amplitude] as a fraction of radius, [timeFreq] (integer, for a
+/// seamless time loop) and a constant [phase].
+class _Harmonic {
+  const _Harmonic(this.angularFreq, this.amplitude, this.timeFreq, this.phase);
+  final int angularFreq;
+  final double amplitude;
+  final int timeFreq;
+  final double phase;
+}
+
+/// A luminous, breathing liquid orb.
+///
+/// Composed of stacked layers that all loop seamlessly: an outer atmospheric
+/// glow, two counter-phased metaball bodies blended additively for an organic
+/// liquid feel, a bright off-centre core, and a soft glowing rim.
 class FerrofluidPainter extends CustomPainter {
+  FerrofluidPainter({required this.animationValue, required this.color});
+
   final double animationValue;
   final Color color;
 
-  FerrofluidPainter({
-    required this.animationValue,
-    required this.color,
-  });
+  // Two bodies with different harmonics drift against each other.
+  static const _bodyA = [
+    _Harmonic(3, 0.060, 1, 0.0),
+    _Harmonic(5, 0.045, -2, 0.0),
+    _Harmonic(7, 0.028, 1, 1.0),
+  ];
+  static const _bodyB = [
+    _Harmonic(4, 0.052, -1, 0.6),
+    _Harmonic(6, 0.038, 2, 2.1),
+    _Harmonic(2, 0.030, 1, 0.3),
+  ];
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width * 0.45;
-
+  Path _blobPath(Offset center, double radius, List<_Harmonic> harmonics) {
+    const points = 160;
     final path = Path();
-    const int points = 120;
-
-    for (int i = 0; i <= points; i++) {
-      final double angle = (i / points) * 2 * math.pi;
-      final double offset1 = math.sin(angle * 3 + animationValue * 2 * math.pi) * (radius * 0.06);
-      final double offset2 = math.cos(angle * 5 - animationValue * 4 * math.pi) * (radius * 0.05);
-      final double offset3 = math.sin(angle * 7 + animationValue * 2 * math.pi) * (radius * 0.03);
-
-      final double currentRadius = radius + offset1 + offset2 + offset3;
-      final double x = center.dx + currentRadius * math.cos(angle);
-      final double y = center.dy + currentRadius * math.sin(angle);
-
+    for (var i = 0; i <= points; i++) {
+      final a = (i / points) * 2 * math.pi;
+      var r = radius;
+      for (final h in harmonics) {
+        r += radius *
+            h.amplitude *
+            math.sin(a * h.angularFreq +
+                animationValue * 2 * math.pi * h.timeFreq +
+                h.phase);
+      }
+      final x = center.dx + r * math.cos(a);
+      final y = center.dy + r * math.sin(a);
       if (i == 0) {
         path.moveTo(x, y);
       } else {
         path.lineTo(x, y);
       }
     }
-    path.close();
+    return path..close();
+  }
 
-    final rect = Rect.fromCircle(center: center, radius: radius * 1.2);
-    final gradient = RadialGradient(
-      center: Alignment.topLeft,
-      radius: 1.2,
-      colors: [
-        color.withAlpha(150),
-        color.withAlpha(80),
-        color.withAlpha(30),
-      ],
-      stops: const [0.0, 0.6, 1.0],
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width * 0.40;
+
+    // 1) Outer atmospheric glow.
+    final glowRect = Rect.fromCircle(center: center, radius: radius * 1.7);
+    canvas.drawCircle(
+      center,
+      radius * 1.7,
+      Paint()
+        ..blendMode = BlendMode.plus
+        ..shader = RadialGradient(
+          colors: [color.withAlpha(60), color.withAlpha(0)],
+          stops: const [0.0, 1.0],
+        ).createShader(glowRect),
     );
 
-    final paint = Paint()
-      ..shader = gradient.createShader(rect)
-      ..style = PaintingStyle.fill
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20);
+    // 2) Secondary body (additive) for liquid depth. Softness comes from the
+    // radial gradient — no MaskFilter.blur (expensive on the Impeller backend).
+    final bodyB = _blobPath(center, radius * 0.94, _bodyB);
+    canvas.drawPath(
+      bodyB,
+      Paint()
+        ..blendMode = BlendMode.plus
+        ..shader = RadialGradient(
+          center: const Alignment(-0.3, -0.3),
+          radius: 1.1,
+          colors: [color.withAlpha(120), color.withAlpha(20)],
+        ).createShader(Rect.fromCircle(center: center, radius: radius)),
+    );
 
-    canvas.drawPath(path, paint);
+    // 3) Main body with a soft top-left lit gradient.
+    final bodyA = _blobPath(center, radius, _bodyA);
+    canvas.drawPath(
+      bodyA,
+      Paint()
+        ..style = PaintingStyle.fill
+        ..shader = RadialGradient(
+          center: const Alignment(-0.4, -0.5),
+          radius: 1.3,
+          colors: [
+            Color.lerp(color, Colors.white, 0.45)!.withAlpha(220),
+            color.withAlpha(160),
+            color.withAlpha(70),
+          ],
+          stops: const [0.0, 0.55, 1.0],
+        ).createShader(Rect.fromCircle(center: center, radius: radius * 1.2)),
+    );
+
+    // 4) Bright inner core.
+    final coreCenter = center.translate(-radius * 0.18, -radius * 0.22);
+    canvas.drawCircle(
+      coreCenter,
+      radius * 0.5,
+      Paint()
+        ..blendMode = BlendMode.plus
+        ..shader = RadialGradient(
+          colors: [Colors.white.withAlpha(120), color.withAlpha(0)],
+        ).createShader(Rect.fromCircle(center: coreCenter, radius: radius * 0.5)),
+    );
+
+    // 5) A specular glint that drifts slowly around the orb (seamless loop).
+    final glintAngle = animationValue * 2 * math.pi;
+    final glint = center.translate(
+      math.cos(glintAngle) * radius * 0.30,
+      math.sin(glintAngle) * radius * 0.30 - radius * 0.12,
+    );
+    canvas.drawCircle(
+      glint,
+      radius * 0.20,
+      Paint()
+        ..blendMode = BlendMode.plus
+        ..shader = RadialGradient(
+          colors: [Colors.white.withAlpha(110), Colors.white.withAlpha(0)],
+        ).createShader(Rect.fromCircle(center: glint, radius: radius * 0.20)),
+    );
+
+    // 6) Crisp glowing rim (no blur).
+    canvas.drawPath(
+      bodyA,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5
+        ..color = Color.lerp(color, Colors.white, 0.3)!.withAlpha(120),
+    );
   }
 
   @override

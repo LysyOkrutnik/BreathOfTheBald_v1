@@ -3,17 +3,26 @@ import 'package:flutter/services.dart';
 import 'package:vibration/vibration.dart';
 
 class HapticEngine {
+  /// When false, all haptics are suppressed (driven by the user's setting).
+  bool enabled = true;
+
+  // Cache the capability check; querying the platform channel on every breath
+  // cue (as often as every ~700ms) is needless overhead.
+  bool? _hasVibrator;
+
   Future<bool> get hasVibrator async {
+    if (_hasVibrator != null) return _hasVibrator!;
     try {
-      final result = await Vibration.hasVibrator();
-      return result == true;
+      _hasVibrator = await Vibration.hasVibrator() == true;
     } catch (_) {
-      return false;
+      _hasVibrator = false;
     }
+    return _hasVibrator!;
   }
 
   /// Triggers a light haptic impact, suitable for inhale/exhale cues.
   Future<void> playTick() async {
+    if (!enabled) return;
     try {
       if (await hasVibrator) {
         Vibration.vibrate(duration: 20, amplitude: 80);
@@ -27,6 +36,7 @@ class HapticEngine {
 
   /// Triggers a heavy haptic impact, suitable for round-end or retention start cues.
   Future<void> playRetentionPeak() async {
+    if (!enabled) return;
     try {
       HapticFeedback.heavyImpact();
       if (await hasVibrator) {
@@ -39,6 +49,7 @@ class HapticEngine {
 
   /// Triggers a heartbeat vibration pattern, used as a periodic cue in Ghost Mode.
   Future<void> playHeartbeat() async {
+    if (!enabled) return;
     try {
       HapticFeedback.mediumImpact();
       if (await hasVibrator) {
@@ -49,12 +60,8 @@ class HapticEngine {
     }
   }
 
-  Future<void> vibrateBreath(double progress) async {
-    // The 'progress' parameter is ignored in favor of a simple light impact for this implementation.
-    playTick();
-  }
-
   Future<void> playInhalePulse(double progress) async {
+    if (!enabled) return;
     try {
       if (await hasVibrator) {
         // Scale intensity from 50 to 150 based on inhale progress.
