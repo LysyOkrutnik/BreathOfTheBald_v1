@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:okrutnik_breath/data/db/database.dart';
 import 'package:okrutnik_breath/data/repositories/custom_preset_repository.dart';
+import 'package:okrutnik_breath/data/repositories/freediving_repository.dart';
 import 'package:okrutnik_breath/data/repositories/planner_repository.dart';
 import 'package:okrutnik_breath/data/repositories/session_repository.dart';
 import 'package:okrutnik_breath/data/repositories/user_profile_repository.dart';
@@ -57,4 +58,15 @@ final customPresetRepositoryProvider = Provider<CustomPresetRepository>((ref) {
 /// Reactive stream of saved custom breathing presets, newest first.
 final customPresetsProvider = StreamProvider<List<CustomPreset>>((ref) {
   return ref.watch(customPresetRepositoryProvider).watchPresets();
+});
+
+final freedivingRepositoryProvider = Provider<FreedivingRepository>((ref) {
+  return FreedivingRepository(ref.watch(databaseProvider));
+});
+
+/// Reactive freediving profile (verified/working PBs, safety-consent flag);
+/// null only before the very first read (getProfile() lazily creates the row).
+final freedivingProfileProvider =
+    StreamProvider<FreedivingProfileData?>((ref) {
+  return ref.watch(freedivingRepositoryProvider).watchProfile();
 });

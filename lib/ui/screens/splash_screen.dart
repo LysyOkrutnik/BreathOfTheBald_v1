@@ -1,14 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/theme.dart';
-import 'package:okrutnik_breath/core/notifications/notification_service.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
-import 'package:okrutnik_breath/ui/screens/menu_screen.dart';
+import 'package:okrutnik_breath/ui/screens/home_shell_screen.dart';
 import 'package:okrutnik_breath/ui/screens/onboarding_screen.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
@@ -50,7 +47,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
     ]);
     if (!mounted) return;
     final Widget next =
-        _onboardingDone ? const MenuScreen() : const OnboardingScreen();
+        _onboardingDone ? const HomeShellScreen() : const OnboardingScreen();
     Navigator.of(context).pushReplacement(fadeThroughRoute(next));
   }
 
@@ -61,21 +58,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
     // One-time migration of any legacy SharedPreferences history into Drift.
     await ref.read(sessionRepositoryProvider).importLegacyData();
 
-    // Returning users: notification permission was handled during onboarding;
-    // just refresh the default daily reminder if it's allowed and no custom
-    // schedule has been set. New users get the priming flow in onboarding.
-    if (!_onboardingDone) return;
-
-    final granted = await Permission.notification.isGranted;
-    final hasCustomSchedule = prefs.getBool('schedule_active') ?? false;
-    if (!granted || hasCustomSchedule || !mounted) return;
-
-    // Capture localized strings before further async gaps.
-    final title = L10n.get(context, 'notif_reminder_title');
-    final body = L10n.get(context, 'notif_reminder_body');
-    final notifications = ref.read(notificationServiceProvider);
-    await notifications.init();
-    await notifications.scheduleDailyReminder(title: title, body: body);
+    // Note: the daily reminder is NOT (re)scheduled here. Once
+    // notifications.scheduleDailyReminder() fires, the OS keeps the alarm
+    // alive on its own (a boot receiver re-arms it after a reboot); the
+    // Settings toggle (backed by settingsProvider) is the single place that
+    // turns it on or off. Re-scheduling it here on every cold start was the
+    // root cause of a past bug where the reminder kept firing with no way to
+    // disable it.
   }
 
   @override

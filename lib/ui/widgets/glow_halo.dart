@@ -15,7 +15,7 @@ class GlowHalo extends StatelessWidget {
     required this.color,
     this.diameter,
     this.haloScale = 2.0,
-    this.intensity = 90,
+    this.intensity = 60,
   });
 
   final Widget child;

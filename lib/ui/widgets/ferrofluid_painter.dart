@@ -142,15 +142,17 @@ class FerrofluidPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = size.width * 0.40;
 
-    // 1) Outer atmospheric glow.
-    final glowRect = Rect.fromCircle(center: center, radius: radius * 1.7);
+    // 1) Outer atmospheric glow — restrained, so the orb reads as a precise
+    // instrument rather than a mystical light source. The core body/rim
+    // below (which actually conveys inhale/exhale state) is untouched.
+    final glowRect = Rect.fromCircle(center: center, radius: radius * 1.5);
     canvas.drawCircle(
       center,
-      radius * 1.7,
+      radius * 1.5,
       Paint()
         ..blendMode = BlendMode.plus
         ..shader = RadialGradient(
-          colors: [color.withAlpha(60), color.withAlpha(0)],
+          colors: [color.withAlpha(38), color.withAlpha(0)],
           stops: const [0.0, 1.0],
         ).createShader(glowRect),
     );

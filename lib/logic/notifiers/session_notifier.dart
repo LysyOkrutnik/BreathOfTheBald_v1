@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:okrutnik_breath/config/levels.dart';
 import 'package:okrutnik_breath/core/audio/audio_manager.dart';
 import 'package:okrutnik_breath/core/haptic/haptic_engine.dart';
+import 'package:okrutnik_breath/logic/freediving/co2_o2_table_generator.dart';
 import 'package:okrutnik_breath/logic/notifiers/ramp_up_calculator.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/logic/providers/settings_provider.dart';
@@ -25,6 +26,16 @@ class SessionNotifier extends StateNotifier<SessionState> {
   LevelData? _currentLevel;
   bool _isSessionActive = false;
   Timer? _phaseTimer;
+
+  // --- Freediving CO2/O2 table state ---
+  List<BreathHoldRound>? _freedivingRounds;
+  int _freedivingRoundIndex = 0;
+  int _freedivingRoundsCompleted = 0;
+
+  /// The exercise type of the most recently finished session, so the summary
+  /// screen can decide whether to show the post-session RPE prompt (CO2/O2
+  /// tables only). Set once, at the moment a session finishes.
+  ExerciseType? lastFinishedExerciseType;
 
   /// True only while a session is active *and* this notifier is still mounted.
   /// Writing `state` after disposal throws, so every async continuation guards
@@ -113,7 +124,219 @@ class SessionNotifier extends StateNotifier<SessionState> {
       _startFireBreathing(level);
     } else if (level.type == ExerciseType.custom) {
       _startCustom(level);
+    } else if (level.type == ExerciseType.co2Table ||
+        level.type == ExerciseType.o2Table) {
+      _startFreedivingTable(level);
     }
+  }
+
+  // ==========================================================
+  // CO2/O2 FREEDIVING TABLES
+  // ==========================================================
+
+  // Tunable timings for the guided CO2/O2 experience. Only inhale/exhale add
+  // time beyond the generated table's exact apnea/rest seconds (~5s/round
+  // total) — warm-up and cool-down are separate, skippable bookends.
+  static const _freedivingWarmupSec = 60;
+  static const _freedivingInhaleSec = 3;
+  static const _freedivingExhaleSec = 2;
+  static const _freedivingCooldownSec = 30;
+
+  /// True while a skippable pause (warm-up/cool-down) is active and can react
+  /// to [skipFreedivingPause]. False during rest — the whole point of rest is
+  /// that it isn't optional.
+  bool _freedivingPauseSkippable = false;
+  bool _freedivingSkipRequested = false;
+
+  /// Runs a pre-generated CO2/O2 breath-hold table end to end: a skippable
+  /// warm-up, then per round an explicit inhale → fixed-duration hold →
+  /// exhale → rest, and a skippable cool-down after the final round.
+  void _startFreedivingTable(LevelData level) {
+    final rounds = level.freedivingRounds;
+    if (rounds == null || rounds.isEmpty) {
+      if (_isRunning) _finishSession();
+      return;
+    }
+    _freedivingRounds = rounds;
+    _freedivingRoundIndex = 0;
+    _freedivingRoundsCompleted = 0;
+    state = state.copyWith(totalRounds: rounds.length, currentRound: 1);
+    _runFreedivingPause(
+      seconds: _freedivingWarmupSec,
+      labelKey: 'freediving_warmup_label',
+      hintKey: 'freediving_warmup_hint',
+      onDone: _runFreedivingInhale,
+    );
+  }
+
+  /// A skippable countdown (warm-up before round 1, or cool-down after the
+  /// last one). Deliberately *not* wired to the hold's tap-to-abort gesture —
+  /// it uses the explicit, unambiguous [skipFreedivingPause] control instead,
+  /// so it can never be confused with "I need to breathe now".
+  void _runFreedivingPause({
+    required int seconds,
+    required String labelKey,
+    required String hintKey,
+    required void Function() onDone,
+  }) {
+    if (!_isRunning) return;
+    _freedivingPauseSkippable = true;
+    _freedivingSkipRequested = false;
+    int sec = seconds;
+    state = state.copyWith(
+      customLabel: labelKey,
+      customDescription: hintKey,
+      customIsBig: false,
+      phase: SessionPhase.recovery(remaining: Duration(seconds: sec)),
+    );
+    _phaseTimer?.cancel();
+    _phaseTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!_isRunning) {
+        t.cancel();
+        return;
+      }
+      if (_freedivingSkipRequested) {
+        t.cancel();
+        _freedivingPauseSkippable = false;
+        onDone();
+        return;
+      }
+      sec--;
+      state = state.copyWith(phase: SessionPhase.recovery(remaining: Duration(seconds: sec)));
+      if (sec <= 0) {
+        t.cancel();
+        _freedivingPauseSkippable = false;
+        onDone();
+      }
+    });
+  }
+
+  /// Called by the "skip" control shown only during warm-up/cool-down.
+  void skipFreedivingPause() {
+    if (_freedivingPauseSkippable) _freedivingSkipRequested = true;
+  }
+
+  void _runFreedivingInhale() {
+    if (!_isRunning || _freedivingRounds == null) return;
+    state = state.copyWith(
+      customLabel: 'session_inhale',
+      customDescription: null,
+      customIsBig: true,
+      phase: SessionPhase.breathing(
+        breathIndex: _freedivingRoundIndex + 1,
+        isInhaling: true,
+        currentBreathDuration: const Duration(seconds: _freedivingInhaleSec),
+      ),
+    );
+    try {
+      _audioManager.playInhale();
+    } catch (_) {}
+    _phaseTimer?.cancel();
+    _phaseTimer = Timer(const Duration(seconds: _freedivingInhaleSec), () {
+      if (_isRunning) _runFreedivingHold();
+    });
+  }
+
+  void _runFreedivingHold() {
+    if (!_isRunning || _freedivingRounds == null) return;
+    final round = _freedivingRounds![_freedivingRoundIndex];
+    state = state.copyWith(
+      currentRound: _freedivingRoundIndex + 1,
+      customLabel: 'freediving_hold_label',
+      customDescription: null,
+      customIsBig: true,
+      phase: const SessionPhase.retention(elapsed: Duration.zero),
+    );
+    try {
+      _hapticEngine.playRetentionPeak();
+      _audioManager.playGong();
+      _audioManager.duckDrone();
+    } catch (_) {}
+
+    final start = DateTime.now();
+    final target = Duration(seconds: round.apneaSec);
+    _phaseTimer?.cancel();
+    _phaseTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!_isRunning) {
+        t.cancel();
+        return;
+      }
+      final elapsed = DateTime.now().difference(start);
+      if (elapsed >= target) {
+        t.cancel();
+        _finishFreedivingHold(completedFull: true);
+        return;
+      }
+      state = state.copyWith(phase: SessionPhase.retention(elapsed: elapsed));
+    });
+  }
+
+  /// Ends the current round's hold — either it reached its planned duration,
+  /// or the user tapped the early-abort control via `finishRetention()`. An
+  /// early abort ends the whole table rather than pushing into further,
+  /// equal-or-harder rounds.
+  void _finishFreedivingHold({required bool completedFull}) {
+    _phaseTimer?.cancel();
+    final round = _freedivingRounds![_freedivingRoundIndex];
+    final actualElapsed = state.phase.maybeWhen(
+      retention: (elapsed) => elapsed,
+      orElse: () => Duration(seconds: round.apneaSec),
+    );
+    final logs = List<Duration>.from(state.retentionLogs)..add(actualElapsed);
+    state = state.copyWith(retentionLogs: logs);
+
+    if (!completedFull) {
+      _finishSession();
+      return;
+    }
+    _freedivingRoundsCompleted++;
+    _runFreedivingExhale();
+  }
+
+  void _runFreedivingExhale() {
+    if (!_isRunning || _freedivingRounds == null) return;
+    state = state.copyWith(
+      customLabel: 'session_exhale',
+      customDescription: null,
+      customIsBig: false,
+      phase: SessionPhase.breathing(
+        breathIndex: _freedivingRoundIndex + 1,
+        isInhaling: false,
+        currentBreathDuration: const Duration(seconds: _freedivingExhaleSec),
+      ),
+    );
+    try {
+      _audioManager.playExhale();
+      _audioManager.unduckDrone();
+    } catch (_) {}
+    _phaseTimer?.cancel();
+    _phaseTimer = Timer(const Duration(seconds: _freedivingExhaleSec), () {
+      if (_isRunning) _advanceFreedivingRound();
+    });
+  }
+
+  void _advanceFreedivingRound() {
+    if (!_isRunning || _freedivingRounds == null) return;
+    final isLastRound = _freedivingRoundIndex >= _freedivingRounds!.length - 1;
+    if (isLastRound) {
+      _runFreedivingPause(
+        seconds: _freedivingCooldownSec,
+        labelKey: 'freediving_cooldown_label',
+        hintKey: 'freediving_cooldown_hint',
+        onDone: _finishSession,
+      );
+      return;
+    }
+
+    final round = _freedivingRounds![_freedivingRoundIndex];
+    _freedivingRoundIndex++;
+    state = state.copyWith(currentRound: _freedivingRoundIndex + 1);
+    _runFreedivingPause(
+      seconds: round.restSec,
+      labelKey: 'freediving_rest_label',
+      hintKey: 'freediving_rest_hint',
+      onDone: _runFreedivingInhale,
+    );
   }
 
   // ==========================================================
@@ -243,6 +466,22 @@ class SessionNotifier extends StateNotifier<SessionState> {
   }
 
   void finishRetention() {
+    // In a CO2/O2 table, the same "tap to end" gesture doubles as the
+    // low-friction "I need to breathe now" early-abort for the current round
+    // — a different continuation (its own rest duration, or ending the whole
+    // table) than Wim Hof's fixed 15s recovery.
+    if (_currentLevel?.type == ExerciseType.co2Table ||
+        _currentLevel?.type == ExerciseType.o2Table) {
+      // Only the hold itself is abortable — during breathing (inhale/exhale)
+      // or a countdown pause, phase is never `retention`, so this branch (and
+      // the UI gesture that calls it) is simply inert at those moments.
+      state.phase.maybeWhen(
+        retention: (_) => _finishFreedivingHold(completedFull: false),
+        orElse: () {},
+      );
+      return;
+    }
+
     _phaseTimer?.cancel();
     state.phase.maybeWhen(
       retention: (elapsed) {
@@ -440,6 +679,11 @@ class SessionNotifier extends StateNotifier<SessionState> {
     // early finish never inflates history/XP.
     final totalRounds = state.currentRound;
     final retentionLogs = List<Duration>.from(state.retentionLogs);
+    final freedivingRoundsCompleted = _freedivingRoundsCompleted;
+
+    // Set before the state change below so it's already visible to the
+    // summary screen's very first build after navigation.
+    lastFinishedExerciseType = level?.type;
 
     state = state.copyWith(
       phase: const SessionPhase.finished(),
@@ -449,8 +693,8 @@ class SessionNotifier extends StateNotifier<SessionState> {
     // The UI has already advanced to the summary; persist results in the
     // background so a slow disk write never blocks the transition.
     if (level != null) {
-      unawaited(
-          _persistSessionResults(level, duration, totalRounds, retentionLogs));
+      unawaited(_persistSessionResults(
+          level, duration, totalRounds, retentionLogs, freedivingRoundsCompleted));
     }
 
     stopSession(resetState: false);
@@ -461,16 +705,26 @@ class SessionNotifier extends StateNotifier<SessionState> {
     Duration duration,
     int totalRounds,
     List<Duration> retentionLogs,
+    int freedivingRoundsCompleted,
   ) async {
     try {
       final totalRetention =
           retentionLogs.fold<int>(0, (sum, d) => sum + d.inSeconds);
 
+      final isFreedivingTable = level.type == ExerciseType.co2Table ||
+          level.type == ExerciseType.o2Table;
+
+      // A CO2/O2 table's "retention" is the sum of several near-maximal
+      // breath-holds and would otherwise dwarf every other exercise's XP
+      // (the generic formula is retentionSeconds * 2, uncapped) — dampen the
+      // XP-calculation input for these two types only. The full, honest hold
+      // time is still stored as the session's real retentionSec below.
       final gamification = _ref.read(gamificationServiceProvider);
       final xpEarned = await gamification.updateXpAndLevel(
         breathCount: level.totalBreaths * totalRounds,
-        retentionSeconds: totalRetention,
-        multiplier: 1.5,
+        retentionSeconds:
+            isFreedivingTable ? (totalRetention * 0.3).round() : totalRetention,
+        multiplier: isFreedivingTable ? 0.5 : 1.5,
       );
       await gamification.updateStreak();
 
@@ -487,6 +741,20 @@ class SessionNotifier extends StateNotifier<SessionState> {
             retentionSec: totalRetention,
             xpEarned: xpEarned,
           );
+
+      if (isFreedivingTable &&
+          level.freedivingRounds != null &&
+          level.freedivingPbUsedSec != null) {
+        await _ref.read(freedivingRepositoryProvider).logTableSession(
+              tableType: level.type == ExerciseType.co2Table
+                  ? FreedivingTableType.co2
+                  : FreedivingTableType.o2,
+              pbUsedSec: level.freedivingPbUsedSec!,
+              rounds: level.freedivingRounds!,
+              roundsCompleted: freedivingRoundsCompleted,
+              durationSec: duration.inSeconds,
+            );
+      }
     } catch (e, st) {
       developer.log('Failed to persist session results',
           name: 'SessionNotifier', error: e, stackTrace: st);
@@ -501,6 +769,11 @@ class SessionNotifier extends StateNotifier<SessionState> {
     _phaseTimer?.cancel();
     WakelockPlus.disable();
     _audioManager.stopDrone();
+    _freedivingRounds = null;
+    _freedivingRoundIndex = 0;
+    _freedivingRoundsCompleted = 0;
+    _freedivingPauseSkippable = false;
+    _freedivingSkipRequested = false;
 
     // Reset the state to clear the UI and prevent stale data from persisting.
     if (resetState) state = SessionState.initial();

@@ -1,9 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:okrutnik_breath/config/theme.dart';
+import 'package:okrutnik_breath/logic/freediving/co2_o2_table_generator.dart';
 
 enum Difficulty { mild, strong, beast, guru }
 
-enum ExerciseType { wimHof, boxBreathing, relax478, fireBreathing, custom }
+enum ExerciseType {
+  wimHof,
+  boxBreathing,
+  relax478,
+  fireBreathing,
+  custom,
+  co2Table,
+  o2Table,
+}
 
 class LevelData {
   final String title;
@@ -27,6 +36,14 @@ class LevelData {
   final int exhaleSec;
   final int holdOutSec;
 
+  /// The exact per-round schedule for a CO2/O2 freediving table. Null for
+  /// every other exercise type.
+  final List<BreathHoldRound>? freedivingRounds;
+
+  /// The PB (seconds) this freediving table was generated from — persisted
+  /// alongside the session log for history/audit.
+  final int? freedivingPbUsedSec;
+
   // UI presentation mapping.
   final Color color;
   final String instructionTitleKey;
@@ -47,6 +64,8 @@ class LevelData {
     this.holdInSec = 0,
     this.exhaleSec = 0,
     this.holdOutSec = 0,
+    this.freedivingRounds,
+    this.freedivingPbUsedSec,
     required this.color,
     required this.instructionTitleKey,
     required this.instructionDescriptionKey,
@@ -81,6 +100,46 @@ class LevelData {
       instructionTitleKey: name,
       instructionDescriptionKey: '',
       instructionStepKeys: const [],
+    );
+  }
+
+  /// Builds a runtime [LevelData] for a CO2 or O2 breath-hold table, generated
+  /// from the user's current working PB. [pbSeconds] should be the caller's
+  /// virtual PB for that table type (see FreedivingProfile).
+  factory LevelData.freedivingTable({
+    required FreedivingTableType tableType,
+    required int pbSeconds,
+    int rounds = Co2O2TableGenerator.defaultRounds,
+  }) {
+    final isCo2 = tableType == FreedivingTableType.co2;
+    final generatedRounds = isCo2
+        ? Co2O2TableGenerator.generateCo2Table(pbSeconds, rounds: rounds)
+        : Co2O2TableGenerator.generateO2Table(pbSeconds, rounds: rounds);
+
+    return LevelData(
+      key: isCo2 ? 'freediving_co2' : 'freediving_o2',
+      title: isCo2 ? 'freediving_co2_title' : 'freediving_o2_title',
+      subtitle: isCo2 ? 'freediving_co2_subtitle' : 'freediving_o2_subtitle',
+      type: isCo2 ? ExerciseType.co2Table : ExerciseType.o2Table,
+      totalRounds: rounds,
+      freedivingRounds: generatedRounds,
+      freedivingPbUsedSec: pbSeconds,
+      color: isCo2 ? const Color(0xFF4FC3F7) : const Color(0xFFFF7043),
+      instructionTitleKey:
+          isCo2 ? 'freediving_co2_title' : 'freediving_o2_title',
+      instructionDescriptionKey:
+          isCo2 ? 'freediving_co2_desc' : 'freediving_o2_desc',
+      instructionStepKeys: isCo2
+          ? const [
+              'freediving_co2_step1',
+              'freediving_co2_step2',
+              'freediving_co2_step3',
+            ]
+          : const [
+              'freediving_o2_step1',
+              'freediving_o2_step2',
+              'freediving_o2_step3',
+            ],
     );
   }
 
@@ -222,6 +281,43 @@ class LevelData {
         "intro_steps_fire_5",
         "intro_steps_fire_6",
       ],
+    ),
+
+    // --- FREEDIVING (display/lookup only) ---
+    // These two entries exist so History/Stats can resolve a name, color and
+    // icon for past sessions via LevelData.levels[session.levelKey]. A real
+    // session is never started from these static entries — it is always
+    // built fresh by LevelData.freedivingTable(...) using the user's current
+    // working PB, since the round schedule depends on that live value.
+    'freediving_co2': LevelData(
+      key: 'freediving_co2',
+      title: "freediving_co2_title",
+      subtitle: "freediving_co2_subtitle",
+      type: ExerciseType.co2Table,
+      color: Color(0xFF4FC3F7),
+      instructionTitleKey: "freediving_co2_title",
+      instructionDescriptionKey: "freediving_co2_desc",
+      instructionStepKeys: [],
+    ),
+    'freediving_o2': LevelData(
+      key: 'freediving_o2',
+      title: "freediving_o2_title",
+      subtitle: "freediving_o2_subtitle",
+      type: ExerciseType.o2Table,
+      color: Color(0xFFFF7043),
+      instructionTitleKey: "freediving_o2_title",
+      instructionDescriptionKey: "freediving_o2_desc",
+      instructionStepKeys: [],
+    ),
+    'freediving_pb_test': LevelData(
+      key: 'freediving_pb_test',
+      title: "freediving_pb_test_title",
+      subtitle: "freediving_pb_test_title",
+      type: ExerciseType.co2Table,
+      color: Color(0xFF81C784),
+      instructionTitleKey: "freediving_pb_test_title",
+      instructionDescriptionKey: "freediving_pb_test_intro",
+      instructionStepKeys: [],
     ),
   };
 }

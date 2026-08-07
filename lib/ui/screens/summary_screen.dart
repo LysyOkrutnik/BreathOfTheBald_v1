@@ -2,26 +2,53 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:okrutnik_breath/config/l10n.dart';
+import 'package:okrutnik_breath/config/levels.dart';
 import 'package:okrutnik_breath/config/responsive.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
+import 'package:okrutnik_breath/logic/freediving/co2_o2_table_generator.dart';
 import 'package:okrutnik_breath/logic/notifiers/session_notifier.dart';
+import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/logic/providers/settings_provider.dart';
-import 'package:okrutnik_breath/ui/screens/menu_screen.dart';
+import 'package:okrutnik_breath/ui/screens/home_shell_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/glow_halo.dart';
 
-class SummaryScreen extends ConsumerWidget {
+class SummaryScreen extends ConsumerStatefulWidget {
   const SummaryScreen({super.key});
+
+  @override
+  ConsumerState<SummaryScreen> createState() => _SummaryScreenState();
+}
+
+class _SummaryScreenState extends ConsumerState<SummaryScreen> {
+  bool _rpeSubmitted = false;
 
   String _fmt(Duration d) =>
       "${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}";
 
+  FreedivingTableType? get _freedivingTableType {
+    final type = ref.read(sessionProvider.notifier).lastFinishedExerciseType;
+    if (type == ExerciseType.co2Table) return FreedivingTableType.co2;
+    if (type == ExerciseType.o2Table) return FreedivingTableType.o2;
+    return null;
+  }
+
+  Future<void> _submitRpe(int score) async {
+    final tableType = _freedivingTableType;
+    if (tableType == null) return;
+    await ref
+        .read(freedivingRepositoryProvider)
+        .recordRpeAndAdjustPb(tableType: tableType, rpeScore: score);
+    if (mounted) setState(() => _rpeSubmitted = true);
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final state = ref.read(sessionProvider);
     final duration = state.sessionDuration ?? Duration.zero;
+    final tableType = _freedivingTableType;
 
     return Scaffold(
       body: Stack(
@@ -71,6 +98,13 @@ class SummaryScreen extends ConsumerWidget {
                           ],
                         ),
                       ).animate().fadeIn(delay: 250.ms),
+                      if (tableType != null) ...[
+                        const SizedBox(height: AppSpacing.xl),
+                        _RpeCard(
+                          submitted: _rpeSubmitted,
+                          onSubmit: _submitRpe,
+                        ).animate().fadeIn(delay: 300.ms),
+                      ],
                       const SizedBox(height: AppSpacing.xl),
                       _StatRow(
                         icon: Icons.timer_outlined,
@@ -112,7 +146,7 @@ class SummaryScreen extends ConsumerWidget {
                       const SizedBox(height: AppSpacing.xxl),
                       PressableScale(
                         onTap: () => Navigator.of(context).pushAndRemoveUntil(
-                          fadeThroughRoute(const MenuScreen()),
+                          fadeThroughRoute(const HomeShellScreen()),
                           (route) => false,
                         ),
                         child: Container(
@@ -136,6 +170,114 @@ class SummaryScreen extends ConsumerWidget {
                       ).animate().fadeIn(delay: 550.ms).slideY(begin: 0.2),
                     ],
                   ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RpeCard extends StatefulWidget {
+  const _RpeCard({required this.submitted, required this.onSubmit});
+  final bool submitted;
+  final ValueChanged<int> onSubmit;
+
+  @override
+  State<_RpeCard> createState() => _RpeCardState();
+}
+
+class _RpeCardState extends State<_RpeCard> {
+  int? _selected;
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.submitted) {
+      return GlassCard(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Row(
+          children: [
+            const Icon(Icons.check_circle_outline, color: AppTheme.primary, size: 20),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Text(
+                L10n.get(context, 'freediving_rpe_thanks'),
+                style: const TextStyle(color: AppTheme.textLight, fontSize: 13),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return GlassCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            L10n.get(context, 'freediving_rpe_question'),
+            style: const TextStyle(
+                color: AppTheme.textLight, fontSize: 14, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            L10n.get(context, 'freediving_rpe_hint'),
+            style: const TextStyle(color: AppTheme.textDim, fontSize: 11),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              for (var i = 1; i <= 10; i++)
+                GestureDetector(
+                  onTap: () => setState(() => _selected = i),
+                  child: Container(
+                    width: 34,
+                    height: 34,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _selected == i
+                          ? AppTheme.primary
+                          : Colors.white.withAlpha(14),
+                      border: Border.all(
+                        color: _selected == i
+                            ? AppTheme.primary
+                            : Colors.white24,
+                      ),
+                    ),
+                    child: Text(
+                      '$i',
+                      style: TextStyle(
+                        color: _selected == i ? Colors.black : AppTheme.textLight,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Opacity(
+            opacity: _selected == null ? 0.4 : 1.0,
+            child: PressableScale(
+              onTap: _selected == null ? null : () => widget.onSubmit(_selected!),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: Text(
+                  L10n.get(context, 'freediving_rpe_submit'),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      color: Colors.black, fontWeight: FontWeight.bold, fontSize: 13),
                 ),
               ),
             ),

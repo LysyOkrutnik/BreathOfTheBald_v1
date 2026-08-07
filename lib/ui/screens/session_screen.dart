@@ -7,7 +7,7 @@ import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
 import 'package:okrutnik_breath/logic/notifiers/session_notifier.dart';
 import 'package:okrutnik_breath/logic/states/session_state.dart';
-import 'package:okrutnik_breath/ui/screens/menu_screen.dart';
+import 'package:okrutnik_breath/ui/screens/home_shell_screen.dart';
 import 'package:okrutnik_breath/ui/screens/summary_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/ferrofluid_painter.dart';
@@ -277,12 +277,29 @@ class _PhaseText extends StatelessWidget {
   Widget build(BuildContext context) {
     var mainText = '';
     var subText = '';
+    var hintText = '';
     var color = Colors.white;
-    var showTapHint = false;
+
+    // Whether to show the "tap to end early" hint depends only on the
+    // underlying phase (a breath-hold), never on whether customLabel is
+    // overriding the displayed text — otherwise a labeled hold (freediving
+    // tables) would silently hide this safety-relevant, always-available
+    // early-abort control. It must never be shown for anything other than an
+    // actual hold — freediving's inhale/exhale/rest/warm-up/cool-down phases
+    // are deliberately `breathing`/`recovery`, not `retention`, specifically
+    // so a tap during those moments does nothing instead of ending the table.
+    final showTapHint =
+        state.phase.maybeMap(retention: (_) => true, orElse: () => false);
+    final isFreedivingHold = state.customLabel == 'freediving_hold_label';
+
+    // The warm-up and cool-down pauses expose an explicit "skip" control
+    // instead of the tap-to-abort gesture.
+    final showSkip = state.customLabel == 'freediving_warmup_label' ||
+        state.customLabel == 'freediving_cooldown_label';
 
     if (state.customLabel != null) {
       mainText = L10n.get(context, state.customLabel!);
-      subText = state.customDescription != null
+      hintText = state.customDescription != null
           ? L10n.get(context, state.customDescription!)
           : '';
       final label = state.customLabel!;
@@ -295,6 +312,20 @@ class _PhaseText extends StatelessWidget {
       } else {
         color = AppTheme.primary;
       }
+
+      // customLabel only overrides the *heading*; the live countdown (hold
+      // elapsed, or a rest/warm-up/cool-down countdown) still needs to be the
+      // prominent subText, with any instructional copy demoted to hintText.
+      state.phase.maybeWhen(
+        retention: (elapsed) {
+          subText =
+              "${elapsed.inMinutes}:${(elapsed.inSeconds % 60).toString().padLeft(2, '0')}";
+        },
+        recovery: (remaining) {
+          subText = "${remaining.inSeconds}";
+        },
+        orElse: () {},
+      );
     } else {
       state.phase.when(
         idle: () {},
@@ -310,7 +341,6 @@ class _PhaseText extends StatelessWidget {
           subText =
               "${elapsed.inMinutes}:${(elapsed.inSeconds % 60).toString().padLeft(2, '0')}";
           color = AppTheme.textDim;
-          showTapHint = true;
         },
         recovery: (remaining) {
           mainText = L10n.get(context, 'session_recovery');
@@ -346,7 +376,22 @@ class _PhaseText extends StatelessWidget {
             fontFeatures: [FontFeature.tabularFigures()],
           ),
         ),
-        if (showTapHint && state.customLabel == null) ...[
+        if (hintText.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+            child: Text(
+              hintText,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 13,
+                color: Colors.white38,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+        if (showTapHint) ...[
           const SizedBox(height: AppSpacing.xl),
           GestureDetector(
             onTap: notifier.finishRetention,
@@ -359,9 +404,33 @@ class _PhaseText extends StatelessWidget {
                 border: Border.all(color: AppTheme.primary.withAlpha(120)),
               ),
               child: Text(
-                L10n.get(context, 'session_tap_to_inhale'),
+                L10n.get(context,
+                    isFreedivingHold ? 'freediving_hold_tap_hint' : 'session_tap_to_inhale'),
                 style: const TextStyle(
                   color: AppTheme.primary,
+                  letterSpacing: 1.5,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ),
+        ],
+        if (showSkip) ...[
+          const SizedBox(height: AppSpacing.xl),
+          GestureDetector(
+            onTap: notifier.skipFreedivingPause,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.xl, vertical: AppSpacing.md),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                border: Border.all(color: Colors.white24),
+              ),
+              child: Text(
+                L10n.get(context, 'freediving_skip'),
+                style: const TextStyle(
+                  color: Colors.white70,
                   letterSpacing: 1.5,
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
@@ -462,7 +531,7 @@ void _showExitDialog(BuildContext context, SessionNotifier notifier) {
                         notifier.stopSession();
                         Navigator.of(dialogContext).pop();
                         Navigator.of(context)
-                            .pushReplacement(fadeThroughRoute(const MenuScreen()));
+                            .pushReplacement(fadeThroughRoute(const HomeShellScreen()));
                       },
                       child: Text(
                         L10n.get(context, 'session_exit_dialog_finish'),

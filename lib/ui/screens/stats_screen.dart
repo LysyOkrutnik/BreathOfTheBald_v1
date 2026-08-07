@@ -14,7 +14,10 @@ import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
 
 class StatsScreen extends ConsumerWidget {
-  const StatsScreen({super.key});
+  const StatsScreen({super.key, this.embedded = false});
+
+  /// True when shown as a bottom-nav tab root rather than a pushed route.
+  final bool embedded;
 
   static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
@@ -33,7 +36,10 @@ class StatsScreen extends ConsumerWidget {
                 constraints: BoxConstraints(maxWidth: context.isTablet ? 760 : 560),
                 child: Column(
                   children: [
-                    ScreenHeader(title: L10n.get(context, 'stats_title')),
+                    ScreenHeader(
+                      title: L10n.get(context, 'stats_title'),
+                      showBackButton: !embedded,
+                    ),
                     Expanded(
                       child: sessions.isEmpty
                           ? _empty(context)

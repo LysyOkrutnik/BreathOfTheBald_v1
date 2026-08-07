@@ -1813,6 +1813,990 @@ class CustomPresetsCompanion extends UpdateCompanion<CustomPreset> {
   }
 }
 
+class $FreedivingProfileTable extends FreedivingProfile
+    with TableInfo<$FreedivingProfileTable, FreedivingProfileData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $FreedivingProfileTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _verifiedPbSecMeta =
+      const VerificationMeta('verifiedPbSec');
+  @override
+  late final GeneratedColumn<int> verifiedPbSec = GeneratedColumn<int>(
+      'verified_pb_sec', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _verifiedPbAtMeta =
+      const VerificationMeta('verifiedPbAt');
+  @override
+  late final GeneratedColumn<DateTime> verifiedPbAt = GeneratedColumn<DateTime>(
+      'verified_pb_at', aliasedName, true,
+      type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _virtualPbCo2SecMeta =
+      const VerificationMeta('virtualPbCo2Sec');
+  @override
+  late final GeneratedColumn<int> virtualPbCo2Sec = GeneratedColumn<int>(
+      'virtual_pb_co2_sec', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _virtualPbO2SecMeta =
+      const VerificationMeta('virtualPbO2Sec');
+  @override
+  late final GeneratedColumn<int> virtualPbO2Sec = GeneratedColumn<int>(
+      'virtual_pb_o2_sec', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _lastCo2SessionAtMeta =
+      const VerificationMeta('lastCo2SessionAt');
+  @override
+  late final GeneratedColumn<DateTime> lastCo2SessionAt =
+      GeneratedColumn<DateTime>('last_co2_session_at', aliasedName, true,
+          type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _lastO2SessionAtMeta =
+      const VerificationMeta('lastO2SessionAt');
+  @override
+  late final GeneratedColumn<DateTime> lastO2SessionAt =
+      GeneratedColumn<DateTime>('last_o2_session_at', aliasedName, true,
+          type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _safetyAcknowledgedAtMeta =
+      const VerificationMeta('safetyAcknowledgedAt');
+  @override
+  late final GeneratedColumn<DateTime> safetyAcknowledgedAt =
+      GeneratedColumn<DateTime>('safety_acknowledged_at', aliasedName, true,
+          type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  @override
+  List<GeneratedColumn> get $columns => [
+        id,
+        verifiedPbSec,
+        verifiedPbAt,
+        virtualPbCo2Sec,
+        virtualPbO2Sec,
+        lastCo2SessionAt,
+        lastO2SessionAt,
+        safetyAcknowledgedAt
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'freediving_profile';
+  @override
+  VerificationContext validateIntegrity(
+      Insertable<FreedivingProfileData> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('verified_pb_sec')) {
+      context.handle(
+          _verifiedPbSecMeta,
+          verifiedPbSec.isAcceptableOrUnknown(
+              data['verified_pb_sec']!, _verifiedPbSecMeta));
+    }
+    if (data.containsKey('verified_pb_at')) {
+      context.handle(
+          _verifiedPbAtMeta,
+          verifiedPbAt.isAcceptableOrUnknown(
+              data['verified_pb_at']!, _verifiedPbAtMeta));
+    }
+    if (data.containsKey('virtual_pb_co2_sec')) {
+      context.handle(
+          _virtualPbCo2SecMeta,
+          virtualPbCo2Sec.isAcceptableOrUnknown(
+              data['virtual_pb_co2_sec']!, _virtualPbCo2SecMeta));
+    }
+    if (data.containsKey('virtual_pb_o2_sec')) {
+      context.handle(
+          _virtualPbO2SecMeta,
+          virtualPbO2Sec.isAcceptableOrUnknown(
+              data['virtual_pb_o2_sec']!, _virtualPbO2SecMeta));
+    }
+    if (data.containsKey('last_co2_session_at')) {
+      context.handle(
+          _lastCo2SessionAtMeta,
+          lastCo2SessionAt.isAcceptableOrUnknown(
+              data['last_co2_session_at']!, _lastCo2SessionAtMeta));
+    }
+    if (data.containsKey('last_o2_session_at')) {
+      context.handle(
+          _lastO2SessionAtMeta,
+          lastO2SessionAt.isAcceptableOrUnknown(
+              data['last_o2_session_at']!, _lastO2SessionAtMeta));
+    }
+    if (data.containsKey('safety_acknowledged_at')) {
+      context.handle(
+          _safetyAcknowledgedAtMeta,
+          safetyAcknowledgedAt.isAcceptableOrUnknown(
+              data['safety_acknowledged_at']!, _safetyAcknowledgedAtMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  FreedivingProfileData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return FreedivingProfileData(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      verifiedPbSec: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}verified_pb_sec']),
+      verifiedPbAt: attachedDatabase.typeMapping.read(
+          DriftSqlType.dateTime, data['${effectivePrefix}verified_pb_at']),
+      virtualPbCo2Sec: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}virtual_pb_co2_sec']),
+      virtualPbO2Sec: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}virtual_pb_o2_sec']),
+      lastCo2SessionAt: attachedDatabase.typeMapping.read(
+          DriftSqlType.dateTime, data['${effectivePrefix}last_co2_session_at']),
+      lastO2SessionAt: attachedDatabase.typeMapping.read(
+          DriftSqlType.dateTime, data['${effectivePrefix}last_o2_session_at']),
+      safetyAcknowledgedAt: attachedDatabase.typeMapping.read(
+          DriftSqlType.dateTime,
+          data['${effectivePrefix}safety_acknowledged_at']),
+    );
+  }
+
+  @override
+  $FreedivingProfileTable createAlias(String alias) {
+    return $FreedivingProfileTable(attachedDatabase, alias);
+  }
+}
+
+class FreedivingProfileData extends DataClass
+    implements Insertable<FreedivingProfileData> {
+  final int id;
+
+  /// The last real, guided Max PB Attempt result. Null until the user
+  /// completes their first test.
+  final int? verifiedPbSec;
+  final DateTime? verifiedPbAt;
+
+  /// Working PB used to generate the next table of each type. Initialized to
+  /// verifiedPbSec and adjusted ±5% per RPE feedback, clamped to
+  /// [50%, 115%] of verifiedPbSec so RPE-driven drift can never exceed a safe
+  /// margin above the last real test.
+  final int? virtualPbCo2Sec;
+  final int? virtualPbO2Sec;
+  final DateTime? lastCo2SessionAt;
+  final DateTime? lastO2SessionAt;
+
+  /// Timestamp the user acknowledged the apnea-specific safety disclaimer;
+  /// null means the Freediving section has not been unlocked yet.
+  final DateTime? safetyAcknowledgedAt;
+  const FreedivingProfileData(
+      {required this.id,
+      this.verifiedPbSec,
+      this.verifiedPbAt,
+      this.virtualPbCo2Sec,
+      this.virtualPbO2Sec,
+      this.lastCo2SessionAt,
+      this.lastO2SessionAt,
+      this.safetyAcknowledgedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    if (!nullToAbsent || verifiedPbSec != null) {
+      map['verified_pb_sec'] = Variable<int>(verifiedPbSec);
+    }
+    if (!nullToAbsent || verifiedPbAt != null) {
+      map['verified_pb_at'] = Variable<DateTime>(verifiedPbAt);
+    }
+    if (!nullToAbsent || virtualPbCo2Sec != null) {
+      map['virtual_pb_co2_sec'] = Variable<int>(virtualPbCo2Sec);
+    }
+    if (!nullToAbsent || virtualPbO2Sec != null) {
+      map['virtual_pb_o2_sec'] = Variable<int>(virtualPbO2Sec);
+    }
+    if (!nullToAbsent || lastCo2SessionAt != null) {
+      map['last_co2_session_at'] = Variable<DateTime>(lastCo2SessionAt);
+    }
+    if (!nullToAbsent || lastO2SessionAt != null) {
+      map['last_o2_session_at'] = Variable<DateTime>(lastO2SessionAt);
+    }
+    if (!nullToAbsent || safetyAcknowledgedAt != null) {
+      map['safety_acknowledged_at'] = Variable<DateTime>(safetyAcknowledgedAt);
+    }
+    return map;
+  }
+
+  FreedivingProfileCompanion toCompanion(bool nullToAbsent) {
+    return FreedivingProfileCompanion(
+      id: Value(id),
+      verifiedPbSec: verifiedPbSec == null && nullToAbsent
+          ? const Value.absent()
+          : Value(verifiedPbSec),
+      verifiedPbAt: verifiedPbAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(verifiedPbAt),
+      virtualPbCo2Sec: virtualPbCo2Sec == null && nullToAbsent
+          ? const Value.absent()
+          : Value(virtualPbCo2Sec),
+      virtualPbO2Sec: virtualPbO2Sec == null && nullToAbsent
+          ? const Value.absent()
+          : Value(virtualPbO2Sec),
+      lastCo2SessionAt: lastCo2SessionAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastCo2SessionAt),
+      lastO2SessionAt: lastO2SessionAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastO2SessionAt),
+      safetyAcknowledgedAt: safetyAcknowledgedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(safetyAcknowledgedAt),
+    );
+  }
+
+  factory FreedivingProfileData.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return FreedivingProfileData(
+      id: serializer.fromJson<int>(json['id']),
+      verifiedPbSec: serializer.fromJson<int?>(json['verifiedPbSec']),
+      verifiedPbAt: serializer.fromJson<DateTime?>(json['verifiedPbAt']),
+      virtualPbCo2Sec: serializer.fromJson<int?>(json['virtualPbCo2Sec']),
+      virtualPbO2Sec: serializer.fromJson<int?>(json['virtualPbO2Sec']),
+      lastCo2SessionAt:
+          serializer.fromJson<DateTime?>(json['lastCo2SessionAt']),
+      lastO2SessionAt: serializer.fromJson<DateTime?>(json['lastO2SessionAt']),
+      safetyAcknowledgedAt:
+          serializer.fromJson<DateTime?>(json['safetyAcknowledgedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'verifiedPbSec': serializer.toJson<int?>(verifiedPbSec),
+      'verifiedPbAt': serializer.toJson<DateTime?>(verifiedPbAt),
+      'virtualPbCo2Sec': serializer.toJson<int?>(virtualPbCo2Sec),
+      'virtualPbO2Sec': serializer.toJson<int?>(virtualPbO2Sec),
+      'lastCo2SessionAt': serializer.toJson<DateTime?>(lastCo2SessionAt),
+      'lastO2SessionAt': serializer.toJson<DateTime?>(lastO2SessionAt),
+      'safetyAcknowledgedAt':
+          serializer.toJson<DateTime?>(safetyAcknowledgedAt),
+    };
+  }
+
+  FreedivingProfileData copyWith(
+          {int? id,
+          Value<int?> verifiedPbSec = const Value.absent(),
+          Value<DateTime?> verifiedPbAt = const Value.absent(),
+          Value<int?> virtualPbCo2Sec = const Value.absent(),
+          Value<int?> virtualPbO2Sec = const Value.absent(),
+          Value<DateTime?> lastCo2SessionAt = const Value.absent(),
+          Value<DateTime?> lastO2SessionAt = const Value.absent(),
+          Value<DateTime?> safetyAcknowledgedAt = const Value.absent()}) =>
+      FreedivingProfileData(
+        id: id ?? this.id,
+        verifiedPbSec:
+            verifiedPbSec.present ? verifiedPbSec.value : this.verifiedPbSec,
+        verifiedPbAt:
+            verifiedPbAt.present ? verifiedPbAt.value : this.verifiedPbAt,
+        virtualPbCo2Sec: virtualPbCo2Sec.present
+            ? virtualPbCo2Sec.value
+            : this.virtualPbCo2Sec,
+        virtualPbO2Sec:
+            virtualPbO2Sec.present ? virtualPbO2Sec.value : this.virtualPbO2Sec,
+        lastCo2SessionAt: lastCo2SessionAt.present
+            ? lastCo2SessionAt.value
+            : this.lastCo2SessionAt,
+        lastO2SessionAt: lastO2SessionAt.present
+            ? lastO2SessionAt.value
+            : this.lastO2SessionAt,
+        safetyAcknowledgedAt: safetyAcknowledgedAt.present
+            ? safetyAcknowledgedAt.value
+            : this.safetyAcknowledgedAt,
+      );
+  FreedivingProfileData copyWithCompanion(FreedivingProfileCompanion data) {
+    return FreedivingProfileData(
+      id: data.id.present ? data.id.value : this.id,
+      verifiedPbSec: data.verifiedPbSec.present
+          ? data.verifiedPbSec.value
+          : this.verifiedPbSec,
+      verifiedPbAt: data.verifiedPbAt.present
+          ? data.verifiedPbAt.value
+          : this.verifiedPbAt,
+      virtualPbCo2Sec: data.virtualPbCo2Sec.present
+          ? data.virtualPbCo2Sec.value
+          : this.virtualPbCo2Sec,
+      virtualPbO2Sec: data.virtualPbO2Sec.present
+          ? data.virtualPbO2Sec.value
+          : this.virtualPbO2Sec,
+      lastCo2SessionAt: data.lastCo2SessionAt.present
+          ? data.lastCo2SessionAt.value
+          : this.lastCo2SessionAt,
+      lastO2SessionAt: data.lastO2SessionAt.present
+          ? data.lastO2SessionAt.value
+          : this.lastO2SessionAt,
+      safetyAcknowledgedAt: data.safetyAcknowledgedAt.present
+          ? data.safetyAcknowledgedAt.value
+          : this.safetyAcknowledgedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FreedivingProfileData(')
+          ..write('id: $id, ')
+          ..write('verifiedPbSec: $verifiedPbSec, ')
+          ..write('verifiedPbAt: $verifiedPbAt, ')
+          ..write('virtualPbCo2Sec: $virtualPbCo2Sec, ')
+          ..write('virtualPbO2Sec: $virtualPbO2Sec, ')
+          ..write('lastCo2SessionAt: $lastCo2SessionAt, ')
+          ..write('lastO2SessionAt: $lastO2SessionAt, ')
+          ..write('safetyAcknowledgedAt: $safetyAcknowledgedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+      id,
+      verifiedPbSec,
+      verifiedPbAt,
+      virtualPbCo2Sec,
+      virtualPbO2Sec,
+      lastCo2SessionAt,
+      lastO2SessionAt,
+      safetyAcknowledgedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is FreedivingProfileData &&
+          other.id == this.id &&
+          other.verifiedPbSec == this.verifiedPbSec &&
+          other.verifiedPbAt == this.verifiedPbAt &&
+          other.virtualPbCo2Sec == this.virtualPbCo2Sec &&
+          other.virtualPbO2Sec == this.virtualPbO2Sec &&
+          other.lastCo2SessionAt == this.lastCo2SessionAt &&
+          other.lastO2SessionAt == this.lastO2SessionAt &&
+          other.safetyAcknowledgedAt == this.safetyAcknowledgedAt);
+}
+
+class FreedivingProfileCompanion
+    extends UpdateCompanion<FreedivingProfileData> {
+  final Value<int> id;
+  final Value<int?> verifiedPbSec;
+  final Value<DateTime?> verifiedPbAt;
+  final Value<int?> virtualPbCo2Sec;
+  final Value<int?> virtualPbO2Sec;
+  final Value<DateTime?> lastCo2SessionAt;
+  final Value<DateTime?> lastO2SessionAt;
+  final Value<DateTime?> safetyAcknowledgedAt;
+  const FreedivingProfileCompanion({
+    this.id = const Value.absent(),
+    this.verifiedPbSec = const Value.absent(),
+    this.verifiedPbAt = const Value.absent(),
+    this.virtualPbCo2Sec = const Value.absent(),
+    this.virtualPbO2Sec = const Value.absent(),
+    this.lastCo2SessionAt = const Value.absent(),
+    this.lastO2SessionAt = const Value.absent(),
+    this.safetyAcknowledgedAt = const Value.absent(),
+  });
+  FreedivingProfileCompanion.insert({
+    this.id = const Value.absent(),
+    this.verifiedPbSec = const Value.absent(),
+    this.verifiedPbAt = const Value.absent(),
+    this.virtualPbCo2Sec = const Value.absent(),
+    this.virtualPbO2Sec = const Value.absent(),
+    this.lastCo2SessionAt = const Value.absent(),
+    this.lastO2SessionAt = const Value.absent(),
+    this.safetyAcknowledgedAt = const Value.absent(),
+  });
+  static Insertable<FreedivingProfileData> custom({
+    Expression<int>? id,
+    Expression<int>? verifiedPbSec,
+    Expression<DateTime>? verifiedPbAt,
+    Expression<int>? virtualPbCo2Sec,
+    Expression<int>? virtualPbO2Sec,
+    Expression<DateTime>? lastCo2SessionAt,
+    Expression<DateTime>? lastO2SessionAt,
+    Expression<DateTime>? safetyAcknowledgedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (verifiedPbSec != null) 'verified_pb_sec': verifiedPbSec,
+      if (verifiedPbAt != null) 'verified_pb_at': verifiedPbAt,
+      if (virtualPbCo2Sec != null) 'virtual_pb_co2_sec': virtualPbCo2Sec,
+      if (virtualPbO2Sec != null) 'virtual_pb_o2_sec': virtualPbO2Sec,
+      if (lastCo2SessionAt != null) 'last_co2_session_at': lastCo2SessionAt,
+      if (lastO2SessionAt != null) 'last_o2_session_at': lastO2SessionAt,
+      if (safetyAcknowledgedAt != null)
+        'safety_acknowledged_at': safetyAcknowledgedAt,
+    });
+  }
+
+  FreedivingProfileCompanion copyWith(
+      {Value<int>? id,
+      Value<int?>? verifiedPbSec,
+      Value<DateTime?>? verifiedPbAt,
+      Value<int?>? virtualPbCo2Sec,
+      Value<int?>? virtualPbO2Sec,
+      Value<DateTime?>? lastCo2SessionAt,
+      Value<DateTime?>? lastO2SessionAt,
+      Value<DateTime?>? safetyAcknowledgedAt}) {
+    return FreedivingProfileCompanion(
+      id: id ?? this.id,
+      verifiedPbSec: verifiedPbSec ?? this.verifiedPbSec,
+      verifiedPbAt: verifiedPbAt ?? this.verifiedPbAt,
+      virtualPbCo2Sec: virtualPbCo2Sec ?? this.virtualPbCo2Sec,
+      virtualPbO2Sec: virtualPbO2Sec ?? this.virtualPbO2Sec,
+      lastCo2SessionAt: lastCo2SessionAt ?? this.lastCo2SessionAt,
+      lastO2SessionAt: lastO2SessionAt ?? this.lastO2SessionAt,
+      safetyAcknowledgedAt: safetyAcknowledgedAt ?? this.safetyAcknowledgedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (verifiedPbSec.present) {
+      map['verified_pb_sec'] = Variable<int>(verifiedPbSec.value);
+    }
+    if (verifiedPbAt.present) {
+      map['verified_pb_at'] = Variable<DateTime>(verifiedPbAt.value);
+    }
+    if (virtualPbCo2Sec.present) {
+      map['virtual_pb_co2_sec'] = Variable<int>(virtualPbCo2Sec.value);
+    }
+    if (virtualPbO2Sec.present) {
+      map['virtual_pb_o2_sec'] = Variable<int>(virtualPbO2Sec.value);
+    }
+    if (lastCo2SessionAt.present) {
+      map['last_co2_session_at'] = Variable<DateTime>(lastCo2SessionAt.value);
+    }
+    if (lastO2SessionAt.present) {
+      map['last_o2_session_at'] = Variable<DateTime>(lastO2SessionAt.value);
+    }
+    if (safetyAcknowledgedAt.present) {
+      map['safety_acknowledged_at'] =
+          Variable<DateTime>(safetyAcknowledgedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FreedivingProfileCompanion(')
+          ..write('id: $id, ')
+          ..write('verifiedPbSec: $verifiedPbSec, ')
+          ..write('verifiedPbAt: $verifiedPbAt, ')
+          ..write('virtualPbCo2Sec: $virtualPbCo2Sec, ')
+          ..write('virtualPbO2Sec: $virtualPbO2Sec, ')
+          ..write('lastCo2SessionAt: $lastCo2SessionAt, ')
+          ..write('lastO2SessionAt: $lastO2SessionAt, ')
+          ..write('safetyAcknowledgedAt: $safetyAcknowledgedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $FreedivingSessionLogTable extends FreedivingSessionLog
+    with TableInfo<$FreedivingSessionLogTable, FreedivingSessionLogData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $FreedivingSessionLogTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _timestampMeta =
+      const VerificationMeta('timestamp');
+  @override
+  late final GeneratedColumn<DateTime> timestamp = GeneratedColumn<DateTime>(
+      'timestamp', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _tableTypeMeta =
+      const VerificationMeta('tableType');
+  @override
+  late final GeneratedColumn<String> tableType = GeneratedColumn<String>(
+      'table_type', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _pbUsedSecMeta =
+      const VerificationMeta('pbUsedSec');
+  @override
+  late final GeneratedColumn<int> pbUsedSec = GeneratedColumn<int>(
+      'pb_used_sec', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _roundsPlannedMeta =
+      const VerificationMeta('roundsPlanned');
+  @override
+  late final GeneratedColumn<int> roundsPlanned = GeneratedColumn<int>(
+      'rounds_planned', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _roundsCompletedMeta =
+      const VerificationMeta('roundsCompleted');
+  @override
+  late final GeneratedColumn<int> roundsCompleted = GeneratedColumn<int>(
+      'rounds_completed', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _roundsJsonMeta =
+      const VerificationMeta('roundsJson');
+  @override
+  late final GeneratedColumn<String> roundsJson = GeneratedColumn<String>(
+      'rounds_json', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _durationSecMeta =
+      const VerificationMeta('durationSec');
+  @override
+  late final GeneratedColumn<int> durationSec = GeneratedColumn<int>(
+      'duration_sec', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _rpeScoreMeta =
+      const VerificationMeta('rpeScore');
+  @override
+  late final GeneratedColumn<int> rpeScore = GeneratedColumn<int>(
+      'rpe_score', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  @override
+  List<GeneratedColumn> get $columns => [
+        id,
+        timestamp,
+        tableType,
+        pbUsedSec,
+        roundsPlanned,
+        roundsCompleted,
+        roundsJson,
+        durationSec,
+        rpeScore
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'freediving_session_log';
+  @override
+  VerificationContext validateIntegrity(
+      Insertable<FreedivingSessionLogData> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('timestamp')) {
+      context.handle(_timestampMeta,
+          timestamp.isAcceptableOrUnknown(data['timestamp']!, _timestampMeta));
+    } else if (isInserting) {
+      context.missing(_timestampMeta);
+    }
+    if (data.containsKey('table_type')) {
+      context.handle(_tableTypeMeta,
+          tableType.isAcceptableOrUnknown(data['table_type']!, _tableTypeMeta));
+    } else if (isInserting) {
+      context.missing(_tableTypeMeta);
+    }
+    if (data.containsKey('pb_used_sec')) {
+      context.handle(
+          _pbUsedSecMeta,
+          pbUsedSec.isAcceptableOrUnknown(
+              data['pb_used_sec']!, _pbUsedSecMeta));
+    } else if (isInserting) {
+      context.missing(_pbUsedSecMeta);
+    }
+    if (data.containsKey('rounds_planned')) {
+      context.handle(
+          _roundsPlannedMeta,
+          roundsPlanned.isAcceptableOrUnknown(
+              data['rounds_planned']!, _roundsPlannedMeta));
+    } else if (isInserting) {
+      context.missing(_roundsPlannedMeta);
+    }
+    if (data.containsKey('rounds_completed')) {
+      context.handle(
+          _roundsCompletedMeta,
+          roundsCompleted.isAcceptableOrUnknown(
+              data['rounds_completed']!, _roundsCompletedMeta));
+    } else if (isInserting) {
+      context.missing(_roundsCompletedMeta);
+    }
+    if (data.containsKey('rounds_json')) {
+      context.handle(
+          _roundsJsonMeta,
+          roundsJson.isAcceptableOrUnknown(
+              data['rounds_json']!, _roundsJsonMeta));
+    } else if (isInserting) {
+      context.missing(_roundsJsonMeta);
+    }
+    if (data.containsKey('duration_sec')) {
+      context.handle(
+          _durationSecMeta,
+          durationSec.isAcceptableOrUnknown(
+              data['duration_sec']!, _durationSecMeta));
+    } else if (isInserting) {
+      context.missing(_durationSecMeta);
+    }
+    if (data.containsKey('rpe_score')) {
+      context.handle(_rpeScoreMeta,
+          rpeScore.isAcceptableOrUnknown(data['rpe_score']!, _rpeScoreMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  FreedivingSessionLogData map(Map<String, dynamic> data,
+      {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return FreedivingSessionLogData(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      timestamp: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}timestamp'])!,
+      tableType: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}table_type'])!,
+      pbUsedSec: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}pb_used_sec'])!,
+      roundsPlanned: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}rounds_planned'])!,
+      roundsCompleted: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}rounds_completed'])!,
+      roundsJson: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}rounds_json'])!,
+      durationSec: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}duration_sec'])!,
+      rpeScore: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}rpe_score']),
+    );
+  }
+
+  @override
+  $FreedivingSessionLogTable createAlias(String alias) {
+    return $FreedivingSessionLogTable(attachedDatabase, alias);
+  }
+}
+
+class FreedivingSessionLogData extends DataClass
+    implements Insertable<FreedivingSessionLogData> {
+  final int id;
+  final DateTime timestamp;
+
+  /// 'co2' or 'o2'.
+  final String tableType;
+
+  /// The PB (seconds) used to generate this table's schedule.
+  final int pbUsedSec;
+  final int roundsPlanned;
+
+  /// May be less than roundsPlanned if the user ended the session early.
+  final int roundsCompleted;
+
+  /// JSON-encoded list of {round, apneaSec, restSec} — the exact schedule used,
+  /// kept for history/audit even as generator defaults evolve.
+  final String roundsJson;
+  final int durationSec;
+
+  /// Rate of Perceived Exertion, 1-10. Null until the post-session prompt is
+  /// answered.
+  final int? rpeScore;
+  const FreedivingSessionLogData(
+      {required this.id,
+      required this.timestamp,
+      required this.tableType,
+      required this.pbUsedSec,
+      required this.roundsPlanned,
+      required this.roundsCompleted,
+      required this.roundsJson,
+      required this.durationSec,
+      this.rpeScore});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['timestamp'] = Variable<DateTime>(timestamp);
+    map['table_type'] = Variable<String>(tableType);
+    map['pb_used_sec'] = Variable<int>(pbUsedSec);
+    map['rounds_planned'] = Variable<int>(roundsPlanned);
+    map['rounds_completed'] = Variable<int>(roundsCompleted);
+    map['rounds_json'] = Variable<String>(roundsJson);
+    map['duration_sec'] = Variable<int>(durationSec);
+    if (!nullToAbsent || rpeScore != null) {
+      map['rpe_score'] = Variable<int>(rpeScore);
+    }
+    return map;
+  }
+
+  FreedivingSessionLogCompanion toCompanion(bool nullToAbsent) {
+    return FreedivingSessionLogCompanion(
+      id: Value(id),
+      timestamp: Value(timestamp),
+      tableType: Value(tableType),
+      pbUsedSec: Value(pbUsedSec),
+      roundsPlanned: Value(roundsPlanned),
+      roundsCompleted: Value(roundsCompleted),
+      roundsJson: Value(roundsJson),
+      durationSec: Value(durationSec),
+      rpeScore: rpeScore == null && nullToAbsent
+          ? const Value.absent()
+          : Value(rpeScore),
+    );
+  }
+
+  factory FreedivingSessionLogData.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return FreedivingSessionLogData(
+      id: serializer.fromJson<int>(json['id']),
+      timestamp: serializer.fromJson<DateTime>(json['timestamp']),
+      tableType: serializer.fromJson<String>(json['tableType']),
+      pbUsedSec: serializer.fromJson<int>(json['pbUsedSec']),
+      roundsPlanned: serializer.fromJson<int>(json['roundsPlanned']),
+      roundsCompleted: serializer.fromJson<int>(json['roundsCompleted']),
+      roundsJson: serializer.fromJson<String>(json['roundsJson']),
+      durationSec: serializer.fromJson<int>(json['durationSec']),
+      rpeScore: serializer.fromJson<int?>(json['rpeScore']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'timestamp': serializer.toJson<DateTime>(timestamp),
+      'tableType': serializer.toJson<String>(tableType),
+      'pbUsedSec': serializer.toJson<int>(pbUsedSec),
+      'roundsPlanned': serializer.toJson<int>(roundsPlanned),
+      'roundsCompleted': serializer.toJson<int>(roundsCompleted),
+      'roundsJson': serializer.toJson<String>(roundsJson),
+      'durationSec': serializer.toJson<int>(durationSec),
+      'rpeScore': serializer.toJson<int?>(rpeScore),
+    };
+  }
+
+  FreedivingSessionLogData copyWith(
+          {int? id,
+          DateTime? timestamp,
+          String? tableType,
+          int? pbUsedSec,
+          int? roundsPlanned,
+          int? roundsCompleted,
+          String? roundsJson,
+          int? durationSec,
+          Value<int?> rpeScore = const Value.absent()}) =>
+      FreedivingSessionLogData(
+        id: id ?? this.id,
+        timestamp: timestamp ?? this.timestamp,
+        tableType: tableType ?? this.tableType,
+        pbUsedSec: pbUsedSec ?? this.pbUsedSec,
+        roundsPlanned: roundsPlanned ?? this.roundsPlanned,
+        roundsCompleted: roundsCompleted ?? this.roundsCompleted,
+        roundsJson: roundsJson ?? this.roundsJson,
+        durationSec: durationSec ?? this.durationSec,
+        rpeScore: rpeScore.present ? rpeScore.value : this.rpeScore,
+      );
+  FreedivingSessionLogData copyWithCompanion(
+      FreedivingSessionLogCompanion data) {
+    return FreedivingSessionLogData(
+      id: data.id.present ? data.id.value : this.id,
+      timestamp: data.timestamp.present ? data.timestamp.value : this.timestamp,
+      tableType: data.tableType.present ? data.tableType.value : this.tableType,
+      pbUsedSec: data.pbUsedSec.present ? data.pbUsedSec.value : this.pbUsedSec,
+      roundsPlanned: data.roundsPlanned.present
+          ? data.roundsPlanned.value
+          : this.roundsPlanned,
+      roundsCompleted: data.roundsCompleted.present
+          ? data.roundsCompleted.value
+          : this.roundsCompleted,
+      roundsJson:
+          data.roundsJson.present ? data.roundsJson.value : this.roundsJson,
+      durationSec:
+          data.durationSec.present ? data.durationSec.value : this.durationSec,
+      rpeScore: data.rpeScore.present ? data.rpeScore.value : this.rpeScore,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FreedivingSessionLogData(')
+          ..write('id: $id, ')
+          ..write('timestamp: $timestamp, ')
+          ..write('tableType: $tableType, ')
+          ..write('pbUsedSec: $pbUsedSec, ')
+          ..write('roundsPlanned: $roundsPlanned, ')
+          ..write('roundsCompleted: $roundsCompleted, ')
+          ..write('roundsJson: $roundsJson, ')
+          ..write('durationSec: $durationSec, ')
+          ..write('rpeScore: $rpeScore')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, timestamp, tableType, pbUsedSec,
+      roundsPlanned, roundsCompleted, roundsJson, durationSec, rpeScore);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is FreedivingSessionLogData &&
+          other.id == this.id &&
+          other.timestamp == this.timestamp &&
+          other.tableType == this.tableType &&
+          other.pbUsedSec == this.pbUsedSec &&
+          other.roundsPlanned == this.roundsPlanned &&
+          other.roundsCompleted == this.roundsCompleted &&
+          other.roundsJson == this.roundsJson &&
+          other.durationSec == this.durationSec &&
+          other.rpeScore == this.rpeScore);
+}
+
+class FreedivingSessionLogCompanion
+    extends UpdateCompanion<FreedivingSessionLogData> {
+  final Value<int> id;
+  final Value<DateTime> timestamp;
+  final Value<String> tableType;
+  final Value<int> pbUsedSec;
+  final Value<int> roundsPlanned;
+  final Value<int> roundsCompleted;
+  final Value<String> roundsJson;
+  final Value<int> durationSec;
+  final Value<int?> rpeScore;
+  const FreedivingSessionLogCompanion({
+    this.id = const Value.absent(),
+    this.timestamp = const Value.absent(),
+    this.tableType = const Value.absent(),
+    this.pbUsedSec = const Value.absent(),
+    this.roundsPlanned = const Value.absent(),
+    this.roundsCompleted = const Value.absent(),
+    this.roundsJson = const Value.absent(),
+    this.durationSec = const Value.absent(),
+    this.rpeScore = const Value.absent(),
+  });
+  FreedivingSessionLogCompanion.insert({
+    this.id = const Value.absent(),
+    required DateTime timestamp,
+    required String tableType,
+    required int pbUsedSec,
+    required int roundsPlanned,
+    required int roundsCompleted,
+    required String roundsJson,
+    required int durationSec,
+    this.rpeScore = const Value.absent(),
+  })  : timestamp = Value(timestamp),
+        tableType = Value(tableType),
+        pbUsedSec = Value(pbUsedSec),
+        roundsPlanned = Value(roundsPlanned),
+        roundsCompleted = Value(roundsCompleted),
+        roundsJson = Value(roundsJson),
+        durationSec = Value(durationSec);
+  static Insertable<FreedivingSessionLogData> custom({
+    Expression<int>? id,
+    Expression<DateTime>? timestamp,
+    Expression<String>? tableType,
+    Expression<int>? pbUsedSec,
+    Expression<int>? roundsPlanned,
+    Expression<int>? roundsCompleted,
+    Expression<String>? roundsJson,
+    Expression<int>? durationSec,
+    Expression<int>? rpeScore,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (timestamp != null) 'timestamp': timestamp,
+      if (tableType != null) 'table_type': tableType,
+      if (pbUsedSec != null) 'pb_used_sec': pbUsedSec,
+      if (roundsPlanned != null) 'rounds_planned': roundsPlanned,
+      if (roundsCompleted != null) 'rounds_completed': roundsCompleted,
+      if (roundsJson != null) 'rounds_json': roundsJson,
+      if (durationSec != null) 'duration_sec': durationSec,
+      if (rpeScore != null) 'rpe_score': rpeScore,
+    });
+  }
+
+  FreedivingSessionLogCompanion copyWith(
+      {Value<int>? id,
+      Value<DateTime>? timestamp,
+      Value<String>? tableType,
+      Value<int>? pbUsedSec,
+      Value<int>? roundsPlanned,
+      Value<int>? roundsCompleted,
+      Value<String>? roundsJson,
+      Value<int>? durationSec,
+      Value<int?>? rpeScore}) {
+    return FreedivingSessionLogCompanion(
+      id: id ?? this.id,
+      timestamp: timestamp ?? this.timestamp,
+      tableType: tableType ?? this.tableType,
+      pbUsedSec: pbUsedSec ?? this.pbUsedSec,
+      roundsPlanned: roundsPlanned ?? this.roundsPlanned,
+      roundsCompleted: roundsCompleted ?? this.roundsCompleted,
+      roundsJson: roundsJson ?? this.roundsJson,
+      durationSec: durationSec ?? this.durationSec,
+      rpeScore: rpeScore ?? this.rpeScore,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (timestamp.present) {
+      map['timestamp'] = Variable<DateTime>(timestamp.value);
+    }
+    if (tableType.present) {
+      map['table_type'] = Variable<String>(tableType.value);
+    }
+    if (pbUsedSec.present) {
+      map['pb_used_sec'] = Variable<int>(pbUsedSec.value);
+    }
+    if (roundsPlanned.present) {
+      map['rounds_planned'] = Variable<int>(roundsPlanned.value);
+    }
+    if (roundsCompleted.present) {
+      map['rounds_completed'] = Variable<int>(roundsCompleted.value);
+    }
+    if (roundsJson.present) {
+      map['rounds_json'] = Variable<String>(roundsJson.value);
+    }
+    if (durationSec.present) {
+      map['duration_sec'] = Variable<int>(durationSec.value);
+    }
+    if (rpeScore.present) {
+      map['rpe_score'] = Variable<int>(rpeScore.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FreedivingSessionLogCompanion(')
+          ..write('id: $id, ')
+          ..write('timestamp: $timestamp, ')
+          ..write('tableType: $tableType, ')
+          ..write('pbUsedSec: $pbUsedSec, ')
+          ..write('roundsPlanned: $roundsPlanned, ')
+          ..write('roundsCompleted: $roundsCompleted, ')
+          ..write('roundsJson: $roundsJson, ')
+          ..write('durationSec: $durationSec, ')
+          ..write('rpeScore: $rpeScore')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -1822,12 +2806,23 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $PlannedSessionsTable plannedSessions =
       $PlannedSessionsTable(this);
   late final $CustomPresetsTable customPresets = $CustomPresetsTable(this);
+  late final $FreedivingProfileTable freedivingProfile =
+      $FreedivingProfileTable(this);
+  late final $FreedivingSessionLogTable freedivingSessionLog =
+      $FreedivingSessionLogTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities =>
-      [sessions, userProfile, healthMetrics, plannedSessions, customPresets];
+  List<DatabaseSchemaEntity> get allSchemaEntities => [
+        sessions,
+        userProfile,
+        healthMetrics,
+        plannedSessions,
+        customPresets,
+        freedivingProfile,
+        freedivingSessionLog
+      ];
 }
 
 typedef $$SessionsTableCreateCompanionBuilder = SessionsCompanion Function({
@@ -2770,6 +3765,470 @@ typedef $$CustomPresetsTableProcessedTableManager = ProcessedTableManager<
     ),
     CustomPreset,
     PrefetchHooks Function()>;
+typedef $$FreedivingProfileTableCreateCompanionBuilder
+    = FreedivingProfileCompanion Function({
+  Value<int> id,
+  Value<int?> verifiedPbSec,
+  Value<DateTime?> verifiedPbAt,
+  Value<int?> virtualPbCo2Sec,
+  Value<int?> virtualPbO2Sec,
+  Value<DateTime?> lastCo2SessionAt,
+  Value<DateTime?> lastO2SessionAt,
+  Value<DateTime?> safetyAcknowledgedAt,
+});
+typedef $$FreedivingProfileTableUpdateCompanionBuilder
+    = FreedivingProfileCompanion Function({
+  Value<int> id,
+  Value<int?> verifiedPbSec,
+  Value<DateTime?> verifiedPbAt,
+  Value<int?> virtualPbCo2Sec,
+  Value<int?> virtualPbO2Sec,
+  Value<DateTime?> lastCo2SessionAt,
+  Value<DateTime?> lastO2SessionAt,
+  Value<DateTime?> safetyAcknowledgedAt,
+});
+
+class $$FreedivingProfileTableFilterComposer
+    extends Composer<_$AppDatabase, $FreedivingProfileTable> {
+  $$FreedivingProfileTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get verifiedPbSec => $composableBuilder(
+      column: $table.verifiedPbSec, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get verifiedPbAt => $composableBuilder(
+      column: $table.verifiedPbAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get virtualPbCo2Sec => $composableBuilder(
+      column: $table.virtualPbCo2Sec,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get virtualPbO2Sec => $composableBuilder(
+      column: $table.virtualPbO2Sec,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get lastCo2SessionAt => $composableBuilder(
+      column: $table.lastCo2SessionAt,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get lastO2SessionAt => $composableBuilder(
+      column: $table.lastO2SessionAt,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get safetyAcknowledgedAt => $composableBuilder(
+      column: $table.safetyAcknowledgedAt,
+      builder: (column) => ColumnFilters(column));
+}
+
+class $$FreedivingProfileTableOrderingComposer
+    extends Composer<_$AppDatabase, $FreedivingProfileTable> {
+  $$FreedivingProfileTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get verifiedPbSec => $composableBuilder(
+      column: $table.verifiedPbSec,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get verifiedPbAt => $composableBuilder(
+      column: $table.verifiedPbAt,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get virtualPbCo2Sec => $composableBuilder(
+      column: $table.virtualPbCo2Sec,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get virtualPbO2Sec => $composableBuilder(
+      column: $table.virtualPbO2Sec,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get lastCo2SessionAt => $composableBuilder(
+      column: $table.lastCo2SessionAt,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get lastO2SessionAt => $composableBuilder(
+      column: $table.lastO2SessionAt,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get safetyAcknowledgedAt => $composableBuilder(
+      column: $table.safetyAcknowledgedAt,
+      builder: (column) => ColumnOrderings(column));
+}
+
+class $$FreedivingProfileTableAnnotationComposer
+    extends Composer<_$AppDatabase, $FreedivingProfileTable> {
+  $$FreedivingProfileTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get verifiedPbSec => $composableBuilder(
+      column: $table.verifiedPbSec, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get verifiedPbAt => $composableBuilder(
+      column: $table.verifiedPbAt, builder: (column) => column);
+
+  GeneratedColumn<int> get virtualPbCo2Sec => $composableBuilder(
+      column: $table.virtualPbCo2Sec, builder: (column) => column);
+
+  GeneratedColumn<int> get virtualPbO2Sec => $composableBuilder(
+      column: $table.virtualPbO2Sec, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get lastCo2SessionAt => $composableBuilder(
+      column: $table.lastCo2SessionAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get lastO2SessionAt => $composableBuilder(
+      column: $table.lastO2SessionAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get safetyAcknowledgedAt => $composableBuilder(
+      column: $table.safetyAcknowledgedAt, builder: (column) => column);
+}
+
+class $$FreedivingProfileTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $FreedivingProfileTable,
+    FreedivingProfileData,
+    $$FreedivingProfileTableFilterComposer,
+    $$FreedivingProfileTableOrderingComposer,
+    $$FreedivingProfileTableAnnotationComposer,
+    $$FreedivingProfileTableCreateCompanionBuilder,
+    $$FreedivingProfileTableUpdateCompanionBuilder,
+    (
+      FreedivingProfileData,
+      BaseReferences<_$AppDatabase, $FreedivingProfileTable,
+          FreedivingProfileData>
+    ),
+    FreedivingProfileData,
+    PrefetchHooks Function()> {
+  $$FreedivingProfileTableTableManager(
+      _$AppDatabase db, $FreedivingProfileTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$FreedivingProfileTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$FreedivingProfileTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$FreedivingProfileTableAnnotationComposer(
+                  $db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<int?> verifiedPbSec = const Value.absent(),
+            Value<DateTime?> verifiedPbAt = const Value.absent(),
+            Value<int?> virtualPbCo2Sec = const Value.absent(),
+            Value<int?> virtualPbO2Sec = const Value.absent(),
+            Value<DateTime?> lastCo2SessionAt = const Value.absent(),
+            Value<DateTime?> lastO2SessionAt = const Value.absent(),
+            Value<DateTime?> safetyAcknowledgedAt = const Value.absent(),
+          }) =>
+              FreedivingProfileCompanion(
+            id: id,
+            verifiedPbSec: verifiedPbSec,
+            verifiedPbAt: verifiedPbAt,
+            virtualPbCo2Sec: virtualPbCo2Sec,
+            virtualPbO2Sec: virtualPbO2Sec,
+            lastCo2SessionAt: lastCo2SessionAt,
+            lastO2SessionAt: lastO2SessionAt,
+            safetyAcknowledgedAt: safetyAcknowledgedAt,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<int?> verifiedPbSec = const Value.absent(),
+            Value<DateTime?> verifiedPbAt = const Value.absent(),
+            Value<int?> virtualPbCo2Sec = const Value.absent(),
+            Value<int?> virtualPbO2Sec = const Value.absent(),
+            Value<DateTime?> lastCo2SessionAt = const Value.absent(),
+            Value<DateTime?> lastO2SessionAt = const Value.absent(),
+            Value<DateTime?> safetyAcknowledgedAt = const Value.absent(),
+          }) =>
+              FreedivingProfileCompanion.insert(
+            id: id,
+            verifiedPbSec: verifiedPbSec,
+            verifiedPbAt: verifiedPbAt,
+            virtualPbCo2Sec: virtualPbCo2Sec,
+            virtualPbO2Sec: virtualPbO2Sec,
+            lastCo2SessionAt: lastCo2SessionAt,
+            lastO2SessionAt: lastO2SessionAt,
+            safetyAcknowledgedAt: safetyAcknowledgedAt,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$FreedivingProfileTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $FreedivingProfileTable,
+    FreedivingProfileData,
+    $$FreedivingProfileTableFilterComposer,
+    $$FreedivingProfileTableOrderingComposer,
+    $$FreedivingProfileTableAnnotationComposer,
+    $$FreedivingProfileTableCreateCompanionBuilder,
+    $$FreedivingProfileTableUpdateCompanionBuilder,
+    (
+      FreedivingProfileData,
+      BaseReferences<_$AppDatabase, $FreedivingProfileTable,
+          FreedivingProfileData>
+    ),
+    FreedivingProfileData,
+    PrefetchHooks Function()>;
+typedef $$FreedivingSessionLogTableCreateCompanionBuilder
+    = FreedivingSessionLogCompanion Function({
+  Value<int> id,
+  required DateTime timestamp,
+  required String tableType,
+  required int pbUsedSec,
+  required int roundsPlanned,
+  required int roundsCompleted,
+  required String roundsJson,
+  required int durationSec,
+  Value<int?> rpeScore,
+});
+typedef $$FreedivingSessionLogTableUpdateCompanionBuilder
+    = FreedivingSessionLogCompanion Function({
+  Value<int> id,
+  Value<DateTime> timestamp,
+  Value<String> tableType,
+  Value<int> pbUsedSec,
+  Value<int> roundsPlanned,
+  Value<int> roundsCompleted,
+  Value<String> roundsJson,
+  Value<int> durationSec,
+  Value<int?> rpeScore,
+});
+
+class $$FreedivingSessionLogTableFilterComposer
+    extends Composer<_$AppDatabase, $FreedivingSessionLogTable> {
+  $$FreedivingSessionLogTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get timestamp => $composableBuilder(
+      column: $table.timestamp, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get tableType => $composableBuilder(
+      column: $table.tableType, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get pbUsedSec => $composableBuilder(
+      column: $table.pbUsedSec, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get roundsPlanned => $composableBuilder(
+      column: $table.roundsPlanned, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get roundsCompleted => $composableBuilder(
+      column: $table.roundsCompleted,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get roundsJson => $composableBuilder(
+      column: $table.roundsJson, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get durationSec => $composableBuilder(
+      column: $table.durationSec, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get rpeScore => $composableBuilder(
+      column: $table.rpeScore, builder: (column) => ColumnFilters(column));
+}
+
+class $$FreedivingSessionLogTableOrderingComposer
+    extends Composer<_$AppDatabase, $FreedivingSessionLogTable> {
+  $$FreedivingSessionLogTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get timestamp => $composableBuilder(
+      column: $table.timestamp, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get tableType => $composableBuilder(
+      column: $table.tableType, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get pbUsedSec => $composableBuilder(
+      column: $table.pbUsedSec, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get roundsPlanned => $composableBuilder(
+      column: $table.roundsPlanned,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get roundsCompleted => $composableBuilder(
+      column: $table.roundsCompleted,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get roundsJson => $composableBuilder(
+      column: $table.roundsJson, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get durationSec => $composableBuilder(
+      column: $table.durationSec, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get rpeScore => $composableBuilder(
+      column: $table.rpeScore, builder: (column) => ColumnOrderings(column));
+}
+
+class $$FreedivingSessionLogTableAnnotationComposer
+    extends Composer<_$AppDatabase, $FreedivingSessionLogTable> {
+  $$FreedivingSessionLogTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get timestamp =>
+      $composableBuilder(column: $table.timestamp, builder: (column) => column);
+
+  GeneratedColumn<String> get tableType =>
+      $composableBuilder(column: $table.tableType, builder: (column) => column);
+
+  GeneratedColumn<int> get pbUsedSec =>
+      $composableBuilder(column: $table.pbUsedSec, builder: (column) => column);
+
+  GeneratedColumn<int> get roundsPlanned => $composableBuilder(
+      column: $table.roundsPlanned, builder: (column) => column);
+
+  GeneratedColumn<int> get roundsCompleted => $composableBuilder(
+      column: $table.roundsCompleted, builder: (column) => column);
+
+  GeneratedColumn<String> get roundsJson => $composableBuilder(
+      column: $table.roundsJson, builder: (column) => column);
+
+  GeneratedColumn<int> get durationSec => $composableBuilder(
+      column: $table.durationSec, builder: (column) => column);
+
+  GeneratedColumn<int> get rpeScore =>
+      $composableBuilder(column: $table.rpeScore, builder: (column) => column);
+}
+
+class $$FreedivingSessionLogTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $FreedivingSessionLogTable,
+    FreedivingSessionLogData,
+    $$FreedivingSessionLogTableFilterComposer,
+    $$FreedivingSessionLogTableOrderingComposer,
+    $$FreedivingSessionLogTableAnnotationComposer,
+    $$FreedivingSessionLogTableCreateCompanionBuilder,
+    $$FreedivingSessionLogTableUpdateCompanionBuilder,
+    (
+      FreedivingSessionLogData,
+      BaseReferences<_$AppDatabase, $FreedivingSessionLogTable,
+          FreedivingSessionLogData>
+    ),
+    FreedivingSessionLogData,
+    PrefetchHooks Function()> {
+  $$FreedivingSessionLogTableTableManager(
+      _$AppDatabase db, $FreedivingSessionLogTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$FreedivingSessionLogTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$FreedivingSessionLogTableOrderingComposer(
+                  $db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$FreedivingSessionLogTableAnnotationComposer(
+                  $db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<DateTime> timestamp = const Value.absent(),
+            Value<String> tableType = const Value.absent(),
+            Value<int> pbUsedSec = const Value.absent(),
+            Value<int> roundsPlanned = const Value.absent(),
+            Value<int> roundsCompleted = const Value.absent(),
+            Value<String> roundsJson = const Value.absent(),
+            Value<int> durationSec = const Value.absent(),
+            Value<int?> rpeScore = const Value.absent(),
+          }) =>
+              FreedivingSessionLogCompanion(
+            id: id,
+            timestamp: timestamp,
+            tableType: tableType,
+            pbUsedSec: pbUsedSec,
+            roundsPlanned: roundsPlanned,
+            roundsCompleted: roundsCompleted,
+            roundsJson: roundsJson,
+            durationSec: durationSec,
+            rpeScore: rpeScore,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required DateTime timestamp,
+            required String tableType,
+            required int pbUsedSec,
+            required int roundsPlanned,
+            required int roundsCompleted,
+            required String roundsJson,
+            required int durationSec,
+            Value<int?> rpeScore = const Value.absent(),
+          }) =>
+              FreedivingSessionLogCompanion.insert(
+            id: id,
+            timestamp: timestamp,
+            tableType: tableType,
+            pbUsedSec: pbUsedSec,
+            roundsPlanned: roundsPlanned,
+            roundsCompleted: roundsCompleted,
+            roundsJson: roundsJson,
+            durationSec: durationSec,
+            rpeScore: rpeScore,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$FreedivingSessionLogTableProcessedTableManager
+    = ProcessedTableManager<
+        _$AppDatabase,
+        $FreedivingSessionLogTable,
+        FreedivingSessionLogData,
+        $$FreedivingSessionLogTableFilterComposer,
+        $$FreedivingSessionLogTableOrderingComposer,
+        $$FreedivingSessionLogTableAnnotationComposer,
+        $$FreedivingSessionLogTableCreateCompanionBuilder,
+        $$FreedivingSessionLogTableUpdateCompanionBuilder,
+        (
+          FreedivingSessionLogData,
+          BaseReferences<_$AppDatabase, $FreedivingSessionLogTable,
+              FreedivingSessionLogData>
+        ),
+        FreedivingSessionLogData,
+        PrefetchHooks Function()>;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -2784,4 +4243,8 @@ class $AppDatabaseManager {
       $$PlannedSessionsTableTableManager(_db, _db.plannedSessions);
   $$CustomPresetsTableTableManager get customPresets =>
       $$CustomPresetsTableTableManager(_db, _db.customPresets);
+  $$FreedivingProfileTableTableManager get freedivingProfile =>
+      $$FreedivingProfileTableTableManager(_db, _db.freedivingProfile);
+  $$FreedivingSessionLogTableTableManager get freedivingSessionLog =>
+      $$FreedivingSessionLogTableTableManager(_db, _db.freedivingSessionLog);
 }

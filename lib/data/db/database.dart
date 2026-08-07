@@ -73,13 +73,75 @@ class CustomPresets extends Table {
   DateTimeColumn get createdAt => dateTime()();
 }
 
-@DriftDatabase(
-    tables: [Sessions, UserProfile, HealthMetrics, PlannedSessions, CustomPresets])
+/// Single-row profile tracking freediving Personal Best and the "virtual" PB
+/// used to generate CO2/O2 tables (which drifts with RPE feedback but is
+/// safety-capped relative to the last verified test — see
+/// FreedivingRepository.recordRpeAndAdjustPb).
+class FreedivingProfile extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  /// The last real, guided Max PB Attempt result. Null until the user
+  /// completes their first test.
+  IntColumn get verifiedPbSec => integer().nullable()();
+  DateTimeColumn get verifiedPbAt => dateTime().nullable()();
+
+  /// Working PB used to generate the next table of each type. Initialized to
+  /// verifiedPbSec and adjusted ±5% per RPE feedback, clamped to
+  /// [50%, 115%] of verifiedPbSec so RPE-driven drift can never exceed a safe
+  /// margin above the last real test.
+  IntColumn get virtualPbCo2Sec => integer().nullable()();
+  IntColumn get virtualPbO2Sec => integer().nullable()();
+
+  DateTimeColumn get lastCo2SessionAt => dateTime().nullable()();
+  DateTimeColumn get lastO2SessionAt => dateTime().nullable()();
+
+  /// Timestamp the user acknowledged the apnea-specific safety disclaimer;
+  /// null means the Freediving section has not been unlocked yet.
+  DateTimeColumn get safetyAcknowledgedAt => dateTime().nullable()();
+}
+
+/// One completed (or aborted) CO2/O2 table session: the exact schedule used
+/// and the user's post-session RPE rating, which drives the next table.
+class FreedivingSessionLog extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  DateTimeColumn get timestamp => dateTime()();
+
+  /// 'co2' or 'o2'.
+  TextColumn get tableType => text()();
+
+  /// The PB (seconds) used to generate this table's schedule.
+  IntColumn get pbUsedSec => integer()();
+
+  IntColumn get roundsPlanned => integer()();
+
+  /// May be less than roundsPlanned if the user ended the session early.
+  IntColumn get roundsCompleted => integer()();
+
+  /// JSON-encoded list of {round, apneaSec, restSec} — the exact schedule used,
+  /// kept for history/audit even as generator defaults evolve.
+  TextColumn get roundsJson => text()();
+
+  IntColumn get durationSec => integer()();
+
+  /// Rate of Perceived Exertion, 1-10. Null until the post-session prompt is
+  /// answered.
+  IntColumn get rpeScore => integer().nullable()();
+}
+
+@DriftDatabase(tables: [
+  Sessions,
+  UserProfile,
+  HealthMetrics,
+  PlannedSessions,
+  CustomPresets,
+  FreedivingProfile,
+  FreedivingSessionLog,
+])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -109,6 +171,11 @@ class AppDatabase extends _$AppDatabase {
           if (from < 6) {
             await m.addColumn(sessions, sessions.hrMin);
             await m.addColumn(sessions, sessions.hrAvg);
+          }
+          // v6 -> v7: freediving CO2/O2 table profile + session log.
+          if (from < 7) {
+            await m.createTable(freedivingProfile);
+            await m.createTable(freedivingSessionLog);
           }
         },
       );

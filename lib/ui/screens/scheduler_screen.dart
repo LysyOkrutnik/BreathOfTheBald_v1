@@ -18,7 +18,10 @@ import 'package:okrutnik_breath/ui/widgets/month_calendar.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
 
 class SchedulerScreen extends ConsumerStatefulWidget {
-  const SchedulerScreen({super.key});
+  const SchedulerScreen({super.key, this.embedded = false});
+
+  /// True when shown as a bottom-nav tab root rather than a pushed route.
+  final bool embedded;
 
   @override
   ConsumerState<SchedulerScreen> createState() => _SchedulerScreenState();
@@ -80,7 +83,10 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen> {
                 constraints: BoxConstraints(maxWidth: context.isTablet ? 980 : 560),
                 child: Column(
                   children: [
-                    ScreenHeader(title: L10n.get(context, 'scheduler_title')),
+                    ScreenHeader(
+                      title: L10n.get(context, 'scheduler_title'),
+                      showBackButton: !widget.embedded,
+                    ),
                     Expanded(
                       child: twoPane
                           ? Row(

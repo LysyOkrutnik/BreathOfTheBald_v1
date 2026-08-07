@@ -10,11 +10,16 @@ class ScreenHeader extends StatelessWidget {
     required this.title,
     this.onBack,
     this.trailing,
+    this.showBackButton = true,
   });
 
   final String title;
   final VoidCallback? onBack;
   final Widget? trailing;
+
+  /// Set to false when this screen is a bottom-nav tab root rather than a
+  /// pushed route — there's nothing to go back to, so no arrow is shown.
+  final bool showBackButton;
 
   @override
   Widget build(BuildContext context) {
@@ -23,10 +28,13 @@ class ScreenHeader extends StatelessWidget {
           horizontal: AppSpacing.md, vertical: AppSpacing.md),
       child: Row(
         children: [
-          _GlassIconButton(
-            icon: Icons.arrow_back_rounded,
-            onTap: onBack ?? () => Navigator.of(context).maybePop(),
-          ),
+          if (showBackButton)
+            _GlassIconButton(
+              icon: Icons.arrow_back_rounded,
+              onTap: onBack ?? () => Navigator.of(context).maybePop(),
+            )
+          else
+            const SizedBox(width: 44),
           Expanded(
             child: Text(
               title,

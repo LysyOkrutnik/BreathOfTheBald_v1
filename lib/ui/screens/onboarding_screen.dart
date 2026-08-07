@@ -5,8 +5,8 @@ import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/responsive.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
-import 'package:okrutnik_breath/core/notifications/notification_service.dart';
-import 'package:okrutnik_breath/ui/screens/menu_screen.dart';
+import 'package:okrutnik_breath/logic/providers/settings_provider.dart';
+import 'package:okrutnik_breath/ui/screens/home_shell_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/glow_halo.dart';
@@ -72,17 +72,18 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     if (enableNotifications) {
       final status = await Permission.notification.request();
       if (status.isGranted) {
-        final notifications = ref.read(notificationServiceProvider);
-        await notifications.init();
-        await notifications.scheduleDailyReminder(
-          title: reminderTitle,
-          body: reminderBody,
-        );
+        // Route through the settings notifier so the Settings toggle and the
+        // actual scheduled alarm can never drift apart.
+        await ref.read(settingsProvider.notifier).setDailyReminderEnabled(
+              true,
+              title: reminderTitle,
+              body: reminderBody,
+            );
       }
     }
 
     if (mounted) {
-      Navigator.of(context).pushReplacement(fadeThroughRoute(const MenuScreen()));
+      Navigator.of(context).pushReplacement(fadeThroughRoute(const HomeShellScreen()));
     }
   }
 

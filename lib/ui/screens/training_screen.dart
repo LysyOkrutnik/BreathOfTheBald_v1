@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:okrutnik_breath/config/l10n.dart';
@@ -10,45 +9,28 @@ import 'package:okrutnik_breath/config/transitions.dart';
 import 'package:okrutnik_breath/data/db/database.dart';
 import 'package:okrutnik_breath/logic/notifiers/session_notifier.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
-import 'package:okrutnik_breath/logic/providers/locale_provider.dart';
 import 'package:okrutnik_breath/ui/screens/custom_builder_screen.dart';
-import 'package:okrutnik_breath/ui/screens/history_screen.dart';
-import 'package:okrutnik_breath/ui/screens/instruction_screen.dart';
 import 'package:okrutnik_breath/ui/screens/intro_screen.dart';
-import 'package:okrutnik_breath/ui/screens/scheduler_screen.dart';
 import 'package:okrutnik_breath/ui/screens/session_screen.dart';
-import 'package:okrutnik_breath/ui/screens/settings_screen.dart';
-import 'package:okrutnik_breath/ui/screens/stats_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
-import 'package:okrutnik_breath/ui/widgets/confirm_dialog.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 
-class MenuScreen extends ConsumerWidget {
-  const MenuScreen({super.key});
+/// The "Trening" bottom-nav tab: classic ladder, special techniques and
+/// custom presets. Freediving now lives in its own tab.
+class TrainingScreen extends StatelessWidget {
+  const TrainingScreen({super.key});
 
   static const _classic = ['mild', 'strong', 'beast', 'guru'];
   static const _special = ['box', 'relax', 'fire'];
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final columns = (context.isTablet || context.isLandscape) ? 2 : 1;
 
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) async {
-        if (didPop) return;
-        final leave = await showGlassConfirm(
-          context,
-          title: L10n.get(context, 'exit_app_title'),
-          confirmLabel: L10n.get(context, 'exit_app_confirm'),
-          cancelLabel: L10n.get(context, 'exit_app_stay'),
-        );
-        if (leave) SystemNavigator.pop();
-      },
-      child: Scaffold(
-        body: Stack(
-          children: [
-            const Positioned.fill(child: AppBackground()),
+    return Scaffold(
+      body: Stack(
+        children: [
+          const Positioned.fill(child: AppBackground()),
           SafeArea(
             child: Center(
               child: ConstrainedBox(
@@ -79,7 +61,6 @@ class MenuScreen extends ConsumerWidget {
                           const SizedBox(height: AppSpacing.xl),
                           const _CustomSection(),
                           SizedBox(height: context.scaled(AppSpacing.xl)),
-                          const _ActionBar(),
                         ],
                       ),
                     ),
@@ -89,7 +70,6 @@ class MenuScreen extends ConsumerWidget {
             ),
           ),
         ],
-      ),
       ),
     );
   }
@@ -250,6 +230,11 @@ class _LevelCard extends StatelessWidget {
       case ExerciseType.fireBreathing:
         return '3 min • ${L10n.get(context, 'desc_pure_energy')}';
       case ExerciseType.custom:
+      case ExerciseType.co2Table:
+      case ExerciseType.o2Table:
+        // Freediving tables never appear in this generic grid (they have
+        // their own dedicated tab); custom presets show their own
+        // description via _PresetCard instead.
         return '';
     }
   }
@@ -334,58 +319,6 @@ class _LevelCard extends StatelessWidget {
         .animate()
         .fadeIn(delay: (60 * index).ms, duration: AppMotion.medium)
         .slideX(begin: 0.08, curve: AppMotion.emphasized);
-  }
-}
-
-class _ActionBar extends ConsumerWidget {
-  const _ActionBar();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final lang = Localizations.localeOf(context).languageCode == 'pl' ? 'EN' : 'PL';
-
-    return Wrap(
-      alignment: WrapAlignment.center,
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.sm,
-      children: [
-        _PillButton(
-          label: lang,
-          onTap: () => ref.read(localeProvider.notifier).toggleLocale(),
-        ),
-        _PillButton(
-          icon: Icons.spa_outlined,
-          label: L10n.get(context, 'menu_guide_button'),
-          highlighted: true,
-          onTap: () => Navigator.of(context)
-              .push(fadeThroughRoute(const InstructionScreen())),
-        ),
-        _PillButton(
-          icon: Icons.insights_rounded,
-          label: L10n.get(context, 'menu_stats_button'),
-          onTap: () => Navigator.of(context)
-              .push(fadeThroughRoute(const StatsScreen())),
-        ),
-        _PillButton(
-          icon: Icons.history_rounded,
-          label: L10n.get(context, 'menu_history_button'),
-          onTap: () => Navigator.of(context)
-              .push(fadeThroughRoute(const HistoryScreen())),
-        ),
-        _PillButton(
-          icon: Icons.schedule_rounded,
-          label: L10n.get(context, 'menu_scheduler_button'),
-          onTap: () => Navigator.of(context)
-              .push(fadeThroughRoute(const SchedulerScreen())),
-        ),
-        _PillButton(
-          icon: Icons.settings_outlined,
-          label: L10n.get(context, 'menu_settings_button'),
-          onTap: () => Navigator.of(context)
-              .push(fadeThroughRoute(const SettingsScreen())),
-        ),
-      ],
-    ).animate().fadeIn(delay: 350.ms, duration: AppMotion.slow);
   }
 }
 
@@ -509,55 +442,6 @@ class _PresetCard extends StatelessWidget {
               icon: const Icon(Icons.delete_outline_rounded,
                   color: Colors.white38, size: 20),
               onPressed: onDelete,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PillButton extends StatelessWidget {
-  const _PillButton({
-    this.icon,
-    required this.label,
-    required this.onTap,
-    this.highlighted = false,
-  });
-
-  final IconData? icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool highlighted;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = highlighted ? AppTheme.primary : AppTheme.textDim;
-    return PressableScale(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.lg, vertical: AppSpacing.sm + 2),
-        decoration: BoxDecoration(
-          color: Colors.white.withAlpha(12),
-          borderRadius: BorderRadius.circular(AppRadius.pill),
-          border: Border.all(color: color.withAlpha(highlighted ? 90 : 40)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[
-              Icon(icon, color: color, size: 16),
-              const SizedBox(width: AppSpacing.sm),
-            ],
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 12,
-                letterSpacing: 1.0,
-                fontWeight: FontWeight.w600,
-              ),
             ),
           ],
         ),

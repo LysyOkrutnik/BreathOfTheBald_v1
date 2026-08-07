@@ -14,6 +14,7 @@ import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/glow_halo.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -51,6 +52,17 @@ class SettingsScreen extends ConsumerWidget {
                             onEdit: () => _editName(context, ref, settings.profileName),
                           ),
                           const SizedBox(height: AppSpacing.xl),
+
+                          _SectionHeader(L10n.get(context, 'settings_section_reminders')),
+                          _Group(children: [
+                            _SwitchTile(
+                              icon: Icons.notifications_active_outlined,
+                              title: L10n.get(context, 'settings_daily_reminder'),
+                              value: settings.dailyReminderEnabled,
+                              onChanged: (v) => _setDailyReminder(context, ref, v),
+                            ),
+                          ]),
+                          const SizedBox(height: AppSpacing.lg),
 
                           _SectionHeader(L10n.get(context, 'settings_section_sound')),
                           _Group(children: [
@@ -119,6 +131,28 @@ class SettingsScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _setDailyReminder(
+      BuildContext context, WidgetRef ref, bool enable) async {
+    final title = L10n.get(context, 'notif_reminder_title');
+    final body = L10n.get(context, 'notif_reminder_body');
+    final permissionDenied = L10n.get(context, 'settings_notif_permission_denied');
+    final messenger = ScaffoldMessenger.of(context);
+
+    if (enable) {
+      final status = await Permission.notification.request();
+      if (!status.isGranted) {
+        messenger.showSnackBar(SnackBar(content: Text(permissionDenied)));
+        return;
+      }
+    }
+
+    await ref.read(settingsProvider.notifier).setDailyReminderEnabled(
+          enable,
+          title: title,
+          body: body,
+        );
   }
 
   Future<void> _editName(
