@@ -89,7 +89,7 @@ class AppTheme {
         foregroundColor: Colors.black,
         elevation: 0,
         padding: const EdgeInsets.symmetric(vertical: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
       ),
     ),
     switchTheme: SwitchThemeData(
@@ -105,47 +105,43 @@ class AppTheme {
 
   // --- DEPTH & SURFACES ---
 
-  /// The app's base vertical gradient. Deliberately neutral (not blue-shifted)
-  /// and low-contrast — calmer and more "precision instrument" than the
-  /// original's dramatic near-sci-fi tint.
+  /// The app's base vertical gradient. A deep, warm near-black with a whisper
+  /// of forest green at the top — reads as a considered wellness-studio
+  /// backdrop rather than a flat technical gray.
   static const LinearGradient backgroundGradient = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [Color(0xFF12151A), Color(0xFF0A0C0F)],
+    colors: [Color(0xFF141F1B), Color(0xFF05070A)],
   );
 
   /// A soft frosted-glass surface decoration used for cards and dialogs.
-  /// Slightly more opaque than a typical "glassmorphism" look — reads as a
-  /// solid, considered surface rather than an ethereal overlay.
   static BoxDecoration glass({
     double radius = AppRadius.lg,
     Color? tint,
-    double borderOpacity = 0.12,
+    double borderOpacity = 0.16,
   }) {
     return BoxDecoration(
-      color: (tint ?? Colors.white).withAlpha(18),
+      color: (tint ?? Colors.white).withAlpha(24),
       borderRadius: BorderRadius.circular(radius),
       border: Border.all(color: Colors.white.withAlpha((borderOpacity * 255).round())),
     );
   }
 
-  /// A restrained outer glow, e.g. for an accent button or active element.
-  /// Tuned down from the original (which read as a neon halo) to a soft,
-  /// almost-subliminal ambient highlight.
-  static List<BoxShadow> glow(Color color, {double blur = 16, double spread = 0}) {
+  /// An ambient outer glow, e.g. for an accent button or active element.
+  static List<BoxShadow> glow(Color color, {double blur = 20, double spread = 0}) {
     return [
       BoxShadow(
-        color: color.withAlpha(50),
+        color: color.withAlpha(90),
         blurRadius: blur,
         spreadRadius: spread,
       ),
     ];
   }
 
-  /// A left-to-right tinted gradient for level/stat cards. A hint of colour,
-  /// not a vivid wash.
+  /// A left-to-right tinted gradient for level/stat cards — a confident wash
+  /// of colour rather than a faint hint.
   static LinearGradient cardGradient(Color color) => LinearGradient(
-        colors: [color.withAlpha(34), color.withAlpha(6)],
+        colors: [color.withAlpha(56), color.withAlpha(10)],
         begin: Alignment.centerLeft,
         end: Alignment.centerRight,
       );
@@ -161,11 +157,12 @@ abstract final class AppSpacing {
   static const double xxl = 48;
 }
 
-/// Corner radius scale.
+/// Corner radius scale. Softer/rounder than the original for a calmer,
+/// more premium feel.
 abstract final class AppRadius {
-  static const double sm = 12;
-  static const double md = 16;
-  static const double lg = 24;
+  static const double sm = 14;
+  static const double md = 20;
+  static const double lg = 28;
   static const double pill = 999;
 }
 

@@ -75,14 +75,13 @@ class _GlowPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Smaller, softer blobs than the original — reads as gentle ambient
-    // lighting rather than a prominent "aura", matching the app's calmer,
-    // more precision-instrument visual direction.
-    final r = size.shortestSide * 0.70;
-    _glow(canvas, size, Offset(size.width * 0.28, size.height * 0.22), r,
-        colorA.withAlpha((40 * intensity).round()));
-    _glow(canvas, size, Offset(size.width * 0.78, size.height * 0.74), r * 0.85,
-        colorB.withAlpha((30 * intensity).round()));
+    // Two confident, softly-lit blobs of colour — an ambient wellness-studio
+    // glow rather than a flat gray backdrop, still cheap (painted once).
+    final r = size.shortestSide * 0.75;
+    _glow(canvas, size, Offset(size.width * 0.26, size.height * 0.20), r,
+        colorA.withAlpha((85 * intensity).round()));
+    _glow(canvas, size, Offset(size.width * 0.80, size.height * 0.78), r * 0.9,
+        colorB.withAlpha((60 * intensity).round()));
   }
 
   void _glow(Canvas canvas, Size size, Offset center, double radius, Color color) {
