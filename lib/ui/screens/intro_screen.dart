@@ -31,7 +31,7 @@ class IntroScreen extends ConsumerWidget {
     return Scaffold(
       body: Stack(
         children: [
-          Positioned.fill(child: AppBackground(accent: level.color)),
+          Positioned.fill(child: AppBackground(sectionAccent: level.color)),
           SafeArea(
             child: Center(
               child: ConstrainedBox(

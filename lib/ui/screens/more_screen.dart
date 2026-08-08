@@ -7,69 +7,73 @@ import 'package:okrutnik_breath/config/transitions.dart';
 import 'package:okrutnik_breath/ui/screens/history_screen.dart';
 import 'package:okrutnik_breath/ui/screens/instruction_screen.dart';
 import 'package:okrutnik_breath/ui/screens/settings_screen.dart';
-import 'package:okrutnik_breath/ui/widgets/app_background.dart';
+import 'package:okrutnik_breath/ui/screens/stats_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
 
-/// The "Więcej" bottom-nav tab: guide, history and settings.
+/// The "Więcej" bottom-nav tab: stats, guide, history and settings. Only
+/// ever shown as a shell tab root — the shared background lives in
+/// HomeShellScreen so it isn't torn down and rebuilt (with its animation
+/// restarting) every time the tab is switched.
 class MoreScreen extends StatelessWidget {
   const MoreScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
-        children: [
-          const Positioned.fill(child: AppBackground()),
-          SafeArea(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: context.isTablet ? 640 : 560),
-                child: Column(
+    return SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: context.isTablet ? 640 : 560),
+          child: Column(
+            children: [
+              ScreenHeader(
+                title: L10n.get(context, 'more_title'),
+                showBackButton: false,
+              ),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                    vertical: AppSpacing.md,
+                  ),
                   children: [
-                    ScreenHeader(
-                      title: L10n.get(context, 'more_title'),
-                      showBackButton: false,
+                    _MoreTile(
+                      icon: Icons.insights_outlined,
+                      color: AppTheme.lure,
+                      title: L10n.get(context, 'menu_stats_button'),
+                      onTap: () => Navigator.of(context)
+                          .push(fadeThroughRoute(const StatsScreen())),
                     ),
-                    Expanded(
-                      child: ListView(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.lg,
-                          vertical: AppSpacing.md,
-                        ),
-                        children: [
-                          _MoreTile(
-                            icon: Icons.spa_outlined,
-                            color: AppTheme.primary,
-                            title: L10n.get(context, 'menu_guide_button'),
-                            onTap: () => Navigator.of(context)
-                                .push(fadeThroughRoute(const InstructionScreen())),
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                          _MoreTile(
-                            icon: Icons.history_rounded,
-                            color: AppTheme.accent,
-                            title: L10n.get(context, 'menu_history_button'),
-                            onTap: () => Navigator.of(context)
-                                .push(fadeThroughRoute(const HistoryScreen())),
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                          _MoreTile(
-                            icon: Icons.settings_outlined,
-                            color: AppTheme.textDim,
-                            title: L10n.get(context, 'menu_settings_button'),
-                            onTap: () => Navigator.of(context)
-                                .push(fadeThroughRoute(const SettingsScreen())),
-                          ),
-                        ].animate(interval: 60.ms).fadeIn(duration: AppMotion.medium),
-                      ),
+                    const SizedBox(height: AppSpacing.md),
+                    _MoreTile(
+                      icon: Icons.spa_outlined,
+                      color: AppTheme.primary,
+                      title: L10n.get(context, 'menu_guide_button'),
+                      onTap: () => Navigator.of(context)
+                          .push(fadeThroughRoute(const InstructionScreen())),
                     ),
-                  ],
+                    const SizedBox(height: AppSpacing.md),
+                    _MoreTile(
+                      icon: Icons.history_rounded,
+                      color: AppTheme.accent,
+                      title: L10n.get(context, 'menu_history_button'),
+                      onTap: () => Navigator.of(context)
+                          .push(fadeThroughRoute(const HistoryScreen())),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    _MoreTile(
+                      icon: Icons.settings_outlined,
+                      color: AppTheme.textDim,
+                      title: L10n.get(context, 'menu_settings_button'),
+                      onTap: () => Navigator.of(context)
+                          .push(fadeThroughRoute(const SettingsScreen())),
+                    ),
+                  ].animate(interval: 60.ms).fadeIn(duration: AppMotion.medium),
                 ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

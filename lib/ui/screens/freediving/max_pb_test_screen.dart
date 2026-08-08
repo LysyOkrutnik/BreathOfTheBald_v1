@@ -103,7 +103,7 @@ class _MaxPbTestScreenState extends ConsumerState<MaxPbTestScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          const Positioned.fill(child: AppBackground(accent: AppTheme.primary)),
+          const Positioned.fill(child: AppBackground(sectionAccent: AppTheme.primary)),
           SafeArea(
             child: Center(
               child: ConstrainedBox(

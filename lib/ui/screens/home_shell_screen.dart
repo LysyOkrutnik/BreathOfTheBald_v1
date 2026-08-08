@@ -5,13 +5,20 @@ import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/ui/screens/freediving/freediving_home_screen.dart';
 import 'package:okrutnik_breath/ui/screens/more_screen.dart';
 import 'package:okrutnik_breath/ui/screens/scheduler_screen.dart';
-import 'package:okrutnik_breath/ui/screens/stats_screen.dart';
-import 'package:okrutnik_breath/ui/screens/training_screen.dart';
+import 'package:okrutnik_breath/ui/screens/special_screen.dart';
+import 'package:okrutnik_breath/ui/screens/wim_hof_screen.dart';
+import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/confirm_dialog.dart';
 
-/// The app's persistent bottom-nav shell: Trening / Freediving / Plan /
-/// Statystyki / Więcej. Replaces the old single-scroll MenuScreen as the
-/// post-onboarding home.
+/// The app's persistent bottom-nav shell: Wim Hof / Ćwiczenia specjalne /
+/// Freediving / Plan / Więcej. Replaces the old single-scroll MenuScreen as
+/// the post-onboarding home.
+///
+/// The atmospheric background lives here, once, behind the [IndexedStack] —
+/// each tab used to carry its own copy, so switching tabs tore down and
+/// restarted the particle animation. A single shared instance persists
+/// across tab switches; only its [AppBackground.sectionAccent] changes to
+/// reflect the active tab's identity colour.
 class HomeShellScreen extends StatefulWidget {
   const HomeShellScreen({super.key});
 
@@ -26,18 +33,28 @@ class _HomeShellScreenState extends State<HomeShellScreen> {
   // eagerly constructing SchedulerScreen would fire its exact-alarm
   // permission request on app launch, before the user ever opens that tab.
   static const List<Widget Function()> _builders = [
-    _buildTraining,
+    _buildWimHof,
+    _buildSpecial,
     _buildFreediving,
     _buildScheduler,
-    _buildStats,
     _buildMore,
   ];
 
-  static Widget _buildTraining() => const TrainingScreen();
-  static Widget _buildFreediving() => const FreedivingHomeScreen(embedded: true);
-  static Widget _buildScheduler() => const SchedulerScreen(embedded: true);
-  static Widget _buildStats() => const StatsScreen(embedded: true);
+  static Widget _buildWimHof() => const WimHofScreen();
+  static Widget _buildSpecial() => const SpecialScreen();
+  static Widget _buildFreediving() => const FreedivingHomeScreen();
+  static Widget _buildScheduler() => const SchedulerScreen();
   static Widget _buildMore() => const MoreScreen();
+
+  // Each tab's secondary identity colour, layered as a quiet accent on top
+  // of the app-wide ocean cyan (null = no secondary tint, just the ocean).
+  static const List<Color?> _sectionAccents = [
+    AppTheme.primary, // Wim Hof
+    AppTheme.accent, // Ćwiczenia specjalne
+    AppTheme.danger, // Freediving
+    AppTheme.lure, // Plan
+    null, // Więcej
+  ];
 
   final List<Widget?> _tabs = List<Widget?>.filled(_builders.length, null);
 
@@ -77,10 +94,18 @@ class _HomeShellScreenState extends State<HomeShellScreen> {
         await _confirmExit();
       },
       child: Scaffold(
-        body: IndexedStack(
-          index: _index,
+        backgroundColor: Colors.transparent,
+        body: Stack(
           children: [
-            for (var i = 0; i < _tabs.length; i++) _tabs[i] ?? const SizedBox.shrink(),
+            Positioned.fill(child: AppBackground(sectionAccent: _sectionAccents[_index])),
+            Positioned.fill(
+              child: IndexedStack(
+                index: _index,
+                children: [
+                  for (var i = 0; i < _tabs.length; i++) _tabs[i] ?? const SizedBox.shrink(),
+                ],
+              ),
+            ),
           ],
         ),
         bottomNavigationBar: NavigationBar(
@@ -94,7 +119,12 @@ class _HomeShellScreenState extends State<HomeShellScreen> {
             NavigationDestination(
               icon: const Icon(Icons.self_improvement_outlined),
               selectedIcon: const Icon(Icons.self_improvement_rounded, color: AppTheme.primary),
-              label: L10n.get(context, 'nav_training'),
+              label: L10n.get(context, 'nav_wimhof'),
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.bolt_outlined),
+              selectedIcon: const Icon(Icons.bolt_rounded, color: AppTheme.accent),
+              label: L10n.get(context, 'nav_special'),
             ),
             NavigationDestination(
               icon: const Icon(Icons.water_outlined),
@@ -103,13 +133,8 @@ class _HomeShellScreenState extends State<HomeShellScreen> {
             ),
             NavigationDestination(
               icon: const Icon(Icons.schedule_outlined),
-              selectedIcon: const Icon(Icons.schedule_rounded, color: AppTheme.accent),
+              selectedIcon: const Icon(Icons.schedule_rounded, color: AppTheme.lure),
               label: L10n.get(context, 'nav_plan'),
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.insights_outlined),
-              selectedIcon: const Icon(Icons.insights_rounded, color: AppTheme.accent),
-              label: L10n.get(context, 'nav_stats'),
             ),
             NavigationDestination(
               icon: const Icon(Icons.more_horiz_rounded),

@@ -30,7 +30,7 @@ class GlassCard extends StatelessWidget {
       color: gradient == null ? (tint ?? Colors.white).withAlpha(20) : null,
       gradient: gradient,
       borderRadius: BorderRadius.circular(radius),
-      border: border ? Border.all(color: Colors.white.withAlpha(42)) : null,
+      border: border ? Border.all(color: AppTheme.glassBorder.withAlpha(48)) : null,
     );
 
     final content = Container(

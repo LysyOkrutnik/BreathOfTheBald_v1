@@ -98,7 +98,7 @@ class _CustomBuilderScreenState extends ConsumerState<CustomBuilderScreen> {
       resizeToAvoidBottomInset: true,
       body: Stack(
         children: [
-          const Positioned.fill(child: AppBackground(accent: AppTheme.accent)),
+          const Positioned.fill(child: AppBackground(sectionAccent: AppTheme.accent)),
           SafeArea(
             child: Center(
               child: ConstrainedBox(

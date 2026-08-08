@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 class AppTheme {
   // --- PALETTE ---
 
-  static const Color background = Color(0xFF101820);
+  static const Color background = Color(0xFF040D14);
 
   // Use true black for session backgrounds to maximize immersion and minimize screen glare.
   static const Color sessionBackground = Colors.black;
@@ -13,9 +13,17 @@ class AppTheme {
   static const Color accent = Color(0xFF4DD0E1);
   static const Color danger = Color(0xFFE57373);
 
+  /// A warm bioluminescent-lure accent — the one warm colour in an otherwise
+  /// cool deep-ocean palette, used to give the Plan tab its own identity.
+  static const Color lure = Color(0xFFFFB74D);
+
   // Use an off-white color to reduce eye strain in dark mode.
   static const Color textLight = Color(0xFFF5F5F5);
   static const Color textDim = Color(0xFFB0BEC5);
+
+  /// Cool cyan-white used for glass borders — reads as light catching an
+  /// underwater edge rather than a neutral gray outline.
+  static const Color glassBorder = Color(0xFFCFF3F5);
 
   // Define colors for the breathing animation.
   static const Color breathInhale = Color(0xFF29B6F6);
@@ -105,25 +113,26 @@ class AppTheme {
 
   // --- DEPTH & SURFACES ---
 
-  /// The app's base vertical gradient. A deep, warm near-black with a whisper
-  /// of forest green at the top — reads as a considered wellness-studio
-  /// backdrop rather than a flat technical gray.
+  /// The app's base vertical gradient — a descent into deep water: a clear
+  /// navy blue at the surface fading to near-black at depth. The unifying
+  /// backdrop for the whole app's "deep ocean" visual identity — deliberately
+  /// blue, not green, so it reads as distinct from earlier passes.
   static const LinearGradient backgroundGradient = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [Color(0xFF141F1B), Color(0xFF05070A)],
+    colors: [Color(0xFF071B33), Color(0xFF00030A)],
   );
 
   /// A soft frosted-glass surface decoration used for cards and dialogs.
   static BoxDecoration glass({
     double radius = AppRadius.lg,
     Color? tint,
-    double borderOpacity = 0.16,
+    double borderOpacity = 0.18,
   }) {
     return BoxDecoration(
       color: (tint ?? Colors.white).withAlpha(24),
       borderRadius: BorderRadius.circular(radius),
-      border: Border.all(color: Colors.white.withAlpha((borderOpacity * 255).round())),
+      border: Border.all(color: glassBorder.withAlpha((borderOpacity * 255).round())),
     );
   }
 

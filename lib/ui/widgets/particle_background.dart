@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:okrutnik_breath/config/theme.dart';
 
 /// A subtle drifting-particle backdrop used across the app.
 ///
@@ -70,24 +71,43 @@ class _ParticleBackgroundState extends State<ParticleBackground>
 class Particle {
   double x;
   double y;
-  final double speedX;
+  double _t = 0;
+  final double baseSize;
+  final double growth;
   final double speedY;
-  final double size;
+  final double wobbleAmp;
+  final double wobbleFreq;
+  final double phase;
   final double opacity;
 
   Particle({required Random random})
       : x = random.nextDouble(),
         y = random.nextDouble(),
-        // Speeds are expressed in screen-fractions per second.
-        speedX = (random.nextDouble() - 0.5) * 0.04,
-        speedY = (random.nextDouble() - 0.5) * 0.04,
-        size = random.nextDouble() * 2 + 0.5,
-        opacity = random.nextDouble() * 0.15 + 0.05;
+        // Speeds/sizes are expressed in screen-fractions per second — tuned
+        // to read as bubbles in sparkling water: quick, growing as they
+        // rise (lower pressure), wobbling side to side rather than drifting
+        // in a straight line.
+        speedY = -(random.nextDouble() * 0.09 + 0.05),
+        baseSize = random.nextDouble() * 1.4 + 0.4,
+        growth = random.nextDouble() * 3.5 + 1.8,
+        wobbleAmp = random.nextDouble() * 0.03 + 0.01,
+        wobbleFreq = random.nextDouble() * 3.0 + 1.5,
+        phase = random.nextDouble() * 2 * pi,
+        opacity = random.nextDouble() * 0.18 + 0.05;
 
-  /// Advances the particle by [dt] seconds, wrapping around the unit square.
+  /// Current radius: bubbles expand as they rise toward the surface (y → 0).
+  double get displaySize => baseSize + (1 - y) * growth;
+
+  /// Current x, wobbling side to side around its anchor rather than
+  /// drifting in a straight line.
+  double displayX(double width) =>
+      (x + wobbleAmp * sin(_t * wobbleFreq + phase)) * width;
+
+  /// Advances the particle by [dt] seconds, wrapping the vertical rise
+  /// around the unit square (a bubble reaching the top respawns at the
+  /// bottom, small again).
   void advance(double dt) {
-    x = (x + speedX * dt) % 1.0;
-    if (x < 0) x += 1.0;
+    _t += dt;
     y = (y + speedY * dt) % 1.0;
     if (y < 0) y += 1.0;
   }
@@ -101,14 +121,17 @@ class _ParticlePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    // Each mote is a dim halo plus a brighter core (both flat fills, no blur
+    // filter) — cheap, but reads as a small bioluminescent glow rather than
+    // a flat dust speck.
     final paint = Paint()..style = PaintingStyle.fill;
     for (final particle in particles) {
-      paint.color = Colors.white.withAlpha((255 * particle.opacity).round());
-      canvas.drawCircle(
-        Offset(particle.x * size.width, particle.y * size.height),
-        particle.size,
-        paint,
-      );
+      final r = particle.displaySize;
+      final center = Offset(particle.displayX(size.width), particle.y * size.height);
+      paint.color = AppTheme.accent.withAlpha((140 * particle.opacity).round());
+      canvas.drawCircle(center, r * 2.2, paint);
+      paint.color = AppTheme.glassBorder.withAlpha((255 * particle.opacity).round());
+      canvas.drawCircle(center, r, paint);
     }
   }
 

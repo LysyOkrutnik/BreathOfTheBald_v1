@@ -12,16 +12,15 @@ import 'package:okrutnik_breath/core/notifications/notification_service.dart';
 import 'package:okrutnik_breath/data/db/database.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/ui/screens/intro_screen.dart';
-import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/month_calendar.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
 
+/// The "Plan" bottom-nav tab. Only ever shown as a shell tab root — the
+/// shared background lives in HomeShellScreen so it isn't torn down and
+/// rebuilt (with its animation restarting) every time the tab is switched.
 class SchedulerScreen extends ConsumerStatefulWidget {
-  const SchedulerScreen({super.key, this.embedded = false});
-
-  /// True when shown as a bottom-nav tab root rather than a pushed route.
-  final bool embedded;
+  const SchedulerScreen({super.key});
 
   @override
   ConsumerState<SchedulerScreen> createState() => _SchedulerScreenState();
@@ -73,50 +72,43 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen> {
 
     final twoPane = context.isTablet || context.isLandscape;
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          const Positioned.fill(child: AppBackground()),
-          SafeArea(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: context.isTablet ? 980 : 560),
-                child: Column(
-                  children: [
-                    ScreenHeader(
-                      title: L10n.get(context, 'scheduler_title'),
-                      showBackButton: !widget.embedded,
-                    ),
-                    Expanded(
-                      child: twoPane
-                          ? Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: SingleChildScrollView(
-                                    padding: const EdgeInsets.all(AppSpacing.lg),
-                                    child: calendar,
-                                  ),
-                                ),
-                                Expanded(child: dayPanel),
-                              ],
-                            )
-                          : Column(
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.all(AppSpacing.lg),
-                                  child: calendar,
-                                ),
-                                Expanded(child: dayPanel),
-                              ],
-                            ),
-                    ),
-                  ],
-                ),
+    return SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: context.isTablet ? 980 : 560),
+          child: Column(
+            children: [
+              ScreenHeader(
+                title: L10n.get(context, 'scheduler_title'),
+                showBackButton: false,
               ),
-            ),
+              Expanded(
+                child: twoPane
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: SingleChildScrollView(
+                              padding: const EdgeInsets.all(AppSpacing.lg),
+                              child: calendar,
+                            ),
+                          ),
+                          Expanded(child: dayPanel),
+                        ],
+                      )
+                    : Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(AppSpacing.lg),
+                            child: calendar,
+                          ),
+                          Expanded(child: dayPanel),
+                        ],
+                      ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

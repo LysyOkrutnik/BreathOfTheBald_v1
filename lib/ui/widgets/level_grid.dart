@@ -3,7 +3,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/levels.dart';
-import 'package:okrutnik_breath/config/responsive.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
 import 'package:okrutnik_breath/data/db/database.dart';
@@ -12,128 +11,12 @@ import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/ui/screens/custom_builder_screen.dart';
 import 'package:okrutnik_breath/ui/screens/intro_screen.dart';
 import 'package:okrutnik_breath/ui/screens/session_screen.dart';
-import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 
-/// The "Trening" bottom-nav tab: classic ladder, special techniques and
-/// custom presets. Freediving now lives in its own tab.
-class TrainingScreen extends StatelessWidget {
-  const TrainingScreen({super.key});
-
-  static const _classic = ['mild', 'strong', 'beast', 'guru'];
-  static const _special = ['box', 'relax', 'fire'];
-
-  @override
-  Widget build(BuildContext context) {
-    final columns = (context.isTablet || context.isLandscape) ? 2 : 1;
-
-    return Scaffold(
-      body: Stack(
-        children: [
-          const Positioned.fill(child: AppBackground()),
-          SafeArea(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: context.isTablet ? 900 : double.infinity,
-                ),
-                child: CustomScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  slivers: [
-                    SliverPadding(
-                      padding: EdgeInsets.fromLTRB(
-                        AppSpacing.lg,
-                        context.responsive(compact: AppSpacing.xl, expanded: AppSpacing.xxl),
-                        AppSpacing.lg,
-                        AppSpacing.xxl,
-                      ),
-                      sliver: SliverList.list(
-                        children: [
-                          const _Header(),
-                          SizedBox(height: context.scaled(AppSpacing.xl)),
-                          _SectionLabel(L10n.get(context, 'menu_section_classic')),
-                          const SizedBox(height: AppSpacing.md),
-                          _LevelGrid(keys: _classic, columns: columns, startIndex: 0),
-                          const SizedBox(height: AppSpacing.xl),
-                          _SectionLabel(L10n.get(context, 'menu_section_special')),
-                          const SizedBox(height: AppSpacing.md),
-                          _LevelGrid(keys: _special, columns: columns, startIndex: _classic.length),
-                          const SizedBox(height: AppSpacing.xl),
-                          const _CustomSection(),
-                          SizedBox(height: context.scaled(AppSpacing.xl)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Header extends StatelessWidget {
-  const _Header();
-
-  @override
-  Widget build(BuildContext context) {
-    final titleSize = context.responsive<double>(compact: 40, medium: 52, expanded: 60);
-
-    return Column(
-      children: [
-        ShaderMask(
-          shaderCallback: (bounds) => const LinearGradient(
-            colors: [AppTheme.textLight, AppTheme.primary],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ).createShader(bounds),
-          child: Text(
-            "${L10n.get(context, 'menu_title_1')}\n${L10n.get(context, 'menu_title_2')}",
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: titleSize,
-              fontWeight: FontWeight.w200,
-              color: Colors.white,
-              height: 1.05,
-              letterSpacing: 4.0,
-            ),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        Text(
-          L10n.get(context, 'menu_subtitle'),
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w300,
-            color: AppTheme.primary,
-            letterSpacing: 3.0,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        Text(
-          L10n.get(context, 'menu_select_rhythm'),
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 12,
-            color: AppTheme.textDim.withAlpha(200),
-            letterSpacing: 2.0,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    )
-        .animate()
-        .fadeIn(duration: AppMotion.slow)
-        .slideY(begin: 0.15, curve: AppMotion.emphasized);
-  }
-}
-
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel(this.text);
+/// A caption label with a trailing rule, used to introduce a section of
+/// cards (e.g. "WŁASNE" above the custom-preset list).
+class SectionLabel extends StatelessWidget {
+  const SectionLabel(this.text, {super.key});
   final String text;
 
   @override
@@ -158,11 +41,14 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-class _LevelGrid extends StatelessWidget {
-  const _LevelGrid({
+/// A responsive grid (1 or 2 columns depending on device/orientation) of
+/// [LevelCard]s for the given level keys.
+class LevelGrid extends StatelessWidget {
+  const LevelGrid({
+    super.key,
     required this.keys,
     required this.columns,
-    required this.startIndex,
+    this.startIndex = 0,
   });
 
   final List<String> keys;
@@ -176,7 +62,7 @@ class _LevelGrid extends StatelessWidget {
         children: [
           for (var i = 0; i < keys.length; i++) ...[
             if (i > 0) const SizedBox(height: AppSpacing.md),
-            _LevelCard(levelKey: keys[i], index: startIndex + i),
+            LevelCard(levelKey: keys[i], index: startIndex + i),
           ],
         ],
       );
@@ -193,7 +79,7 @@ class _LevelGrid extends StatelessWidget {
             for (var i = 0; i < keys.length; i++)
               SizedBox(
                 width: cardWidth,
-                child: _LevelCard(levelKey: keys[i], index: startIndex + i),
+                child: LevelCard(levelKey: keys[i], index: startIndex + i),
               ),
           ],
         );
@@ -202,8 +88,8 @@ class _LevelGrid extends StatelessWidget {
   }
 }
 
-class _LevelCard extends StatelessWidget {
-  const _LevelCard({required this.levelKey, required this.index});
+class LevelCard extends StatelessWidget {
+  const LevelCard({super.key, required this.levelKey, this.index = 0});
 
   final String levelKey;
   final int index;
@@ -234,7 +120,7 @@ class _LevelCard extends StatelessWidget {
       case ExerciseType.o2Table:
         // Freediving tables never appear in this generic grid (they have
         // their own dedicated tab); custom presets show their own
-        // description via _PresetCard instead.
+        // description via PresetCard instead.
         return '';
     }
   }
@@ -322,8 +208,10 @@ class _LevelCard extends StatelessWidget {
   }
 }
 
-class _CustomSection extends ConsumerWidget {
-  const _CustomSection();
+/// The "Własne" (custom presets) section: existing presets plus a
+/// create-new-preset action.
+class CustomSection extends ConsumerWidget {
+  const CustomSection({super.key});
 
   void _start(BuildContext context, WidgetRef ref, CustomPreset p) {
     final level = LevelData.custom(
@@ -345,10 +233,10 @@ class _CustomSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _SectionLabel(L10n.get(context, 'menu_section_custom')),
+        SectionLabel(L10n.get(context, 'menu_section_custom')),
         const SizedBox(height: AppSpacing.md),
         for (final p in presets) ...[
-          _PresetCard(
+          PresetCard(
             preset: p,
             onTap: () => _start(context, ref, p),
             onDelete: () =>
@@ -389,8 +277,9 @@ class _CustomSection extends ConsumerWidget {
   }
 }
 
-class _PresetCard extends StatelessWidget {
-  const _PresetCard({
+class PresetCard extends StatelessWidget {
+  const PresetCard({
+    super.key,
     required this.preset,
     required this.onTap,
     required this.onDelete,

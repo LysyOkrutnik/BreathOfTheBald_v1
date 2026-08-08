@@ -11,59 +11,50 @@ import 'package:okrutnik_breath/logic/freediving/co2_o2_table_generator.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/ui/screens/freediving/freediving_table_intro_screen.dart';
 import 'package:okrutnik_breath/ui/screens/freediving/max_pb_test_screen.dart';
-import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
 
+/// The "Freediving" bottom-nav tab. Only ever shown as a shell tab root —
+/// the shared background lives in HomeShellScreen so it isn't torn down and
+/// rebuilt (with its animation restarting) every time the tab is switched.
 class FreedivingHomeScreen extends ConsumerWidget {
-  const FreedivingHomeScreen({super.key, this.embedded = false});
-
-  /// True when shown as a bottom-nav tab root rather than a pushed route —
-  /// suppresses the header's back arrow (there's nothing to go back to).
-  final bool embedded;
+  const FreedivingHomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(freedivingProfileProvider);
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          const Positioned.fill(child: AppBackground(accent: AppTheme.danger)),
-          SafeArea(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: context.isTablet ? 640 : 560),
-                child: Column(
-                  children: [
-                    ScreenHeader(
-                      title: L10n.get(context, 'freediving_title'),
-                      showBackButton: !embedded,
-                    ),
-                    Expanded(
-                      child: profileAsync.when(
-                        loading: () => const Center(
-                          child: CircularProgressIndicator(color: AppTheme.danger),
-                        ),
-                        error: (_, __) => const SizedBox.shrink(),
-                        data: (profile) {
-                          if (profile == null || profile.safetyAcknowledgedAt == null) {
-                            return _SafetyConsent(
-                              onAccept: () => ref
-                                  .read(freedivingRepositoryProvider)
-                                  .acknowledgeSafety(),
-                            );
-                          }
-                          return _FreedivingContent(profile: profile);
-                        },
-                      ),
-                    ),
-                  ],
+    return SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: context.isTablet ? 640 : 560),
+          child: Column(
+            children: [
+              ScreenHeader(
+                title: L10n.get(context, 'freediving_title'),
+                showBackButton: false,
+              ),
+              Expanded(
+                child: profileAsync.when(
+                  loading: () => const Center(
+                    child: CircularProgressIndicator(color: AppTheme.danger),
+                  ),
+                  error: (_, __) => const SizedBox.shrink(),
+                  data: (profile) {
+                    if (profile == null || profile.safetyAcknowledgedAt == null) {
+                      return _SafetyConsent(
+                        onAccept: () => ref
+                            .read(freedivingRepositoryProvider)
+                            .acknowledgeSafety(),
+                      );
+                    }
+                    return _FreedivingContent(profile: profile);
+                  },
                 ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

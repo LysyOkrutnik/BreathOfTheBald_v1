@@ -44,7 +44,7 @@ class FreedivingTableIntroScreen extends ConsumerWidget {
     return Scaffold(
       body: Stack(
         children: [
-          Positioned.fill(child: AppBackground(accent: color)),
+          Positioned.fill(child: AppBackground(sectionAccent: color)),
           SafeArea(
             child: Center(
               child: ConstrainedBox(
