@@ -1,12 +1,14 @@
 # Includes its own Postgres — nothing else needs to exist on the VPS beyond
 # this stack.
 #
-# Reverse proxy: Nginx Proxy Manager (NPM), not Traefik. NPM has no
-# label-based service discovery — it's configured through its own web UI —
-# so `api` just publishes a host port; point an NPM Proxy Host at
-# `<vps-ip>:${HOST_PORT}` (forwarding to breath.lysyweb.pl, SSL handled by
-# NPM's own Let's Encrypt integration). Change HOST_PORT in .env if 8080 is
-# already taken by something else on the VPS.
+# Reverse proxy: Nginx Proxy Manager (NPM), on the external Docker network
+# `server-proxy_default` — `api` joins it so NPM can route to it by
+# container name (`breath-api-1`) rather than a host IP, which breaks every
+# time the container's own internal IP changes across restarts. Configure
+# the NPM Proxy Host with Forward Hostname `breath-api-1`, Forward Port
+# `8080` (the container's internal port, not the published host one).
+# HOST_PORT is still published too, as a fallback/debugging path — harmless
+# either way.
 #
 # Deployed straight from the prebuilt ghcr.io image (see
 # .github/workflows/server-docker.yml) — Portainer only ever pulls, it never
@@ -47,6 +49,7 @@ services:
       - ./firebase-service-account.json:/run/secrets/firebase-service-account.json:ro
     networks:
       - internal
+      - server-proxy_default
 
   # One-off: `docker compose --profile tools run --rm migrate`. Same image as
   # `api` — `prisma` (the CLI) ships as a regular dependency precisely so
@@ -65,6 +68,8 @@ services:
 
 networks:
   internal:
+  server-proxy_default:
+    external: true
 
 volumes:
   postgres_data:
