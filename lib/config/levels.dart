@@ -12,6 +12,18 @@ enum ExerciseType {
   custom,
   co2Table,
   o2Table,
+  customFreedivingTable,
+  coldShower,
+}
+
+extension ExerciseTypeX on ExerciseType {
+  /// True for any freediving breath-hold table — CO2/O2 (PB-driven) or a
+  /// user-defined custom table — all of which run through the same
+  /// warm-up/hold/rest session engine.
+  bool get isFreedivingTable =>
+      this == ExerciseType.co2Table ||
+      this == ExerciseType.o2Table ||
+      this == ExerciseType.customFreedivingTable;
 }
 
 class LevelData {
@@ -96,6 +108,27 @@ class LevelData {
       holdInSec: holdInSec,
       exhaleSec: exhaleSec,
       holdOutSec: holdOutSec,
+      color: color,
+      instructionTitleKey: name,
+      instructionDescriptionKey: '',
+      instructionStepKeys: const [],
+    );
+  }
+
+  /// Builds a runtime [LevelData] for a user-defined breath-hold table (fixed
+  /// apnea/rest schedule, not derived from PB — see CustomFreedivingPreset).
+  factory LevelData.customFreedivingTable({
+    required String name,
+    required List<BreathHoldRound> rounds,
+  }) {
+    const color = Color(0xFF9575CD);
+    return LevelData(
+      key: 'custom_freediving',
+      title: name,
+      subtitle: '',
+      type: ExerciseType.customFreedivingTable,
+      totalRounds: rounds.length,
+      freedivingRounds: rounds,
       color: color,
       instructionTitleKey: name,
       instructionDescriptionKey: '',
@@ -317,6 +350,16 @@ class LevelData {
       color: Color(0xFF81C784),
       instructionTitleKey: "freediving_pb_test_title",
       instructionDescriptionKey: "freediving_pb_test_intro",
+      instructionStepKeys: [],
+    ),
+    'cold_shower': LevelData(
+      key: 'cold_shower',
+      title: "coldshower_title",
+      subtitle: "coldshower_title",
+      type: ExerciseType.coldShower,
+      color: Color(0xFF80D8FF),
+      instructionTitleKey: "coldshower_title",
+      instructionDescriptionKey: "coldshower_title",
       instructionStepKeys: [],
     ),
   };

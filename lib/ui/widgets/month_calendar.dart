@@ -3,8 +3,8 @@ import 'package:intl/intl.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 
 /// A compact, glass-styled month calendar. Weeks start on Monday. Days that
-/// have planned sessions show an accent dot; the selected day is filled and
-/// today is outlined.
+/// have planned sessions show a dot per distinct session type (colour-coded);
+/// the selected day is filled and today is outlined.
 class MonthCalendar extends StatelessWidget {
   const MonthCalendar({
     super.key,
@@ -18,8 +18,9 @@ class MonthCalendar extends StatelessWidget {
   final DateTime focusedMonth;
   final DateTime selectedDay;
 
-  /// Date-only days (year/month/day, time stripped) that have plans.
-  final Set<DateTime> markedDays;
+  /// Date-only days (year/month/day, time stripped) mapped to the distinct
+  /// colours of that day's planned sessions (for the colour-coded dots).
+  final Map<DateTime, List<Color>> markedDays;
   final ValueChanged<DateTime> onDaySelected;
   final ValueChanged<DateTime> onMonthChanged;
 
@@ -58,8 +59,9 @@ class MonthCalendar extends StatelessWidget {
                   isSelected:
                       DateTime(focusedMonth.year, focusedMonth.month, day) ==
                           dateOnly(selectedDay),
-                  hasPlan: markedDays
-                      .contains(DateTime(focusedMonth.year, focusedMonth.month, day)),
+                  dotColors: markedDays[
+                          DateTime(focusedMonth.year, focusedMonth.month, day)] ??
+                      const [],
                   onTap: () => onDaySelected(
                       DateTime(focusedMonth.year, focusedMonth.month, day)),
                 ),
@@ -100,9 +102,12 @@ class MonthCalendar extends StatelessWidget {
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(6),
-          child: Icon(icon, color: Colors.white70, size: 22),
+        // The icon+padding alone was ~34x34 — below the 48dp minimum
+        // recommended touch target size.
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: Center(child: Icon(icon, color: Colors.white70, size: 22)),
         ),
       ),
     );
@@ -137,14 +142,17 @@ class _DayCell extends StatelessWidget {
     required this.date,
     required this.isToday,
     required this.isSelected,
-    required this.hasPlan,
+    required this.dotColors,
     required this.onTap,
   });
 
   final DateTime date;
   final bool isToday;
   final bool isSelected;
-  final bool hasPlan;
+
+  /// One colour per distinct session type planned this day (already
+  /// deduplicated by the caller); shown as up to 3 small dots.
+  final List<Color> dotColors;
   final VoidCallback onTap;
 
   @override
@@ -156,7 +164,8 @@ class _DayCell extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: const EdgeInsets.all(2),
-        child: Container(
+        child: AnimatedContainer(
+          duration: AppMotion.fast,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: isSelected ? AppTheme.primary : Colors.transparent,
@@ -181,16 +190,24 @@ class _DayCell extends StatelessWidget {
                   ),
                 ),
               ),
-              if (hasPlan)
+              if (dotColors.isNotEmpty)
                 Positioned(
                   bottom: 4,
-                  child: Container(
-                    width: 5,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: isSelected ? Colors.black : AppTheme.accent,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final color in dotColors.take(3)) ...[
+                        Container(
+                          width: 5,
+                          height: 5,
+                          margin: const EdgeInsets.symmetric(horizontal: 1),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isSelected ? Colors.black : color,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
             ],

@@ -11,6 +11,7 @@ import 'package:okrutnik_breath/ui/screens/home_shell_screen.dart';
 import 'package:okrutnik_breath/ui/screens/summary_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/ferrofluid_painter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SessionScreen extends ConsumerWidget {
   const SessionScreen({super.key});
@@ -26,6 +27,20 @@ class SessionScreen extends ConsumerWidget {
       }
     });
 
+    // A real interruption (phone call, long time away) while backgrounded —
+    // let the user explicitly decide whether to continue rather than
+    // silently resuming as if nothing happened.
+    ref.listen(sessionInterruptedProvider, (prev, next) {
+      if (next) {
+        ref.read(sessionInterruptedProvider.notifier).state = false;
+        _showExitDialog(context, notifier);
+      }
+    });
+
+    ref.listen(sessionProvider.select((s) => s.awaitingRoundDecision), (prev, next) {
+      if (next) _showRoundIncompleteDialog(context, notifier);
+    });
+
     final visuals = _Visuals.from(state);
 
     return PopScope(
@@ -39,11 +54,24 @@ class SessionScreen extends ConsumerWidget {
           children: [
             const Positioned.fill(child: AppBackground(intensity: 0.45)),
             SafeArea(
-              child: state.isGhostMode
-                  ? _GhostLayout(notifier: notifier, visuals: visuals)
-                  : context.isLandscape
-                      ? _LandscapeLayout(state: state, notifier: notifier, visuals: visuals)
-                      : _PortraitLayout(state: state, notifier: notifier, visuals: visuals),
+              // A double-tap toggling Ghost Mode used to swap layouts with no
+              // transition at all — combined with how subtle the dimmed
+              // layout is, it wasn't obvious the tap had done anything.
+              child: AnimatedSwitcher(
+                duration: AppMotion.medium,
+                child: state.isGhostMode
+                    ? _GhostLayout(
+                        key: const ValueKey('ghost'),
+                        notifier: notifier,
+                        visuals: visuals,
+                      )
+                    : KeyedSubtree(
+                        key: const ValueKey('normal'),
+                        child: context.isLandscape
+                            ? _LandscapeLayout(state: state, notifier: notifier, visuals: visuals)
+                            : _PortraitLayout(state: state, notifier: notifier, visuals: visuals),
+                      ),
+              ),
             ),
           ],
         ),
@@ -74,6 +102,13 @@ class _Visuals {
           duration = d;
         },
         recovery: (remaining) => isBig = remaining.inSeconds > 2,
+        // Without this, the blob froze deflated for the entire hold (which
+        // can run minutes) — it now breathes slowly in place so the screen
+        // reads as "alive and waiting", not stalled.
+        retention: (elapsed) {
+          isBig = (elapsed.inSeconds ~/ 4).isEven;
+          duration = const Duration(seconds: 4);
+        },
         orElse: () {},
       );
     }
@@ -184,7 +219,7 @@ class _LandscapeLayout extends StatelessWidget {
 }
 
 class _GhostLayout extends StatelessWidget {
-  const _GhostLayout({required this.notifier, required this.visuals});
+  const _GhostLayout({super.key, required this.notifier, required this.visuals});
   final SessionNotifier notifier;
   final _Visuals visuals;
 
@@ -207,7 +242,11 @@ class _GhostLayout extends StatelessWidget {
                 height: ringSize,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white.withAlpha(14), width: 1.5),
+                  // Was alpha 14 (~5% opacity) — at the intended viewing
+                  // distance (phone down, eyes half-closed) that read as
+                  // "nothing on screen", not "dimmed". Still far below the
+                  // normal session's contrast, just no longer invisible.
+                  border: Border.all(color: Colors.white.withAlpha(50), width: 1.5),
                 ),
               ),
             ),
@@ -220,7 +259,7 @@ class _GhostLayout extends StatelessWidget {
               "${L10n.get(context, 'session_ghost_mode_title')}\n"
               "${L10n.get(context, 'session_ghost_mode_subtitle')}",
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white12, fontSize: 10, letterSpacing: 2),
+              style: const TextStyle(color: Colors.white38, fontSize: 12, letterSpacing: 2),
             ),
           ),
         ],
@@ -368,10 +407,13 @@ class _PhaseText extends StatelessWidget {
         Text(
           subText,
           textAlign: TextAlign.center,
+          // Was white30 — this is the live hold/recovery countdown, not
+          // decorative chrome, and read too low-contrast against the
+          // session's pure-black background.
           style: const TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: Colors.white30,
+            color: Colors.white54,
             letterSpacing: 2.0,
             fontFeatures: [FontFeature.tabularFigures()],
           ),
@@ -385,7 +427,7 @@ class _PhaseText extends StatelessWidget {
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 13,
-                color: Colors.white38,
+                color: Colors.white54,
                 height: 1.4,
               ),
             ),
@@ -415,6 +457,14 @@ class _PhaseText extends StatelessWidget {
               ),
             ),
           ),
+          const _GhostModeHint(),
+          if (isFreedivingHold) ...[
+            const SizedBox(height: AppSpacing.lg),
+            _ContractionMarker(
+              markCount: state.contractionMarkCount,
+              onTap: notifier.markContraction,
+            ),
+          ],
         ],
         if (showSkip) ...[
           const SizedBox(height: AppSpacing.xl),
@@ -444,6 +494,147 @@ class _PhaseText extends StatelessWidget {
   }
 }
 
+/// A one-time nudge toward Ghost Mode (double-tap to dim the screen),
+/// surfaced during the first breath-hold a user ever reaches rather than
+/// leaving it buried in onboarding/the guide — that's the exact moment it's
+/// actually useful, staring at a screen with nothing left to do but wait.
+class _GhostModeHint extends StatefulWidget {
+  const _GhostModeHint();
+
+  @override
+  State<_GhostModeHint> createState() => _GhostModeHintState();
+}
+
+class _GhostModeHintState extends State<_GhostModeHint> {
+  static const _prefsKey = 'ghost_mode_hint_shown';
+  bool _visible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkFirstTime();
+  }
+
+  Future<void> _checkFirstTime() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_prefsKey) ?? false) return;
+    await prefs.setBool(_prefsKey, true);
+    if (mounted) setState(() => _visible = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_visible) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.lg),
+      child: Text(
+        L10n.get(context, 'session_ghost_mode_hint'),
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: Colors.white54, fontSize: 11, letterSpacing: 1.0),
+      ),
+    );
+  }
+}
+
+/// Freediving-only control shown during a hold: marks the moment the
+/// diaphragm's urge-to-breathe reflex first shows up ("first contraction")
+/// without ending the hold — a small, deliberately secondary pill so it's
+/// never confused with the tap-to-abort control directly above it. Taps
+/// trigger a light haptic and a brief expanding-ring pulse purely as tactile
+/// confirmation; the actual data (elapsed time, count) is tracked by the
+/// notifier and only surfaced later, in the session summary.
+class _ContractionMarker extends StatefulWidget {
+  const _ContractionMarker({required this.markCount, required this.onTap});
+  final int markCount;
+  final VoidCallback onTap;
+
+  @override
+  State<_ContractionMarker> createState() => _ContractionMarkerState();
+}
+
+class _ContractionMarkerState extends State<_ContractionMarker> {
+  int _rippleKey = 0;
+
+  void _handleTap() {
+    widget.onTap();
+    setState(() => _rippleKey++);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _handleTap,
+      behavior: HitTestBehavior.opaque,
+      child: Stack(
+        alignment: Alignment.center,
+        clipBehavior: Clip.none,
+        children: [
+          // A fresh ValueKey per tap restarts this animation from scratch —
+          // the ripple always plays even on rapid repeated taps.
+          TweenAnimationBuilder<double>(
+            key: ValueKey(_rippleKey),
+            tween: Tween(begin: 0.0, end: 1.0),
+            duration: const Duration(milliseconds: 500),
+            builder: (context, t, _) => _rippleKey == 0
+                ? const SizedBox.shrink()
+                : Opacity(
+                    opacity: (1 - t).clamp(0.0, 1.0),
+                    child: Container(
+                      width: 44 + t * 26,
+                      height: 44 + t * 26,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppTheme.accent.withAlpha(160), width: 1.5),
+                      ),
+                    ),
+                  ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: Colors.white.withAlpha(14),
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              border: Border.all(color: Colors.white24),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.waves_rounded, color: AppTheme.accent, size: 16),
+                const SizedBox(width: 6),
+                Text(
+                  L10n.get(context, 'freediving_mark_contraction'),
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 11,
+                    letterSpacing: 1.0,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (widget.markCount > 0) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: AppTheme.accent,
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                    ),
+                    child: Text(
+                      '${widget.markCount}',
+                      style: const TextStyle(
+                          color: Colors.black, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ProgressBar extends StatelessWidget {
   const _ProgressBar({required this.state});
   final SessionState state;
@@ -451,6 +642,12 @@ class _ProgressBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     var progress = 0.0;
+    // A hold has no fixed length to show fractional progress against (Wim
+    // Hof retention is open-ended; even a freediving table's target isn't
+    // known here) — an indeterminate animation at least reads as "running",
+    // instead of the bar sitting frozen at 0% for the whole hold.
+    final isIndeterminate =
+        state.phase.maybeMap(retention: (_) => true, orElse: () => false);
     if (state.totalBreathsInRound > 0) {
       state.phase.maybeWhen(
         breathing: (index, _, __) => progress = index / state.totalBreathsInRound,
@@ -461,16 +658,22 @@ class _ProgressBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppRadius.pill),
-        child: TweenAnimationBuilder<double>(
-          tween: Tween(end: progress.clamp(0.0, 1.0)),
-          duration: AppMotion.fast,
-          builder: (context, value, _) => LinearProgressIndicator(
-            value: value,
-            backgroundColor: Colors.white10,
-            valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primary),
-            minHeight: 3,
-          ),
-        ),
+        child: isIndeterminate
+            ? const LinearProgressIndicator(
+                backgroundColor: Colors.white10,
+                valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primary),
+                minHeight: 3,
+              )
+            : TweenAnimationBuilder<double>(
+                tween: Tween(end: progress.clamp(0.0, 1.0)),
+                duration: AppMotion.fast,
+                builder: (context, value, _) => LinearProgressIndicator(
+                  value: value,
+                  backgroundColor: Colors.white10,
+                  valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primary),
+                  minHeight: 3,
+                ),
+              ),
       ),
     );
   }
@@ -485,7 +688,13 @@ void _showExitDialog(BuildContext context, SessionNotifier notifier) {
       child: Dialog(
         backgroundColor: Colors.transparent,
         insetPadding: const EdgeInsets.all(AppSpacing.lg),
-        child: Container(
+        child: ConstrainedBox(
+          // Dialogs have no natural width cap of their own — on a tablet
+          // this would otherwise stretch to the full inset width, spreading
+          // the button row out awkwardly.
+          constraints:
+              BoxConstraints(maxWidth: dialogContext.isTablet ? 420 : double.infinity),
+          child: Container(
           padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.lg, vertical: AppSpacing.xl),
           decoration: BoxDecoration(
@@ -510,6 +719,12 @@ void _showExitDialog(BuildContext context, SessionNotifier notifier) {
                   fontWeight: FontWeight.w300,
                   letterSpacing: 2.5,
                 ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                L10n.get(context, 'session_exit_dialog_body'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white54, fontSize: 13, height: 1.4),
               ),
               const SizedBox(height: AppSpacing.xl),
               Row(
@@ -542,6 +757,99 @@ void _showExitDialog(BuildContext context, SessionNotifier notifier) {
                 ],
               ),
             ],
+          ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/// Shown once a freediving table round ends early (the hold itself always
+/// ends immediately on tap — this only decides what happens next). No
+/// barrier-tap or back-button dismissal: leaving the session mid-decision
+/// with a stale `awaitingRoundDecision` would strand the flow.
+void _showRoundIncompleteDialog(BuildContext context, SessionNotifier notifier) {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    barrierColor: Colors.black.withAlpha(160),
+    builder: (dialogContext) => PopScope(
+      canPop: false,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(AppSpacing.lg),
+          child: ConstrainedBox(
+            constraints:
+                BoxConstraints(maxWidth: dialogContext.isTablet ? 420 : double.infinity),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg, vertical: AppSpacing.xl),
+              decoration: BoxDecoration(
+                color: Colors.white.withAlpha(16),
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                border: Border.all(color: Colors.white.withAlpha(28)),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black54, blurRadius: 40, spreadRadius: 8),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.waves_rounded, color: AppTheme.accent, size: 34),
+                  const SizedBox(height: AppSpacing.lg),
+                  Text(
+                    L10n.get(context, 'freediving_round_incomplete_title'),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w300,
+                      letterSpacing: 2.5,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    L10n.get(context, 'freediving_round_incomplete_body'),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white54, fontSize: 13, height: 1.4),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () {
+                            notifier.endSessionAfterMissedRound();
+                            Navigator.of(dialogContext).pop();
+                          },
+                          child: Text(
+                            L10n.get(context, 'freediving_round_incomplete_end'),
+                            style: const TextStyle(color: Colors.white70),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
+                          onPressed: () {
+                            notifier.continueAfterMissedRound();
+                            Navigator.of(dialogContext).pop();
+                          },
+                          child: Text(
+                            L10n.get(context, 'freediving_round_incomplete_continue'),
+                            style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),

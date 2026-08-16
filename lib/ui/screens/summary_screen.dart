@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,12 +10,14 @@ import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
 import 'package:okrutnik_breath/logic/freediving/co2_o2_table_generator.dart';
 import 'package:okrutnik_breath/logic/notifiers/session_notifier.dart';
+import 'package:okrutnik_breath/logic/path/training_path.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/logic/providers/settings_provider.dart';
 import 'package:okrutnik_breath/ui/screens/home_shell_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/glow_halo.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SummaryScreen extends ConsumerStatefulWidget {
   const SummaryScreen({super.key});
@@ -24,31 +28,149 @@ class SummaryScreen extends ConsumerStatefulWidget {
 
 class _SummaryScreenState extends ConsumerState<SummaryScreen> {
   bool _rpeSubmitted = false;
+  bool _symptomSubmitted = false;
+
+  /// True once we know the just-finished session never made it into the
+  /// database — `lastSessionIdFuture` resolves to null either on a genuine
+  /// write failure or when there was nothing to persist in the first place.
+  /// Either way, celebrating XP/streak the user didn't actually get would be
+  /// a convincing lie, so this gates the RPE prompt and drives a warning
+  /// banner instead.
+  bool _saveFailed = false;
+
+  static const _lastStagePrefsKey = 'training_path_last_seen_stage';
+
+  // "Twoja Ścieżka" stage-advance celebration: compares the path's stage as
+  // of this summary against the last one we ever recorded, entirely local to
+  // this screen so it only needs to run once, right when a session (the only
+  // thing that can move the path forward) just finished.
+  PathStage? _celebratedStage;
+
+  /// The new character level, if this session pushed XP into a new bracket —
+  /// same one-shot-read lifecycle as [_celebratedStage], sourced from
+  /// [SessionNotifier.justLeveledUpTo] instead of a separate provider diff.
+  int? _leveledUpTo;
+
+  /// Whether this session's streak update spent its one-day grace (a missed
+  /// day forgiven rather than resetting the streak) — surfaced so a saved
+  /// streak doesn't look unexplained.
+  bool _streakGraceUsed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveStageCelebration();
+  }
+
+  /// Waits for the just-finished session to actually persist (the same
+  /// signal the RPE flow uses), plus a short margin for the Drift watch
+  /// streams behind [trainingPathProvider] to re-emit — otherwise this would
+  /// almost certainly read the *pre-session* path value (the DB write is
+  /// still in flight when this screen's very first frame builds) and record
+  /// it as "last seen", permanently skipping the real celebration.
+  Future<void> _resolveStageCelebration() async {
+    final notifier = ref.read(sessionProvider.notifier);
+    final sessionId = await notifier.lastSessionIdFuture;
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    if (!mounted) return;
+    if (sessionId == null) {
+      setState(() => _saveFailed = true);
+    } else {
+      setState(() {
+        _leveledUpTo = notifier.justLeveledUpTo;
+        _streakGraceUsed = notifier.justUsedStreakGrace;
+      });
+    }
+
+    final current = ref.read(trainingPathProvider);
+    if (current == null) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final index = prefs.getInt(_lastStagePrefsKey);
+    final previous = index == null ? null : PathStage.values[index];
+    await prefs.setInt(_lastStagePrefsKey, current.stage.index);
+    if (!mounted) return;
+
+    if (previous != null && current.stage.index > previous.index) {
+      setState(() => _celebratedStage = current.stage);
+    }
+  }
 
   String _fmt(Duration d) =>
       "${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}";
 
+  ExerciseType? get _lastType =>
+      ref.read(sessionProvider.notifier).lastFinishedExerciseType;
+
   FreedivingTableType? get _freedivingTableType {
-    final type = ref.read(sessionProvider.notifier).lastFinishedExerciseType;
+    final type = _lastType;
     if (type == ExerciseType.co2Table) return FreedivingTableType.co2;
     if (type == ExerciseType.o2Table) return FreedivingTableType.o2;
     return null;
   }
 
+  // Computed synchronously at the moment the session finished (same
+  // lifecycle as [_lastType]) — doesn't need to wait on the DB persist the
+  // way the RPE flow does.
+  RoundContractionSummary? get _contractionSummary =>
+      ref.read(sessionProvider.notifier).lastFreedivingContractionSummary;
+
+  bool get _ratesToGenericSession =>
+      _lastType == ExerciseType.wimHof ||
+      _lastType == ExerciseType.customFreedivingTable;
+
+  bool get _showRpePrompt => _freedivingTableType != null || _ratesToGenericSession;
+
+  String get _rpeHintKey {
+    if (_freedivingTableType != null) return 'freediving_rpe_hint';
+    if (_lastType == ExerciseType.wimHof) return 'wimhof_rpe_hint';
+    return 'session_rpe_hint';
+  }
+
+  String get _rpeThanksKey {
+    if (_freedivingTableType != null) return 'freediving_rpe_thanks';
+    if (_lastType == ExerciseType.wimHof) return 'wimhof_rpe_thanks';
+    return 'session_rpe_thanks';
+  }
+
   Future<void> _submitRpe(int score) async {
+    final tableType = _freedivingTableType;
+    if (tableType != null) {
+      await ref
+          .read(freedivingRepositoryProvider)
+          .recordRpeAndAdjustPb(tableType: tableType, rpeScore: score);
+    } else if (_ratesToGenericSession) {
+      final sessionId =
+          await ref.read(sessionProvider.notifier).lastSessionIdFuture;
+      if (sessionId != null) {
+        await ref.read(sessionRepositoryProvider).updateRpe(sessionId, score);
+      }
+    } else {
+      return;
+    }
+    if (mounted) setState(() => _rpeSubmitted = true);
+  }
+
+  /// Deliberately separate from RPE (which measures perceived effort) — a
+  /// recurring symptom report across sessions is a safety signal RPE alone
+  /// wouldn't surface. Kept to a single tap: no follow-up questions, no
+  /// requirement to answer.
+  Future<void> _submitSymptom(String tag) async {
     final tableType = _freedivingTableType;
     if (tableType == null) return;
     await ref
         .read(freedivingRepositoryProvider)
-        .recordRpeAndAdjustPb(tableType: tableType, rpeScore: score);
-    if (mounted) setState(() => _rpeSubmitted = true);
+        .recordSymptomTag(tableType: tableType, symptomTag: tag);
+    if (mounted) setState(() => _symptomSubmitted = true);
   }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.read(sessionProvider);
     final duration = state.sessionDuration ?? Duration.zero;
-    final tableType = _freedivingTableType;
+    // Rating a session that was never actually saved has nothing to attach
+    // the rating to — and would misleadingly suggest it went through.
+    final showRpePrompt = _showRpePrompt && !_saveFailed;
 
     return Scaffold(
       body: Stack(
@@ -98,11 +220,48 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                           ],
                         ),
                       ).animate().fadeIn(delay: 250.ms),
-                      if (tableType != null) ...[
+                      if (_saveFailed) ...[
+                        const SizedBox(height: AppSpacing.xl),
+                        const _SaveFailedCard().animate().fadeIn(delay: 280.ms),
+                      ],
+                      if (_celebratedStage != null) ...[
+                        const SizedBox(height: AppSpacing.xl),
+                        _StageAdvanceCard(stage: _celebratedStage!)
+                            .animate()
+                            .fadeIn(delay: 280.ms)
+                            .scale(begin: const Offset(0.95, 0.95)),
+                      ],
+                      if (_leveledUpTo != null) ...[
+                        const SizedBox(height: AppSpacing.xl),
+                        _LevelUpCard(level: _leveledUpTo!)
+                            .animate()
+                            .fadeIn(delay: 280.ms)
+                            .scale(begin: const Offset(0.95, 0.95)),
+                      ],
+                      if (_streakGraceUsed) ...[
+                        const SizedBox(height: AppSpacing.md),
+                        const _StreakGraceNote().animate().fadeIn(delay: 300.ms),
+                      ],
+                      if (_contractionSummary != null) ...[
+                        const SizedBox(height: AppSpacing.xl),
+                        _ContractionSummaryCard(summary: _contractionSummary!)
+                            .animate()
+                            .fadeIn(delay: 280.ms),
+                      ],
+                      if (_freedivingTableType != null && !_saveFailed) ...[
+                        const SizedBox(height: AppSpacing.xl),
+                        _SymptomCard(
+                          submitted: _symptomSubmitted,
+                          onSelect: _submitSymptom,
+                        ).animate().fadeIn(delay: 290.ms),
+                      ],
+                      if (showRpePrompt) ...[
                         const SizedBox(height: AppSpacing.xl),
                         _RpeCard(
                           submitted: _rpeSubmitted,
                           onSubmit: _submitRpe,
+                          hint: L10n.get(context, _rpeHintKey),
+                          thanks: L10n.get(context, _rpeThanksKey),
                         ).animate().fadeIn(delay: 300.ms),
                       ],
                       const SizedBox(height: AppSpacing.xl),
@@ -181,9 +340,16 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
 }
 
 class _RpeCard extends StatefulWidget {
-  const _RpeCard({required this.submitted, required this.onSubmit});
+  const _RpeCard({
+    required this.submitted,
+    required this.onSubmit,
+    required this.hint,
+    required this.thanks,
+  });
   final bool submitted;
   final ValueChanged<int> onSubmit;
+  final String hint;
+  final String thanks;
 
   @override
   State<_RpeCard> createState() => _RpeCardState();
@@ -203,7 +369,7 @@ class _RpeCardState extends State<_RpeCard> {
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Text(
-                L10n.get(context, 'freediving_rpe_thanks'),
+                widget.thanks,
                 style: const TextStyle(color: AppTheme.textLight, fontSize: 13),
               ),
             ),
@@ -224,7 +390,7 @@ class _RpeCardState extends State<_RpeCard> {
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            L10n.get(context, 'freediving_rpe_hint'),
+            widget.hint,
             style: const TextStyle(color: AppTheme.textDim, fontSize: 11),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -233,11 +399,13 @@ class _RpeCardState extends State<_RpeCard> {
             runSpacing: AppSpacing.sm,
             children: [
               for (var i = 1; i <= 10; i++)
-                GestureDetector(
+                PressableScale(
                   onTap: () => setState(() => _selected = i),
                   child: Container(
-                    width: 34,
-                    height: 34,
+                    // Was 34x34 — below the 48dp minimum recommended touch
+                    // target for a row of 10 adjacent number chips.
+                    width: 48,
+                    height: 48,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
@@ -284,6 +452,312 @@ class _RpeCardState extends State<_RpeCard> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// A single-tap, fully-optional post-freediving-session check-in — three
+/// large chips instead of a form, so it costs the user one tap or none at
+/// all. Deliberately separate from the RPE scale below it: RPE measures how
+/// hard the session felt, this measures whether anything safety-relevant
+/// happened during it.
+class _SymptomCard extends StatelessWidget {
+  const _SymptomCard({required this.submitted, required this.onSelect});
+  final bool submitted;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    if (submitted) {
+      return GlassCard(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Row(
+          children: [
+            const Icon(Icons.check_circle_outline, color: AppTheme.primary, size: 20),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Text(
+                L10n.get(context, 'freediving_symptom_thanks'),
+                style: const TextStyle(color: AppTheme.textLight, fontSize: 13),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return GlassCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            L10n.get(context, 'freediving_symptom_question'),
+            style: const TextStyle(
+                color: AppTheme.textLight, fontSize: 14, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              _SymptomChip(
+                label: L10n.get(context, 'freediving_symptom_tingling'),
+                onTap: () => onSelect('tingling'),
+              ),
+              _SymptomChip(
+                label: L10n.get(context, 'freediving_symptom_dizziness'),
+                onTap: () => onSelect('dizziness'),
+              ),
+              _SymptomChip(
+                label: L10n.get(context, 'freediving_symptom_ok'),
+                onTap: () => onSelect('ok'),
+                highlight: true,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SymptomChip extends StatelessWidget {
+  const _SymptomChip({required this.label, required this.onTap, this.highlight = false});
+  final String label;
+  final VoidCallback onTap;
+  final bool highlight;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onTap,
+      child: Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+        decoration: BoxDecoration(
+          color: highlight ? AppTheme.primary.withAlpha(30) : Colors.white.withAlpha(14),
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          border: Border.all(
+              color: highlight ? AppTheme.primary.withAlpha(140) : Colors.white24),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: highlight ? AppTheme.primary : AppTheme.textLight,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Shown when the just-finished session never made it into the database —
+/// the numbers above are real (read straight from in-memory session state),
+/// but nothing was recorded: no XP, no streak, no history entry.
+class _SaveFailedCard extends StatelessWidget {
+  const _SaveFailedCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      gradient: AppTheme.cardGradient(AppTheme.danger),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.warning_amber_rounded, color: AppTheme.danger, size: 22),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  L10n.get(context, 'summary_save_failed_title'),
+                  style: const TextStyle(
+                    color: AppTheme.textLight,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  L10n.get(context, 'summary_save_failed_body'),
+                  style: const TextStyle(color: AppTheme.textDim, fontSize: 11, height: 1.4),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shown once, right when "Twoja Ścieżka" advances to a new stage — the
+/// summary screen is the one moment we know a session (the only thing that
+/// can move the path forward) just finished, so it's the natural place to
+/// surface this rather than a silent background change.
+class _StageAdvanceCard extends StatelessWidget {
+  const _StageAdvanceCard({required this.stage});
+  final PathStage stage;
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      gradient: AppTheme.cardGradient(AppTheme.accent),
+      child: Row(
+        children: [
+          const Icon(Icons.military_tech_rounded, color: AppTheme.accent, size: 28),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  L10n.get(context, 'path_stage_advanced_title'),
+                  style: const TextStyle(
+                    color: AppTheme.accent,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  L10n.get(context, stageTitleKey(stage)),
+                  style: const TextStyle(
+                    color: AppTheme.textLight,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shown once, right when a session pushes total XP into a new level
+/// bracket — same card pattern as [_StageAdvanceCard], since a character
+/// level-up previously had zero celebration of its own despite the exact
+/// same "compare before/after, show once" plumbing already existing.
+class _LevelUpCard extends StatelessWidget {
+  const _LevelUpCard({required this.level});
+  final int level;
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      gradient: AppTheme.cardGradient(AppTheme.primary),
+      child: Row(
+        children: [
+          const Icon(Icons.star_rounded, color: AppTheme.primary, size: 28),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  L10n.get(context, 'summary_level_up_title'),
+                  style: const TextStyle(
+                    color: AppTheme.primary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${L10n.get(context, 'summary_level_up_body')} $level',
+                  style: const TextStyle(
+                    color: AppTheme.textLight,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shown after a freediving table with at least one marked "first
+/// contraction" — a metric distinct from raw hold time: a growing gap
+/// between contraction onset and total hold time is real CO2-tolerance
+/// progress that the hold-time number alone doesn't show.
+class _ContractionSummaryCard extends StatelessWidget {
+  const _ContractionSummaryCard({required this.summary});
+  final RoundContractionSummary summary;
+
+  String _fmt(int seconds) =>
+      "${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}";
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      gradient: AppTheme.cardGradient(AppTheme.accent),
+      child: Row(
+        children: [
+          const Icon(Icons.waves_rounded, color: AppTheme.accent, size: 28),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  L10n.get(context, 'summary_contraction_title'),
+                  style: const TextStyle(
+                    color: AppTheme.accent,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${_fmt(summary.averageFirstContractionSec)} '
+                  '(${summary.roundsMarked}/${summary.totalRounds} ${L10n.get(context, 'summary_contraction_rounds')})',
+                  style: const TextStyle(
+                    color: AppTheme.textLight,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A one-line acknowledgment that the streak survived on its one-day grace —
+/// without this, a preserved streak after a missed day would just look
+/// unexplained (or worse, like a bug).
+class _StreakGraceNote extends StatelessWidget {
+  const _StreakGraceNote();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.shield_outlined, color: AppTheme.textDim.withAlpha(200), size: 14),
+        const SizedBox(width: 6),
+        Text(
+          L10n.get(context, 'summary_streak_grace_note'),
+          style: TextStyle(color: AppTheme.textDim.withAlpha(200), fontSize: 11),
+        ),
+      ],
     );
   }
 }

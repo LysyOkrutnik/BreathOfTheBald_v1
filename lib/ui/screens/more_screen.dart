@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/responsive.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
+import 'package:okrutnik_breath/logic/path/training_path.dart';
+import 'package:okrutnik_breath/logic/path/weekly_plan.dart';
+import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/ui/screens/history_screen.dart';
 import 'package:okrutnik_breath/ui/screens/instruction_screen.dart';
 import 'package:okrutnik_breath/ui/screens/settings_screen.dart';
 import 'package:okrutnik_breath/ui/screens/stats_screen.dart';
+import 'package:okrutnik_breath/ui/screens/training_path_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
 
@@ -15,11 +20,19 @@ import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
 /// ever shown as a shell tab root — the shared background lives in
 /// HomeShellScreen so it isn't torn down and rebuilt (with its animation
 /// restarting) every time the tab is switched.
-class MoreScreen extends StatelessWidget {
+class MoreScreen extends ConsumerWidget {
   const MoreScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final path = ref.watch(trainingPathProvider);
+    final plan = ref.watch(weeklyPlanProvider);
+    final languageCode = Localizations.localeOf(context).languageCode;
+    final pathSubtitle = (path == null || plan == null)
+        ? null
+        : '${L10n.get(context, stageTitleKey(path.stage))} • '
+            '${todaySummaryLabelForLocale(languageCode, plan.days.first.actions)}';
+
     return SafeArea(
       child: Center(
         child: ConstrainedBox(
@@ -37,6 +50,15 @@ class MoreScreen extends StatelessWidget {
                     vertical: AppSpacing.md,
                   ),
                   children: [
+                    _MoreTile(
+                      icon: Icons.route_rounded,
+                      color: AppTheme.accent,
+                      title: L10n.get(context, 'path_title'),
+                      subtitle: pathSubtitle,
+                      onTap: () => Navigator.of(context)
+                          .push(fadeThroughRoute(const TrainingPathScreen())),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
                     _MoreTile(
                       icon: Icons.insights_outlined,
                       color: AppTheme.lure,
@@ -85,12 +107,18 @@ class _MoreTile extends StatelessWidget {
     required this.color,
     required this.title,
     required this.onTap,
+    this.subtitle,
   });
 
   final IconData icon;
   final Color color;
   final String title;
   final VoidCallback onTap;
+
+  /// Set only for Twoja Ścieżka — a live status line (stage • today's
+  /// actions), so this entry reads as a dashboard shortcut rather than a
+  /// static menu item identical to Stats/Guide/History/Settings.
+  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
@@ -112,14 +140,28 @@ class _MoreTile extends StatelessWidget {
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  color: AppTheme.textLight,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1.2,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: AppTheme.textLight,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: color.withAlpha(200), fontSize: 12),
+                    ),
+                  ],
+                ],
               ),
             ),
             Icon(Icons.chevron_right_rounded, color: color.withAlpha(180), size: 22),

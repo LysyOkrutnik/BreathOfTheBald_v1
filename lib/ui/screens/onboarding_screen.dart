@@ -42,6 +42,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           body: L10n.get(context, 'onboard_welcome_body'),
         ),
         _Page(
+          icon: Icons.route_rounded,
+          color: AppTheme.accent,
+          title: L10n.get(context, 'onboard_tabs_title'),
+          body: L10n.get(context, 'onboard_tabs_body'),
+        ),
+        _Page(
           icon: Icons.touch_app_rounded,
           color: AppTheme.accent,
           title: L10n.get(context, 'onboard_how_title'),

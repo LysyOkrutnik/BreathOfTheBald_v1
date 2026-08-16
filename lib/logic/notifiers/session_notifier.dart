@@ -1,12 +1,17 @@
 import 'dart:async';
 import 'dart:developer' as developer;
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/levels.dart';
 import 'package:okrutnik_breath/core/audio/audio_manager.dart';
 import 'package:okrutnik_breath/core/haptic/haptic_engine.dart';
+import 'package:okrutnik_breath/core/notifications/notification_service.dart';
 import 'package:okrutnik_breath/logic/freediving/co2_o2_table_generator.dart';
 import 'package:okrutnik_breath/logic/notifiers/ramp_up_calculator.dart';
+import 'package:okrutnik_breath/logic/path/weekly_plan.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
+import 'package:okrutnik_breath/logic/providers/locale_provider.dart';
 import 'package:okrutnik_breath/logic/providers/settings_provider.dart';
 import 'package:okrutnik_breath/logic/states/session_state.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -16,7 +21,17 @@ final sessionProvider = StateNotifierProvider<SessionNotifier, SessionState>((re
   return SessionNotifier(audioManager, ref);
 });
 
-class SessionNotifier extends StateNotifier<SessionState> {
+/// Flips to true exactly once whenever a session was backgrounded for long
+/// enough that it should no longer be trusted to resume silently — the phase
+/// timers keep counting real elapsed time while backgrounded (a hold's
+/// `DateTime.now().difference(start)` accounting is correct either way), but
+/// the user themselves may no longer be in a state to safely continue a
+/// breath-hold practice after a real interruption. SessionScreen listens for
+/// this and surfaces the same exit dialog used for a manual exit, resetting
+/// it back to false immediately after.
+final sessionInterruptedProvider = StateProvider<bool>((ref) => false);
+
+class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObserver {
   final AudioManager _audioManager;
   final HapticEngine _hapticEngine = HapticEngine();
   final Ref _ref;
@@ -32,17 +47,89 @@ class SessionNotifier extends StateNotifier<SessionState> {
   int _freedivingRoundIndex = 0;
   int _freedivingRoundsCompleted = 0;
 
+  // --- "Fala kontrakcji" (first-contraction marking), freediving only ---
+  DateTime? _currentHoldStart;
+  List<Duration> _currentRoundContractions = [];
+  final List<RoundContraction> _contractionsByRound = [];
+
+  /// Set once, right when a freediving table session finishes — read once by
+  /// the summary screen, same lifecycle as [justLeveledUpTo]. Null for any
+  /// other exercise type, or if no round was ever marked.
+  RoundContractionSummary? lastFreedivingContractionSummary;
+
   /// The exercise type of the most recently finished session, so the summary
-  /// screen can decide whether to show the post-session RPE prompt (CO2/O2
-  /// tables only). Set once, at the moment a session finishes.
+  /// screen can decide whether to show the post-session RPE prompt (Wim Hof
+  /// levels and CO2/O2 tables). Set once, at the moment a session finishes.
   ExerciseType? lastFinishedExerciseType;
+
+  /// The new level, if the just-finished session pushed the user's total XP
+  /// into a new level bracket — null otherwise. Read once by the summary
+  /// screen, same lifecycle as [lastFinishedExerciseType].
+  int? justLeveledUpTo;
+
+  /// True if the just-finished session's streak update used its one-day
+  /// grace (a missed day forgiven rather than resetting the streak).
+  bool justUsedStreakGrace = false;
+
+  /// Resolves to the just-finished session's row id once the background
+  /// persist completes (or null if there was nothing to persist) — the
+  /// summary screen awaits this before attaching a Wim Hof RPE rating,
+  /// since the insert can still be in flight when the user answers.
+  Completer<int?> _lastSessionIdCompleter = Completer<int?>();
+  Future<int?> get lastSessionIdFuture => _lastSessionIdCompleter.future;
 
   /// True only while a session is active *and* this notifier is still mounted.
   /// Writing `state` after disposal throws, so every async continuation guards
   /// on this before touching state.
   bool get _isRunning => _isSessionActive && mounted;
 
-  SessionNotifier(this._audioManager, this._ref) : super(SessionState.initial());
+  /// Set when an active session goes to the background; cleared on resume.
+  DateTime? _backgroundedAt;
+
+  /// Below this, a quick peek at a notification shade or app switcher isn't
+  /// worth interrupting the user over; at or above it, they may have taken a
+  /// phone call, put the phone down, or otherwise stepped away for real.
+  static const _backgroundInterruptionThreshold = Duration(seconds: 20);
+
+  SessionNotifier(this._audioManager, this._ref) : super(SessionState.initial()) {
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  // Named `appState`, not `state` — this class already has a `state` member
+  // (the current SessionState) and shadowing it here would be a trap.
+  @override
+  // ignore: avoid_renaming_method_parameters
+  void didChangeAppLifecycleState(AppLifecycleState appState) {
+    if (!_isSessionActive) return;
+
+    if (appState == AppLifecycleState.paused) {
+      _backgroundedAt = DateTime.now();
+      // Silences the ambient drone while backgrounded — nothing is visible
+      // to pace against anyway, and it's the one part of a session that
+      // would otherwise keep audibly running from inside a pocket or bag.
+      try {
+        _audioManager.stopDrone();
+      } catch (_) {}
+    } else if (appState == AppLifecycleState.resumed) {
+      final backgroundedAt = _backgroundedAt;
+      _backgroundedAt = null;
+      if (!_isRunning) return;
+      try {
+        _audioManager.startDrone();
+      } catch (_) {}
+      if (backgroundedAt != null &&
+          DateTime.now().difference(backgroundedAt) >=
+              _backgroundInterruptionThreshold) {
+        _ref.read(sessionInterruptedProvider.notifier).state = true;
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
 
   Future<void> startSession(LevelData level) async {
     // Ignore a duplicate start while a session is already running (e.g. a
@@ -124,8 +211,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
       _startFireBreathing(level);
     } else if (level.type == ExerciseType.custom) {
       _startCustom(level);
-    } else if (level.type == ExerciseType.co2Table ||
-        level.type == ExerciseType.o2Table) {
+    } else if (level.type.isFreedivingTable) {
       _startFreedivingTable(level);
     }
   }
@@ -134,12 +220,14 @@ class SessionNotifier extends StateNotifier<SessionState> {
   // CO2/O2 FREEDIVING TABLES
   // ==========================================================
 
-  // Tunable timings for the guided CO2/O2 experience. Only inhale/exhale add
-  // time beyond the generated table's exact apnea/rest seconds (~5s/round
-  // total) — warm-up and cool-down are separate, skippable bookends.
+  // Tunable timings for the guided CO2/O2 experience. Per-round overhead
+  // beyond the generated table's exact apnea/rest seconds (breathe-up +
+  // final inhale + exhale) lives in FreedivingSessionTiming, shared with the
+  // pre-start preview — warm-up and cool-down are separate, skippable
+  // bookends and stay local to the runner.
   static const _freedivingWarmupSec = 60;
-  static const _freedivingInhaleSec = 3;
-  static const _freedivingExhaleSec = 2;
+  static const _freedivingInhaleSec = FreedivingSessionTiming.finalInhaleSec;
+  static const _freedivingExhaleSec = FreedivingSessionTiming.exhaleSec;
   static const _freedivingCooldownSec = 30;
 
   /// True while a skippable pause (warm-up/cool-down) is active and can react
@@ -147,6 +235,13 @@ class SessionNotifier extends StateNotifier<SessionState> {
   /// that it isn't optional.
   bool _freedivingPauseSkippable = false;
   bool _freedivingSkipRequested = false;
+
+  /// True right after a round's hold was ended early (rather than reaching
+  /// its full planned duration) — consumed the moment exhale finishes, by
+  /// pausing in [_advanceFreedivingRound] for an explicit continue-or-end
+  /// decision instead of silently pushing into (or skipping) the rest of the
+  /// table.
+  bool _lastRoundMissed = false;
 
   /// Runs a pre-generated CO2/O2 breath-hold table end to end: a skippable
   /// warm-up, then per round an explicit inhale → fixed-duration hold →
@@ -165,7 +260,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
       seconds: _freedivingWarmupSec,
       labelKey: 'freediving_warmup_label',
       hintKey: 'freediving_warmup_hint',
-      onDone: _runFreedivingInhale,
+      onDone: _runFreedivingBreatheUp,
     );
   }
 
@@ -216,6 +311,72 @@ class SessionNotifier extends StateNotifier<SessionState> {
     if (_freedivingPauseSkippable) _freedivingSkipRequested = true;
   }
 
+  /// User chose "continue" on the post-missed-round dialog: proceeds exactly
+  /// as a fully-completed round would (rest + next hold, or cool-down if
+  /// that was the last round).
+  void continueAfterMissedRound() {
+    if (!state.awaitingRoundDecision) return;
+    state = state.copyWith(awaitingRoundDecision: false);
+    _advanceFreedivingRound();
+  }
+
+  /// User chose "end" on the post-missed-round dialog: stops the table here
+  /// rather than attempting the remaining rounds.
+  void endSessionAfterMissedRound() {
+    if (!state.awaitingRoundDecision) return;
+    state = state.copyWith(awaitingRoundDecision: false);
+    _finishSession();
+  }
+
+  static const _freedivingBreatheUpCycles = FreedivingSessionTiming.breatheUpCycles;
+  static const _freedivingBreatheUpBreathSec = FreedivingSessionTiming.breatheUpBreathSec;
+
+  /// A handful of slow, calm breaths right before the final full inhale —
+  /// deliberately distinct from Wim Hof's power breathing (fast, forceful,
+  /// meant to build a CO2/O2 buffer through hyperventilation). A freediving
+  /// breathe-up does the opposite: it lowers heart rate and CO2 production
+  /// going into the hold, so the pace here is slow on purpose.
+  void _runFreedivingBreatheUp({int cycle = 1}) {
+    if (!_isRunning || _freedivingRounds == null) return;
+    if (cycle > _freedivingBreatheUpCycles) {
+      _runFreedivingInhale();
+      return;
+    }
+    state = state.copyWith(
+      customLabel: 'session_inhale',
+      customDescription: 'freediving_breatheup_hint',
+      customIsBig: true,
+      phase: SessionPhase.breathing(
+        breathIndex: cycle,
+        isInhaling: true,
+        currentBreathDuration: const Duration(seconds: _freedivingBreatheUpBreathSec),
+      ),
+    );
+    try {
+      _audioManager.playInhale();
+    } catch (_) {}
+    _phaseTimer?.cancel();
+    _phaseTimer = Timer(const Duration(seconds: _freedivingBreatheUpBreathSec), () {
+      if (!_isRunning) return;
+      state = state.copyWith(
+        customLabel: 'session_exhale',
+        customDescription: 'freediving_breatheup_hint',
+        customIsBig: false,
+        phase: SessionPhase.breathing(
+          breathIndex: cycle,
+          isInhaling: false,
+          currentBreathDuration: const Duration(seconds: _freedivingBreatheUpBreathSec),
+        ),
+      );
+      try {
+        _audioManager.playExhale();
+      } catch (_) {}
+      _phaseTimer = Timer(const Duration(seconds: _freedivingBreatheUpBreathSec), () {
+        if (_isRunning) _runFreedivingBreatheUp(cycle: cycle + 1);
+      });
+    });
+  }
+
   void _runFreedivingInhale() {
     if (!_isRunning || _freedivingRounds == null) return;
     state = state.copyWith(
@@ -240,12 +401,14 @@ class SessionNotifier extends StateNotifier<SessionState> {
   void _runFreedivingHold() {
     if (!_isRunning || _freedivingRounds == null) return;
     final round = _freedivingRounds![_freedivingRoundIndex];
+    _currentRoundContractions = [];
     state = state.copyWith(
       currentRound: _freedivingRoundIndex + 1,
       customLabel: 'freediving_hold_label',
       customDescription: null,
       customIsBig: true,
       phase: const SessionPhase.retention(elapsed: Duration.zero),
+      contractionMarkCount: 0,
     );
     try {
       _hapticEngine.playRetentionPeak();
@@ -254,6 +417,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
     } catch (_) {}
 
     final start = DateTime.now();
+    _currentHoldStart = start;
     final target = Duration(seconds: round.apneaSec);
     _phaseTimer?.cancel();
     _phaseTimer = Timer.periodic(const Duration(seconds: 1), (t) {
@@ -272,9 +436,11 @@ class SessionNotifier extends StateNotifier<SessionState> {
   }
 
   /// Ends the current round's hold — either it reached its planned duration,
-  /// or the user tapped the early-abort control via `finishRetention()`. An
-  /// early abort ends the whole table rather than pushing into further,
-  /// equal-or-harder rounds.
+  /// or the user tapped the early-abort control via `finishRetention()`. The
+  /// hold itself always ends immediately either way (a physiological "I need
+  /// to breathe now" signal must never wait on anything); exhale still runs
+  /// as normal, and only afterwards — in [_advanceFreedivingRound] — does an
+  /// early ending pause for an explicit continue-or-end decision.
   void _finishFreedivingHold({required bool completedFull}) {
     _phaseTimer?.cancel();
     final round = _freedivingRounds![_freedivingRoundIndex];
@@ -285,12 +451,41 @@ class SessionNotifier extends StateNotifier<SessionState> {
     final logs = List<Duration>.from(state.retentionLogs)..add(actualElapsed);
     state = state.copyWith(retentionLogs: logs);
 
-    if (!completedFull) {
-      _finishSession();
-      return;
+    _contractionsByRound.add(RoundContraction(
+      firstContractionSec:
+          _currentRoundContractions.isEmpty ? null : _currentRoundContractions.first.inSeconds,
+      markCount: _currentRoundContractions.length,
+    ));
+    _currentRoundContractions = [];
+    _currentHoldStart = null;
+
+    if (completedFull) {
+      _freedivingRoundsCompleted++;
+    } else {
+      _lastRoundMissed = true;
     }
-    _freedivingRoundsCompleted++;
     _runFreedivingExhale();
+  }
+
+  /// Marks a "first contraction" moment during a freediving hold — a tap
+  /// that never ends the hold, just timestamps how far into it the
+  /// diaphragm's urge-to-breathe reflex first showed up. A no-op outside an
+  /// actual freediving hold (the UI only ever offers the control there, but
+  /// this guards the state transition itself rather than trusting the
+  /// caller).
+  void markContraction() {
+    final start = _currentHoldStart;
+    if (start == null) return;
+    final isFreedivingHold = state.phase.maybeMap(retention: (_) => true, orElse: () => false) &&
+        (_currentLevel?.type.isFreedivingTable ?? false);
+    if (!isFreedivingHold) return;
+
+    _currentRoundContractions =
+        List<Duration>.from(_currentRoundContractions)..add(DateTime.now().difference(start));
+    state = state.copyWith(contractionMarkCount: _currentRoundContractions.length);
+    try {
+      _hapticEngine.playTick();
+    } catch (_) {}
   }
 
   void _runFreedivingExhale() {
@@ -317,6 +512,16 @@ class SessionNotifier extends StateNotifier<SessionState> {
 
   void _advanceFreedivingRound() {
     if (!_isRunning || _freedivingRounds == null) return;
+
+    // The round that just finished was ended early — pause here for an
+    // explicit continue-or-end decision (surfaced as a dialog by
+    // SessionScreen) rather than silently deciding either way.
+    if (_lastRoundMissed) {
+      _lastRoundMissed = false;
+      state = state.copyWith(awaitingRoundDecision: true);
+      return;
+    }
+
     final isLastRound = _freedivingRoundIndex >= _freedivingRounds!.length - 1;
     if (isLastRound) {
       _runFreedivingPause(
@@ -335,7 +540,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
       seconds: round.restSec,
       labelKey: 'freediving_rest_label',
       hintKey: 'freediving_rest_hint',
-      onDone: _runFreedivingInhale,
+      onDone: _runFreedivingBreatheUp,
     );
   }
 
@@ -470,8 +675,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
     // low-friction "I need to breathe now" early-abort for the current round
     // — a different continuation (its own rest duration, or ending the whole
     // table) than Wim Hof's fixed 15s recovery.
-    if (_currentLevel?.type == ExerciseType.co2Table ||
-        _currentLevel?.type == ExerciseType.o2Table) {
+    if (_currentLevel?.type.isFreedivingTable ?? false) {
       // Only the hold itself is abortable — during breathing (inhale/exhale)
       // or a countdown pause, phase is never `retention`, so this branch (and
       // the UI gesture that calls it) is simply inert at those moments.
@@ -680,10 +884,15 @@ class SessionNotifier extends StateNotifier<SessionState> {
     final totalRounds = state.currentRound;
     final retentionLogs = List<Duration>.from(state.retentionLogs);
     final freedivingRoundsCompleted = _freedivingRoundsCompleted;
+    final contractionsByRound = List<RoundContraction>.from(_contractionsByRound);
 
     // Set before the state change below so it's already visible to the
     // summary screen's very first build after navigation.
     lastFinishedExerciseType = level?.type;
+    lastFreedivingContractionSummary = (level?.type.isFreedivingTable ?? false)
+        ? RoundContractionSummary.fromRounds(contractionsByRound)
+        : null;
+    _lastSessionIdCompleter = Completer<int?>();
 
     state = state.copyWith(
       phase: const SessionPhase.finished(),
@@ -693,8 +902,10 @@ class SessionNotifier extends StateNotifier<SessionState> {
     // The UI has already advanced to the summary; persist results in the
     // background so a slow disk write never blocks the transition.
     if (level != null) {
-      unawaited(_persistSessionResults(
-          level, duration, totalRounds, retentionLogs, freedivingRoundsCompleted));
+      unawaited(_persistSessionResults(level, duration, totalRounds, retentionLogs,
+          freedivingRoundsCompleted, contractionsByRound));
+    } else {
+      _lastSessionIdCompleter.complete(null);
     }
 
     stopSession(resetState: false);
@@ -706,13 +917,13 @@ class SessionNotifier extends StateNotifier<SessionState> {
     int totalRounds,
     List<Duration> retentionLogs,
     int freedivingRoundsCompleted,
+    List<RoundContraction> contractionsByRound,
   ) async {
     try {
       final totalRetention =
           retentionLogs.fold<int>(0, (sum, d) => sum + d.inSeconds);
 
-      final isFreedivingTable = level.type == ExerciseType.co2Table ||
-          level.type == ExerciseType.o2Table;
+      final isFreedivingTable = level.type.isFreedivingTable;
 
       // A CO2/O2 table's "retention" is the sum of several near-maximal
       // breath-holds and would otherwise dwarf every other exercise's XP
@@ -720,27 +931,35 @@ class SessionNotifier extends StateNotifier<SessionState> {
       // XP-calculation input for these two types only. The full, honest hold
       // time is still stored as the session's real retentionSec below.
       final gamification = _ref.read(gamificationServiceProvider);
-      final xpEarned = await gamification.updateXpAndLevel(
+      final xpResult = await gamification.updateXpAndLevel(
         breathCount: level.totalBreaths * totalRounds,
         retentionSeconds:
             isFreedivingTable ? (totalRetention * 0.3).round() : totalRetention,
         multiplier: isFreedivingTable ? 0.5 : 1.5,
       );
-      await gamification.updateStreak();
+      justLeveledUpTo = xpResult.leveledUp ? xpResult.newLevel : null;
+      final streakResult = await gamification.updateStreak();
+      justUsedStreakGrace = streakResult.graceUsed;
 
-      // Custom sessions share the key 'custom'; persist their user-given name
-      // instead so history and stats show the real name, not "custom".
-      final levelKey =
-          level.type == ExerciseType.custom ? level.title : level.key;
+      // Custom sessions share one key per type ('custom', 'custom_freediving');
+      // persist their user-given name instead so history and stats show the
+      // real name, not the generic shared key.
+      final levelKey = level.type == ExerciseType.custom ||
+              level.type == ExerciseType.customFreedivingTable
+          ? level.title
+          : level.key;
 
-      await _ref.read(sessionRepositoryProvider).addSession(
+      final sessionId = await _ref.read(sessionRepositoryProvider).addSession(
             levelKey: levelKey,
             timestamp: DateTime.now(),
             durationSec: duration.inSeconds,
             rounds: totalRounds,
             retentionSec: totalRetention,
-            xpEarned: xpEarned,
+            xpEarned: xpResult.xpEarned,
           );
+      if (!_lastSessionIdCompleter.isCompleted) {
+        _lastSessionIdCompleter.complete(sessionId);
+      }
 
       if (isFreedivingTable &&
           level.freedivingRounds != null &&
@@ -753,10 +972,51 @@ class SessionNotifier extends StateNotifier<SessionState> {
               rounds: level.freedivingRounds!,
               roundsCompleted: freedivingRoundsCompleted,
               durationSec: duration.inSeconds,
+              contractions: contractionsByRound,
             );
       }
+
+      refreshDailyReminderContent();
     } catch (e, st) {
       developer.log('Failed to persist session results',
+          name: 'SessionNotifier', error: e, stackTrace: st);
+      if (!_lastSessionIdCompleter.isCompleted) {
+        _lastSessionIdCompleter.complete(null);
+      }
+    }
+  }
+
+  /// Refreshes the recurring daily reminder's body to reflect today's
+  /// "Twoja Ścieżka" suggestion. Called right after a session finishes (the
+  /// moment most likely to have just changed it) and also from the app root
+  /// on every foreground resume — otherwise a user who doesn't finish a
+  /// session for a few days would keep seeing an already-stale plan summary
+  /// in the alarm's text indefinitely.
+  ///
+  /// This ONLY updates the content of an alarm the user has already turned
+  /// on — it never enables or disables the reminder itself. That distinction
+  /// matters: an earlier bug had a splash-screen guard silently
+  /// re-scheduling this same alarm on every cold start regardless of the
+  /// user's real preference, with no way to turn it off (see
+  /// SettingsNotifier's `_kMigratedV2` migration). `setDailyReminderEnabled`
+  /// remains the only place that can flip it on/off; this just keeps an
+  /// already-on alarm's text current.
+  void refreshDailyReminderContent() {
+    try {
+      if (!_ref.read(settingsProvider).dailyReminderEnabled) return;
+      final plan = _ref.read(weeklyPlanProvider);
+      if (plan == null) return;
+      final todayActions = plan.days.first.actions;
+
+      final languageCode = _ref.read(localeProvider).languageCode;
+      final title = L10n.getForLocale(languageCode, 'notif_reminder_title');
+      final body = todaySummaryLabelForLocale(languageCode, todayActions);
+      unawaited(_ref.read(notificationServiceProvider).scheduleDailyReminder(
+            title: title,
+            body: body,
+          ));
+    } catch (e, st) {
+      developer.log('Failed to refresh daily reminder content',
           name: 'SessionNotifier', error: e, stackTrace: st);
     }
   }
@@ -774,12 +1034,22 @@ class SessionNotifier extends StateNotifier<SessionState> {
     _freedivingRoundsCompleted = 0;
     _freedivingPauseSkippable = false;
     _freedivingSkipRequested = false;
+    _lastRoundMissed = false;
+    _currentHoldStart = null;
+    _currentRoundContractions = [];
+    _contractionsByRound.clear();
 
     // Reset the state to clear the UI and prevent stale data from persisting.
     if (resetState) state = SessionState.initial();
   }
 
   void toggleGhostMode() {
+    // The resulting dimmed screen is deliberately subtle, which meant a
+    // double-tap gave no confirmation it even registered — a light haptic
+    // fires every time regardless of the (barely visible) visual change.
+    try {
+      _hapticEngine.playTick();
+    } catch (_) {}
     state = state.copyWith(isGhostMode: !state.isGhostMode);
   }
 }

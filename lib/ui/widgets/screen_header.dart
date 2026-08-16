@@ -34,7 +34,7 @@ class ScreenHeader extends StatelessWidget {
               onTap: onBack ?? () => Navigator.of(context).maybePop(),
             )
           else
-            const SizedBox(width: 44),
+            const SizedBox(width: 48),
           Expanded(
             child: Text(
               title,
@@ -48,7 +48,7 @@ class ScreenHeader extends StatelessWidget {
             ),
           ),
           SizedBox(
-            width: 44,
+            width: 48,
             child: trailing != null
                 ? Align(alignment: Alignment.centerRight, child: trailing)
                 : null,
@@ -73,9 +73,13 @@ class _GlassIconButton extends StatelessWidget {
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Icon(icon, color: Colors.white70, size: 22),
+        // Padding alone made this ~42x42 — below the 48dp minimum
+        // recommended touch target, and it's the back button on nearly
+        // every secondary screen in the app.
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: Center(child: Icon(icon, color: Colors.white70, size: 22)),
         ),
       ),
     );

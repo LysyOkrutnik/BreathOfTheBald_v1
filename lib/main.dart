@@ -10,6 +10,8 @@ import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/core/notifications/notification_service.dart';
 import 'package:okrutnik_breath/core/widget/home_widget_service.dart';
+import 'package:okrutnik_breath/logic/notifiers/session_notifier.dart';
+import 'package:okrutnik_breath/logic/path/cold_shower.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/logic/providers/locale_provider.dart';
 import 'package:okrutnik_breath/ui/screens/splash_screen.dart';
@@ -55,7 +57,7 @@ class MyApp extends ConsumerStatefulWidget {
   ConsumerState<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends ConsumerState<MyApp> {
+class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
   static const _widget = HomeWidgetService();
   StreamSubscription<Uri?>? _widgetClickSub;
 
@@ -67,20 +69,40 @@ class _MyAppState extends ConsumerState<MyApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Handle the home-screen widget launching the app.
     HomeWidget.initiallyLaunchedFromHomeWidget()
         .then((uri) => _handleWidgetUri(uri, coldStart: true));
     _widgetClickSub = HomeWidget.widgetClicked.listen(_handleWidgetUri);
+    // Cold start: the daily reminder's body may be several days stale if the
+    // user hasn't finished a session since (that's otherwise the only thing
+    // that refreshes it).
+    ref.read(sessionProvider.notifier).refreshDailyReminderContent();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ref.read(sessionProvider.notifier).refreshDailyReminderContent();
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _widgetClickSub?.cancel();
     super.dispose();
   }
 
   void _handleWidgetUri(Uri? uri, {bool coldStart = false}) {
-    if (uri == null || uri.host != 'quickstart') return;
+    if (uri == null) return;
+
+    if (uri.host == 'coldshower') {
+      _handleColdShowerFromWidget();
+      return;
+    }
+
+    if (uri.host != 'quickstart') return;
     if (_handlingQuickstart) return; // ignore the duplicate delivery
     _handlingQuickstart = true;
 
@@ -94,12 +116,32 @@ class _MyAppState extends ConsumerState<MyApp> {
     Future.delayed(const Duration(seconds: 2), () => _handlingQuickstart = false);
   }
 
-  void _pushStreakToWidget(int streak) {
+  /// A no-op if already logged today — the widget button stays tappable
+  /// (just shown dimmed) rather than needing a disabled-click affordance.
+  /// Waits for the real session-history state rather than trusting whatever
+  /// `coldShowerDoneTodayProvider` happens to read synchronously: on a cold
+  /// start triggered by the widget tap itself, the underlying DB stream may
+  /// not have emitted yet, which would otherwise read "not done" even when
+  /// it was already logged earlier that day — double-logging XP and a
+  /// duplicate history row.
+  Future<void> _handleColdShowerFromWidget() async {
+    await ref.read(sessionHistoryProvider.future);
+    if (!ref.read(coldShowerDoneTodayProvider)) {
+      await logColdShowerSession(ref);
+    }
+    _pushWidgetState();
+  }
+
+  void _pushWidgetState() {
     final isPl = ref.read(localeProvider).languageCode == 'pl';
+    final streak = ref.read(userProfileProvider).value?.dailyStreak ?? 0;
     _widget.update(
       streak: streak,
       streakLabel: isPl ? 'dni serii' : 'day streak',
       startLabel: isPl ? 'ODDYCHAJ' : 'BREATHE',
+      coldShowerDone: ref.read(coldShowerDoneTodayProvider),
+      coldShowerLabel: isPl ? 'ZIMNY PRYSZNIC' : 'COLD SHOWER',
+      coldShowerDoneLabel: isPl ? 'PRYSZNIC ZALICZONY' : 'SHOWER DONE',
     );
   }
 
@@ -107,11 +149,11 @@ class _MyAppState extends ConsumerState<MyApp> {
   Widget build(BuildContext context) {
     final locale = ref.watch(localeProvider);
 
-    // Keep the home-screen widget's streak in sync with the profile.
+    // Keep the home-screen widget's streak and cold-shower checkbox in sync.
     ref.listen(userProfileProvider, (prev, next) {
-      final profile = next.value;
-      if (profile != null) _pushStreakToWidget(profile.dailyStreak);
+      if (next.value != null) _pushWidgetState();
     });
+    ref.listen(coldShowerDoneTodayProvider, (prev, next) => _pushWidgetState());
 
     return MaterialApp(
       title: 'Breath of the Bald',

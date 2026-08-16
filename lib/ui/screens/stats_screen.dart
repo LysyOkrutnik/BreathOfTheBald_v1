@@ -9,6 +9,7 @@ import 'package:okrutnik_breath/config/responsive.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/data/db/database.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
+import 'package:okrutnik_breath/logic/services/gamification_service.dart';
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
@@ -20,7 +21,8 @@ class StatsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final sessions = ref.watch(sessionHistoryProvider).value ?? const <Session>[];
+    final sessionsAsync = ref.watch(sessionHistoryProvider);
+    final sessions = sessionsAsync.value ?? const <Session>[];
     final profile = ref.watch(userProfileProvider).value;
 
     return Scaffold(
@@ -37,9 +39,17 @@ class StatsScreen extends ConsumerWidget {
                       title: L10n.get(context, 'stats_title'),
                     ),
                     Expanded(
-                      child: sessions.isEmpty
-                          ? _empty(context)
-                          : _content(context, sessions, profile),
+                      // Still loading is not the same as "no sessions yet" —
+                      // collapsing both into `sessions.isEmpty` used to flash
+                      // the empty state on every cold open before the first
+                      // stream value arrived.
+                      child: sessionsAsync.isLoading
+                          ? const Center(
+                              child: CircularProgressIndicator(color: AppTheme.primary),
+                            )
+                          : sessions.isEmpty
+                              ? _empty(context)
+                              : _content(context, sessions, profile),
                     ),
                   ],
                 ),
@@ -80,8 +90,8 @@ class StatsScreen extends ConsumerWidget {
     final totalXp = profile?.totalXp ?? 0;
     final streak = profile?.dailyStreak ?? 0;
 
-    final prevThreshold = (level - 1) * 500;
-    final nextThreshold = level * 500;
+    final prevThreshold = level > 1 ? xpToAdvanceFromLevel(level - 1) : 0;
+    final nextThreshold = xpToAdvanceFromLevel(level);
     final xpProgress = nextThreshold > prevThreshold
         ? ((totalXp - prevThreshold) / (nextThreshold - prevThreshold))
             .clamp(0.0, 1.0)
@@ -469,10 +479,13 @@ class _TechniqueBreakdown extends StatelessWidget {
         ),
         const SizedBox(width: AppSpacing.sm),
         SizedBox(
-          width: 24,
+          width: 32,
           child: Text(
             '$count',
             textAlign: TextAlign.right,
+            maxLines: 1,
+            overflow: TextOverflow.visible,
+            softWrap: false,
             style: const TextStyle(
                 color: AppTheme.textDim,
                 fontSize: 12,

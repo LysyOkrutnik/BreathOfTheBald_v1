@@ -74,7 +74,7 @@ class _MaxPbTestScreenState extends ConsumerState<MaxPbTestScreen> {
       // Log as a regular training session too, so it counts toward streak,
       // history and XP like any other completed practice.
       final gamification = ref.read(gamificationServiceProvider);
-      final xpEarned = await gamification.updateXpAndLevel(
+      final xpResult = await gamification.updateXpAndLevel(
         breathCount: 0,
         retentionSeconds: (seconds * 0.3).round(),
         multiplier: 0.5,
@@ -86,7 +86,7 @@ class _MaxPbTestScreenState extends ConsumerState<MaxPbTestScreen> {
             durationSec: seconds,
             rounds: 1,
             retentionSec: seconds,
-            xpEarned: xpEarned,
+            xpEarned: xpResult.xpEarned,
           );
     } catch (e, st) {
       developer.log('Failed to save PB test',
@@ -114,64 +114,87 @@ class _MaxPbTestScreenState extends ConsumerState<MaxPbTestScreen> {
                     Expanded(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            if (_testState == _TestState.idle) ...[
-                              Text(
-                                L10n.get(context, 'freediving_pb_test_intro'),
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                    color: AppTheme.textDim, fontSize: 14, height: 1.5),
-                              ),
-                              const SizedBox(height: AppSpacing.xxl),
-                            ],
-                            GlowHalo(
-                              color: AppTheme.primary,
-                              diameter: 200,
-                              haloScale: 1.6,
-                              intensity: _testState == _TestState.running ? 130 : 70,
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: AppTheme.primary.withAlpha(20),
-                                  border: Border.all(
-                                      color: AppTheme.primary.withAlpha(100)),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    _fmt(_elapsed),
-                                    style: const TextStyle(
-                                      color: AppTheme.textLight,
-                                      fontSize: 44,
-                                      fontWeight: FontWeight.w200,
-                                      fontFeatures: [FontFeature.tabularFigures()],
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            // A landscape phone has much less height to work
+                            // with than portrait — without this, the intro
+                            // text + halo + button routinely overflowed the
+                            // viewport (no scroll safety net at all). Scrolls
+                            // when needed, but stays centered like before
+                            // whenever the content actually fits.
+                            return SingleChildScrollView(
+                              physics: const BouncingScrollPhysics(),
+                              child: ConstrainedBox(
+                                constraints:
+                                    BoxConstraints(minHeight: constraints.maxHeight),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    if (_testState == _TestState.idle) ...[
+                                      Text(
+                                        L10n.get(context, 'freediving_pb_test_intro'),
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                            color: AppTheme.textDim,
+                                            fontSize: 14,
+                                            height: 1.5),
+                                      ),
+                                      const SizedBox(height: AppSpacing.xxl),
+                                    ],
+                                    GlowHalo(
+                                      color: AppTheme.primary,
+                                      diameter: context.isLandscape ? 130 : 200,
+                                      haloScale: 1.6,
+                                      intensity:
+                                          _testState == _TestState.running ? 130 : 70,
+                                      child: DecoratedBox(
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: AppTheme.primary.withAlpha(20),
+                                          border: Border.all(
+                                              color: AppTheme.primary.withAlpha(100)),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            _fmt(_elapsed),
+                                            style: TextStyle(
+                                              color: AppTheme.textLight,
+                                              fontSize: context.isLandscape ? 32 : 44,
+                                              fontWeight: FontWeight.w200,
+                                              fontFeatures: const [
+                                                FontFeature.tabularFigures()
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
                                     ),
-                                  ),
+                                    const SizedBox(height: AppSpacing.xxl),
+                                    if (_testState != _TestState.stopped)
+                                      _ActionButton(
+                                        label: L10n.get(
+                                          context,
+                                          _testState == _TestState.idle
+                                              ? 'freediving_pb_test_start'
+                                              : 'freediving_pb_test_stop',
+                                        ),
+                                        color: _testState == _TestState.idle
+                                            ? AppTheme.primary
+                                            : AppTheme.danger,
+                                        onTap:
+                                            _testState == _TestState.idle ? _start : _stop,
+                                      )
+                                    else
+                                      _ConfirmPanel(
+                                        elapsedSeconds: _elapsed.inSeconds,
+                                        onSave: _save,
+                                        onDiscard: _reset,
+                                      ),
+                                  ],
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: AppSpacing.xxl),
-                            if (_testState != _TestState.stopped)
-                              _ActionButton(
-                                label: L10n.get(
-                                  context,
-                                  _testState == _TestState.idle
-                                      ? 'freediving_pb_test_start'
-                                      : 'freediving_pb_test_stop',
-                                ),
-                                color: _testState == _TestState.idle
-                                    ? AppTheme.primary
-                                    : AppTheme.danger,
-                                onTap: _testState == _TestState.idle ? _start : _stop,
-                              )
-                            else
-                              _ConfirmPanel(
-                                elapsedSeconds: _elapsed.inSeconds,
-                                onSave: _save,
-                                onDiscard: _reset,
-                              ),
-                          ],
+                            );
+                          },
                         ),
                       ),
                     ),

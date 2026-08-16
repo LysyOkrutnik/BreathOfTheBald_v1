@@ -30,6 +30,11 @@ class Sessions extends Table {
   /// Heart rate (bpm) read from Health Connect during the session window.
   IntColumn get hrMin => integer().nullable()();
   IntColumn get hrAvg => integer().nullable()();
+
+  /// Rate of Perceived Exertion, 1-10. Null until the post-session prompt is
+  /// answered (currently asked after Wim Hof sessions, to drive ladder
+  /// auto-progression — see WimHofProgression).
+  IntColumn get rpeScore => integer().nullable()();
 }
 
 class UserProfile extends Table {
@@ -126,6 +131,38 @@ class FreedivingSessionLog extends Table {
   /// Rate of Perceived Exertion, 1-10. Null until the post-session prompt is
   /// answered.
   IntColumn get rpeScore => integer().nullable()();
+
+  /// Optional post-session symptom check-in: 'tingling', 'dizziness', or
+  /// 'ok'. Null if the user skipped it. A trend of repeated non-'ok' values
+  /// is a real safety signal (recurring dizziness/tingling across sessions),
+  /// so it's kept as its own field rather than folded into rpeScore, which
+  /// only measures perceived effort.
+  TextColumn get symptomTag => text().nullable()();
+}
+
+/// A user-defined breath-hold table (the custom freediving builder): a fixed
+/// apnea/rest schedule the user sets directly, rather than one generated
+/// from their PB. Start/end values are linearly interpolated across rounds.
+class CustomFreedivingPresets extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text()();
+  IntColumn get startApneaSec => integer()();
+  IntColumn get endApneaSec => integer()();
+  IntColumn get startRestSec => integer()();
+  IntColumn get endRestSec => integer()();
+  IntColumn get rounds => integer()();
+  DateTimeColumn get createdAt => dateTime()();
+}
+
+/// Single-row tracker for the Wim Hof classic-ladder auto-progression.
+/// [currentLevelKey] is the "confirmed" level shown as the default/recommended
+/// choice; [currentLevelSetAt] bounds the eligibility and trial windows (see
+/// WimHofProgression) — sessions before this timestamp don't count toward
+/// advancing past the current level.
+class WimHofProgress extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get currentLevelKey => text().withDefault(const Constant('mild'))();
+  DateTimeColumn get currentLevelSetAt => dateTime().nullable()();
 }
 
 @DriftDatabase(tables: [
@@ -136,12 +173,14 @@ class FreedivingSessionLog extends Table {
   CustomPresets,
   FreedivingProfile,
   FreedivingSessionLog,
+  WimHofProgress,
+  CustomFreedivingPresets,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -176,6 +215,19 @@ class AppDatabase extends _$AppDatabase {
           if (from < 7) {
             await m.createTable(freedivingProfile);
             await m.createTable(freedivingSessionLog);
+          }
+          // v7 -> v8: RPE on regular sessions + Wim Hof ladder progression.
+          if (from < 8) {
+            await m.addColumn(sessions, sessions.rpeScore);
+            await m.createTable(wimHofProgress);
+          }
+          // v8 -> v9: user-defined custom freediving table presets.
+          if (from < 9) {
+            await m.createTable(customFreedivingPresets);
+          }
+          // v9 -> v10: post-session symptom check-in on freediving logs.
+          if (from < 10) {
+            await m.addColumn(freedivingSessionLog, freedivingSessionLog.symptomTag);
           }
         },
       );

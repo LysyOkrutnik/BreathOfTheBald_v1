@@ -78,6 +78,12 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
   late final GeneratedColumn<int> hrAvg = GeneratedColumn<int>(
       'hr_avg', aliasedName, true,
       type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _rpeScoreMeta =
+      const VerificationMeta('rpeScore');
+  @override
+  late final GeneratedColumn<int> rpeScore = GeneratedColumn<int>(
+      'rpe_score', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
   @override
   List<GeneratedColumn> get $columns => [
         id,
@@ -90,7 +96,8 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
         spo2Min,
         spo2Avg,
         hrMin,
-        hrAvg
+        hrAvg,
+        rpeScore
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -157,6 +164,10 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
       context.handle(
           _hrAvgMeta, hrAvg.isAcceptableOrUnknown(data['hr_avg']!, _hrAvgMeta));
     }
+    if (data.containsKey('rpe_score')) {
+      context.handle(_rpeScoreMeta,
+          rpeScore.isAcceptableOrUnknown(data['rpe_score']!, _rpeScoreMeta));
+    }
     return context;
   }
 
@@ -188,6 +199,8 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
           .read(DriftSqlType.int, data['${effectivePrefix}hr_min']),
       hrAvg: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}hr_avg']),
+      rpeScore: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}rpe_score']),
     );
   }
 
@@ -220,6 +233,11 @@ class Session extends DataClass implements Insertable<Session> {
   /// Heart rate (bpm) read from Health Connect during the session window.
   final int? hrMin;
   final int? hrAvg;
+
+  /// Rate of Perceived Exertion, 1-10. Null until the post-session prompt is
+  /// answered (currently asked after Wim Hof sessions, to drive ladder
+  /// auto-progression — see WimHofProgression).
+  final int? rpeScore;
   const Session(
       {required this.id,
       required this.timestamp,
@@ -231,7 +249,8 @@ class Session extends DataClass implements Insertable<Session> {
       this.spo2Min,
       this.spo2Avg,
       this.hrMin,
-      this.hrAvg});
+      this.hrAvg,
+      this.rpeScore});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -253,6 +272,9 @@ class Session extends DataClass implements Insertable<Session> {
     }
     if (!nullToAbsent || hrAvg != null) {
       map['hr_avg'] = Variable<int>(hrAvg);
+    }
+    if (!nullToAbsent || rpeScore != null) {
+      map['rpe_score'] = Variable<int>(rpeScore);
     }
     return map;
   }
@@ -276,6 +298,9 @@ class Session extends DataClass implements Insertable<Session> {
           hrMin == null && nullToAbsent ? const Value.absent() : Value(hrMin),
       hrAvg:
           hrAvg == null && nullToAbsent ? const Value.absent() : Value(hrAvg),
+      rpeScore: rpeScore == null && nullToAbsent
+          ? const Value.absent()
+          : Value(rpeScore),
     );
   }
 
@@ -294,6 +319,7 @@ class Session extends DataClass implements Insertable<Session> {
       spo2Avg: serializer.fromJson<int?>(json['spo2Avg']),
       hrMin: serializer.fromJson<int?>(json['hrMin']),
       hrAvg: serializer.fromJson<int?>(json['hrAvg']),
+      rpeScore: serializer.fromJson<int?>(json['rpeScore']),
     );
   }
   @override
@@ -311,6 +337,7 @@ class Session extends DataClass implements Insertable<Session> {
       'spo2Avg': serializer.toJson<int?>(spo2Avg),
       'hrMin': serializer.toJson<int?>(hrMin),
       'hrAvg': serializer.toJson<int?>(hrAvg),
+      'rpeScore': serializer.toJson<int?>(rpeScore),
     };
   }
 
@@ -325,7 +352,8 @@ class Session extends DataClass implements Insertable<Session> {
           Value<int?> spo2Min = const Value.absent(),
           Value<int?> spo2Avg = const Value.absent(),
           Value<int?> hrMin = const Value.absent(),
-          Value<int?> hrAvg = const Value.absent()}) =>
+          Value<int?> hrAvg = const Value.absent(),
+          Value<int?> rpeScore = const Value.absent()}) =>
       Session(
         id: id ?? this.id,
         timestamp: timestamp ?? this.timestamp,
@@ -338,6 +366,7 @@ class Session extends DataClass implements Insertable<Session> {
         spo2Avg: spo2Avg.present ? spo2Avg.value : this.spo2Avg,
         hrMin: hrMin.present ? hrMin.value : this.hrMin,
         hrAvg: hrAvg.present ? hrAvg.value : this.hrAvg,
+        rpeScore: rpeScore.present ? rpeScore.value : this.rpeScore,
       );
   Session copyWithCompanion(SessionsCompanion data) {
     return Session(
@@ -355,6 +384,7 @@ class Session extends DataClass implements Insertable<Session> {
       spo2Avg: data.spo2Avg.present ? data.spo2Avg.value : this.spo2Avg,
       hrMin: data.hrMin.present ? data.hrMin.value : this.hrMin,
       hrAvg: data.hrAvg.present ? data.hrAvg.value : this.hrAvg,
+      rpeScore: data.rpeScore.present ? data.rpeScore.value : this.rpeScore,
     );
   }
 
@@ -371,14 +401,15 @@ class Session extends DataClass implements Insertable<Session> {
           ..write('spo2Min: $spo2Min, ')
           ..write('spo2Avg: $spo2Avg, ')
           ..write('hrMin: $hrMin, ')
-          ..write('hrAvg: $hrAvg')
+          ..write('hrAvg: $hrAvg, ')
+          ..write('rpeScore: $rpeScore')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode => Object.hash(id, timestamp, levelKey, durationSec, rounds,
-      retentionSec, xpEarned, spo2Min, spo2Avg, hrMin, hrAvg);
+      retentionSec, xpEarned, spo2Min, spo2Avg, hrMin, hrAvg, rpeScore);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -393,7 +424,8 @@ class Session extends DataClass implements Insertable<Session> {
           other.spo2Min == this.spo2Min &&
           other.spo2Avg == this.spo2Avg &&
           other.hrMin == this.hrMin &&
-          other.hrAvg == this.hrAvg);
+          other.hrAvg == this.hrAvg &&
+          other.rpeScore == this.rpeScore);
 }
 
 class SessionsCompanion extends UpdateCompanion<Session> {
@@ -408,6 +440,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
   final Value<int?> spo2Avg;
   final Value<int?> hrMin;
   final Value<int?> hrAvg;
+  final Value<int?> rpeScore;
   const SessionsCompanion({
     this.id = const Value.absent(),
     this.timestamp = const Value.absent(),
@@ -420,6 +453,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     this.spo2Avg = const Value.absent(),
     this.hrMin = const Value.absent(),
     this.hrAvg = const Value.absent(),
+    this.rpeScore = const Value.absent(),
   });
   SessionsCompanion.insert({
     this.id = const Value.absent(),
@@ -433,6 +467,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     this.spo2Avg = const Value.absent(),
     this.hrMin = const Value.absent(),
     this.hrAvg = const Value.absent(),
+    this.rpeScore = const Value.absent(),
   })  : timestamp = Value(timestamp),
         levelKey = Value(levelKey),
         durationSec = Value(durationSec),
@@ -449,6 +484,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     Expression<int>? spo2Avg,
     Expression<int>? hrMin,
     Expression<int>? hrAvg,
+    Expression<int>? rpeScore,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -462,6 +498,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
       if (spo2Avg != null) 'spo2_avg': spo2Avg,
       if (hrMin != null) 'hr_min': hrMin,
       if (hrAvg != null) 'hr_avg': hrAvg,
+      if (rpeScore != null) 'rpe_score': rpeScore,
     });
   }
 
@@ -476,7 +513,8 @@ class SessionsCompanion extends UpdateCompanion<Session> {
       Value<int?>? spo2Min,
       Value<int?>? spo2Avg,
       Value<int?>? hrMin,
-      Value<int?>? hrAvg}) {
+      Value<int?>? hrAvg,
+      Value<int?>? rpeScore}) {
     return SessionsCompanion(
       id: id ?? this.id,
       timestamp: timestamp ?? this.timestamp,
@@ -489,6 +527,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
       spo2Avg: spo2Avg ?? this.spo2Avg,
       hrMin: hrMin ?? this.hrMin,
       hrAvg: hrAvg ?? this.hrAvg,
+      rpeScore: rpeScore ?? this.rpeScore,
     );
   }
 
@@ -528,6 +567,9 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     if (hrAvg.present) {
       map['hr_avg'] = Variable<int>(hrAvg.value);
     }
+    if (rpeScore.present) {
+      map['rpe_score'] = Variable<int>(rpeScore.value);
+    }
     return map;
   }
 
@@ -544,7 +586,8 @@ class SessionsCompanion extends UpdateCompanion<Session> {
           ..write('spo2Min: $spo2Min, ')
           ..write('spo2Avg: $spo2Avg, ')
           ..write('hrMin: $hrMin, ')
-          ..write('hrAvg: $hrAvg')
+          ..write('hrAvg: $hrAvg, ')
+          ..write('rpeScore: $rpeScore')
           ..write(')'))
         .toString();
   }
@@ -2369,6 +2412,12 @@ class $FreedivingSessionLogTable extends FreedivingSessionLog
   late final GeneratedColumn<int> rpeScore = GeneratedColumn<int>(
       'rpe_score', aliasedName, true,
       type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _symptomTagMeta =
+      const VerificationMeta('symptomTag');
+  @override
+  late final GeneratedColumn<String> symptomTag = GeneratedColumn<String>(
+      'symptom_tag', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
   @override
   List<GeneratedColumn> get $columns => [
         id,
@@ -2379,7 +2428,8 @@ class $FreedivingSessionLogTable extends FreedivingSessionLog
         roundsCompleted,
         roundsJson,
         durationSec,
-        rpeScore
+        rpeScore,
+        symptomTag
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -2451,6 +2501,12 @@ class $FreedivingSessionLogTable extends FreedivingSessionLog
       context.handle(_rpeScoreMeta,
           rpeScore.isAcceptableOrUnknown(data['rpe_score']!, _rpeScoreMeta));
     }
+    if (data.containsKey('symptom_tag')) {
+      context.handle(
+          _symptomTagMeta,
+          symptomTag.isAcceptableOrUnknown(
+              data['symptom_tag']!, _symptomTagMeta));
+    }
     return context;
   }
 
@@ -2479,6 +2535,8 @@ class $FreedivingSessionLogTable extends FreedivingSessionLog
           .read(DriftSqlType.int, data['${effectivePrefix}duration_sec'])!,
       rpeScore: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}rpe_score']),
+      symptomTag: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}symptom_tag']),
     );
   }
 
@@ -2511,6 +2569,13 @@ class FreedivingSessionLogData extends DataClass
   /// Rate of Perceived Exertion, 1-10. Null until the post-session prompt is
   /// answered.
   final int? rpeScore;
+
+  /// Optional post-session symptom check-in: 'tingling', 'dizziness', or
+  /// 'ok'. Null if the user skipped it. A trend of repeated non-'ok' values
+  /// is a real safety signal (recurring dizziness/tingling across sessions),
+  /// so it's kept as its own field rather than folded into rpeScore, which
+  /// only measures perceived effort.
+  final String? symptomTag;
   const FreedivingSessionLogData(
       {required this.id,
       required this.timestamp,
@@ -2520,7 +2585,8 @@ class FreedivingSessionLogData extends DataClass
       required this.roundsCompleted,
       required this.roundsJson,
       required this.durationSec,
-      this.rpeScore});
+      this.rpeScore,
+      this.symptomTag});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -2534,6 +2600,9 @@ class FreedivingSessionLogData extends DataClass
     map['duration_sec'] = Variable<int>(durationSec);
     if (!nullToAbsent || rpeScore != null) {
       map['rpe_score'] = Variable<int>(rpeScore);
+    }
+    if (!nullToAbsent || symptomTag != null) {
+      map['symptom_tag'] = Variable<String>(symptomTag);
     }
     return map;
   }
@@ -2551,6 +2620,9 @@ class FreedivingSessionLogData extends DataClass
       rpeScore: rpeScore == null && nullToAbsent
           ? const Value.absent()
           : Value(rpeScore),
+      symptomTag: symptomTag == null && nullToAbsent
+          ? const Value.absent()
+          : Value(symptomTag),
     );
   }
 
@@ -2567,6 +2639,7 @@ class FreedivingSessionLogData extends DataClass
       roundsJson: serializer.fromJson<String>(json['roundsJson']),
       durationSec: serializer.fromJson<int>(json['durationSec']),
       rpeScore: serializer.fromJson<int?>(json['rpeScore']),
+      symptomTag: serializer.fromJson<String?>(json['symptomTag']),
     );
   }
   @override
@@ -2582,6 +2655,7 @@ class FreedivingSessionLogData extends DataClass
       'roundsJson': serializer.toJson<String>(roundsJson),
       'durationSec': serializer.toJson<int>(durationSec),
       'rpeScore': serializer.toJson<int?>(rpeScore),
+      'symptomTag': serializer.toJson<String?>(symptomTag),
     };
   }
 
@@ -2594,7 +2668,8 @@ class FreedivingSessionLogData extends DataClass
           int? roundsCompleted,
           String? roundsJson,
           int? durationSec,
-          Value<int?> rpeScore = const Value.absent()}) =>
+          Value<int?> rpeScore = const Value.absent(),
+          Value<String?> symptomTag = const Value.absent()}) =>
       FreedivingSessionLogData(
         id: id ?? this.id,
         timestamp: timestamp ?? this.timestamp,
@@ -2605,6 +2680,7 @@ class FreedivingSessionLogData extends DataClass
         roundsJson: roundsJson ?? this.roundsJson,
         durationSec: durationSec ?? this.durationSec,
         rpeScore: rpeScore.present ? rpeScore.value : this.rpeScore,
+        symptomTag: symptomTag.present ? symptomTag.value : this.symptomTag,
       );
   FreedivingSessionLogData copyWithCompanion(
       FreedivingSessionLogCompanion data) {
@@ -2624,6 +2700,8 @@ class FreedivingSessionLogData extends DataClass
       durationSec:
           data.durationSec.present ? data.durationSec.value : this.durationSec,
       rpeScore: data.rpeScore.present ? data.rpeScore.value : this.rpeScore,
+      symptomTag:
+          data.symptomTag.present ? data.symptomTag.value : this.symptomTag,
     );
   }
 
@@ -2638,14 +2716,24 @@ class FreedivingSessionLogData extends DataClass
           ..write('roundsCompleted: $roundsCompleted, ')
           ..write('roundsJson: $roundsJson, ')
           ..write('durationSec: $durationSec, ')
-          ..write('rpeScore: $rpeScore')
+          ..write('rpeScore: $rpeScore, ')
+          ..write('symptomTag: $symptomTag')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, timestamp, tableType, pbUsedSec,
-      roundsPlanned, roundsCompleted, roundsJson, durationSec, rpeScore);
+  int get hashCode => Object.hash(
+      id,
+      timestamp,
+      tableType,
+      pbUsedSec,
+      roundsPlanned,
+      roundsCompleted,
+      roundsJson,
+      durationSec,
+      rpeScore,
+      symptomTag);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -2658,7 +2746,8 @@ class FreedivingSessionLogData extends DataClass
           other.roundsCompleted == this.roundsCompleted &&
           other.roundsJson == this.roundsJson &&
           other.durationSec == this.durationSec &&
-          other.rpeScore == this.rpeScore);
+          other.rpeScore == this.rpeScore &&
+          other.symptomTag == this.symptomTag);
 }
 
 class FreedivingSessionLogCompanion
@@ -2672,6 +2761,7 @@ class FreedivingSessionLogCompanion
   final Value<String> roundsJson;
   final Value<int> durationSec;
   final Value<int?> rpeScore;
+  final Value<String?> symptomTag;
   const FreedivingSessionLogCompanion({
     this.id = const Value.absent(),
     this.timestamp = const Value.absent(),
@@ -2682,6 +2772,7 @@ class FreedivingSessionLogCompanion
     this.roundsJson = const Value.absent(),
     this.durationSec = const Value.absent(),
     this.rpeScore = const Value.absent(),
+    this.symptomTag = const Value.absent(),
   });
   FreedivingSessionLogCompanion.insert({
     this.id = const Value.absent(),
@@ -2693,6 +2784,7 @@ class FreedivingSessionLogCompanion
     required String roundsJson,
     required int durationSec,
     this.rpeScore = const Value.absent(),
+    this.symptomTag = const Value.absent(),
   })  : timestamp = Value(timestamp),
         tableType = Value(tableType),
         pbUsedSec = Value(pbUsedSec),
@@ -2710,6 +2802,7 @@ class FreedivingSessionLogCompanion
     Expression<String>? roundsJson,
     Expression<int>? durationSec,
     Expression<int>? rpeScore,
+    Expression<String>? symptomTag,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -2721,6 +2814,7 @@ class FreedivingSessionLogCompanion
       if (roundsJson != null) 'rounds_json': roundsJson,
       if (durationSec != null) 'duration_sec': durationSec,
       if (rpeScore != null) 'rpe_score': rpeScore,
+      if (symptomTag != null) 'symptom_tag': symptomTag,
     });
   }
 
@@ -2733,7 +2827,8 @@ class FreedivingSessionLogCompanion
       Value<int>? roundsCompleted,
       Value<String>? roundsJson,
       Value<int>? durationSec,
-      Value<int?>? rpeScore}) {
+      Value<int?>? rpeScore,
+      Value<String?>? symptomTag}) {
     return FreedivingSessionLogCompanion(
       id: id ?? this.id,
       timestamp: timestamp ?? this.timestamp,
@@ -2744,6 +2839,7 @@ class FreedivingSessionLogCompanion
       roundsJson: roundsJson ?? this.roundsJson,
       durationSec: durationSec ?? this.durationSec,
       rpeScore: rpeScore ?? this.rpeScore,
+      symptomTag: symptomTag ?? this.symptomTag,
     );
   }
 
@@ -2777,6 +2873,9 @@ class FreedivingSessionLogCompanion
     if (rpeScore.present) {
       map['rpe_score'] = Variable<int>(rpeScore.value);
     }
+    if (symptomTag.present) {
+      map['symptom_tag'] = Variable<String>(symptomTag.value);
+    }
     return map;
   }
 
@@ -2791,7 +2890,682 @@ class FreedivingSessionLogCompanion
           ..write('roundsCompleted: $roundsCompleted, ')
           ..write('roundsJson: $roundsJson, ')
           ..write('durationSec: $durationSec, ')
-          ..write('rpeScore: $rpeScore')
+          ..write('rpeScore: $rpeScore, ')
+          ..write('symptomTag: $symptomTag')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $WimHofProgressTable extends WimHofProgress
+    with TableInfo<$WimHofProgressTable, WimHofProgressData> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $WimHofProgressTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _currentLevelKeyMeta =
+      const VerificationMeta('currentLevelKey');
+  @override
+  late final GeneratedColumn<String> currentLevelKey = GeneratedColumn<String>(
+      'current_level_key', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('mild'));
+  static const VerificationMeta _currentLevelSetAtMeta =
+      const VerificationMeta('currentLevelSetAt');
+  @override
+  late final GeneratedColumn<DateTime> currentLevelSetAt =
+      GeneratedColumn<DateTime>('current_level_set_at', aliasedName, true,
+          type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  @override
+  List<GeneratedColumn> get $columns =>
+      [id, currentLevelKey, currentLevelSetAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'wim_hof_progress';
+  @override
+  VerificationContext validateIntegrity(Insertable<WimHofProgressData> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('current_level_key')) {
+      context.handle(
+          _currentLevelKeyMeta,
+          currentLevelKey.isAcceptableOrUnknown(
+              data['current_level_key']!, _currentLevelKeyMeta));
+    }
+    if (data.containsKey('current_level_set_at')) {
+      context.handle(
+          _currentLevelSetAtMeta,
+          currentLevelSetAt.isAcceptableOrUnknown(
+              data['current_level_set_at']!, _currentLevelSetAtMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  WimHofProgressData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return WimHofProgressData(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      currentLevelKey: attachedDatabase.typeMapping.read(
+          DriftSqlType.string, data['${effectivePrefix}current_level_key'])!,
+      currentLevelSetAt: attachedDatabase.typeMapping.read(
+          DriftSqlType.dateTime,
+          data['${effectivePrefix}current_level_set_at']),
+    );
+  }
+
+  @override
+  $WimHofProgressTable createAlias(String alias) {
+    return $WimHofProgressTable(attachedDatabase, alias);
+  }
+}
+
+class WimHofProgressData extends DataClass
+    implements Insertable<WimHofProgressData> {
+  final int id;
+  final String currentLevelKey;
+  final DateTime? currentLevelSetAt;
+  const WimHofProgressData(
+      {required this.id,
+      required this.currentLevelKey,
+      this.currentLevelSetAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['current_level_key'] = Variable<String>(currentLevelKey);
+    if (!nullToAbsent || currentLevelSetAt != null) {
+      map['current_level_set_at'] = Variable<DateTime>(currentLevelSetAt);
+    }
+    return map;
+  }
+
+  WimHofProgressCompanion toCompanion(bool nullToAbsent) {
+    return WimHofProgressCompanion(
+      id: Value(id),
+      currentLevelKey: Value(currentLevelKey),
+      currentLevelSetAt: currentLevelSetAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(currentLevelSetAt),
+    );
+  }
+
+  factory WimHofProgressData.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return WimHofProgressData(
+      id: serializer.fromJson<int>(json['id']),
+      currentLevelKey: serializer.fromJson<String>(json['currentLevelKey']),
+      currentLevelSetAt:
+          serializer.fromJson<DateTime?>(json['currentLevelSetAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'currentLevelKey': serializer.toJson<String>(currentLevelKey),
+      'currentLevelSetAt': serializer.toJson<DateTime?>(currentLevelSetAt),
+    };
+  }
+
+  WimHofProgressData copyWith(
+          {int? id,
+          String? currentLevelKey,
+          Value<DateTime?> currentLevelSetAt = const Value.absent()}) =>
+      WimHofProgressData(
+        id: id ?? this.id,
+        currentLevelKey: currentLevelKey ?? this.currentLevelKey,
+        currentLevelSetAt: currentLevelSetAt.present
+            ? currentLevelSetAt.value
+            : this.currentLevelSetAt,
+      );
+  WimHofProgressData copyWithCompanion(WimHofProgressCompanion data) {
+    return WimHofProgressData(
+      id: data.id.present ? data.id.value : this.id,
+      currentLevelKey: data.currentLevelKey.present
+          ? data.currentLevelKey.value
+          : this.currentLevelKey,
+      currentLevelSetAt: data.currentLevelSetAt.present
+          ? data.currentLevelSetAt.value
+          : this.currentLevelSetAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('WimHofProgressData(')
+          ..write('id: $id, ')
+          ..write('currentLevelKey: $currentLevelKey, ')
+          ..write('currentLevelSetAt: $currentLevelSetAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, currentLevelKey, currentLevelSetAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is WimHofProgressData &&
+          other.id == this.id &&
+          other.currentLevelKey == this.currentLevelKey &&
+          other.currentLevelSetAt == this.currentLevelSetAt);
+}
+
+class WimHofProgressCompanion extends UpdateCompanion<WimHofProgressData> {
+  final Value<int> id;
+  final Value<String> currentLevelKey;
+  final Value<DateTime?> currentLevelSetAt;
+  const WimHofProgressCompanion({
+    this.id = const Value.absent(),
+    this.currentLevelKey = const Value.absent(),
+    this.currentLevelSetAt = const Value.absent(),
+  });
+  WimHofProgressCompanion.insert({
+    this.id = const Value.absent(),
+    this.currentLevelKey = const Value.absent(),
+    this.currentLevelSetAt = const Value.absent(),
+  });
+  static Insertable<WimHofProgressData> custom({
+    Expression<int>? id,
+    Expression<String>? currentLevelKey,
+    Expression<DateTime>? currentLevelSetAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (currentLevelKey != null) 'current_level_key': currentLevelKey,
+      if (currentLevelSetAt != null) 'current_level_set_at': currentLevelSetAt,
+    });
+  }
+
+  WimHofProgressCompanion copyWith(
+      {Value<int>? id,
+      Value<String>? currentLevelKey,
+      Value<DateTime?>? currentLevelSetAt}) {
+    return WimHofProgressCompanion(
+      id: id ?? this.id,
+      currentLevelKey: currentLevelKey ?? this.currentLevelKey,
+      currentLevelSetAt: currentLevelSetAt ?? this.currentLevelSetAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (currentLevelKey.present) {
+      map['current_level_key'] = Variable<String>(currentLevelKey.value);
+    }
+    if (currentLevelSetAt.present) {
+      map['current_level_set_at'] = Variable<DateTime>(currentLevelSetAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('WimHofProgressCompanion(')
+          ..write('id: $id, ')
+          ..write('currentLevelKey: $currentLevelKey, ')
+          ..write('currentLevelSetAt: $currentLevelSetAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $CustomFreedivingPresetsTable extends CustomFreedivingPresets
+    with TableInfo<$CustomFreedivingPresetsTable, CustomFreedivingPreset> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CustomFreedivingPresetsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+      'name', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _startApneaSecMeta =
+      const VerificationMeta('startApneaSec');
+  @override
+  late final GeneratedColumn<int> startApneaSec = GeneratedColumn<int>(
+      'start_apnea_sec', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _endApneaSecMeta =
+      const VerificationMeta('endApneaSec');
+  @override
+  late final GeneratedColumn<int> endApneaSec = GeneratedColumn<int>(
+      'end_apnea_sec', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _startRestSecMeta =
+      const VerificationMeta('startRestSec');
+  @override
+  late final GeneratedColumn<int> startRestSec = GeneratedColumn<int>(
+      'start_rest_sec', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _endRestSecMeta =
+      const VerificationMeta('endRestSec');
+  @override
+  late final GeneratedColumn<int> endRestSec = GeneratedColumn<int>(
+      'end_rest_sec', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _roundsMeta = const VerificationMeta('rounds');
+  @override
+  late final GeneratedColumn<int> rounds = GeneratedColumn<int>(
+      'rounds', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _createdAtMeta =
+      const VerificationMeta('createdAt');
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+      'created_at', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [
+        id,
+        name,
+        startApneaSec,
+        endApneaSec,
+        startRestSec,
+        endRestSec,
+        rounds,
+        createdAt
+      ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'custom_freediving_presets';
+  @override
+  VerificationContext validateIntegrity(
+      Insertable<CustomFreedivingPreset> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+          _nameMeta, name.isAcceptableOrUnknown(data['name']!, _nameMeta));
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('start_apnea_sec')) {
+      context.handle(
+          _startApneaSecMeta,
+          startApneaSec.isAcceptableOrUnknown(
+              data['start_apnea_sec']!, _startApneaSecMeta));
+    } else if (isInserting) {
+      context.missing(_startApneaSecMeta);
+    }
+    if (data.containsKey('end_apnea_sec')) {
+      context.handle(
+          _endApneaSecMeta,
+          endApneaSec.isAcceptableOrUnknown(
+              data['end_apnea_sec']!, _endApneaSecMeta));
+    } else if (isInserting) {
+      context.missing(_endApneaSecMeta);
+    }
+    if (data.containsKey('start_rest_sec')) {
+      context.handle(
+          _startRestSecMeta,
+          startRestSec.isAcceptableOrUnknown(
+              data['start_rest_sec']!, _startRestSecMeta));
+    } else if (isInserting) {
+      context.missing(_startRestSecMeta);
+    }
+    if (data.containsKey('end_rest_sec')) {
+      context.handle(
+          _endRestSecMeta,
+          endRestSec.isAcceptableOrUnknown(
+              data['end_rest_sec']!, _endRestSecMeta));
+    } else if (isInserting) {
+      context.missing(_endRestSecMeta);
+    }
+    if (data.containsKey('rounds')) {
+      context.handle(_roundsMeta,
+          rounds.isAcceptableOrUnknown(data['rounds']!, _roundsMeta));
+    } else if (isInserting) {
+      context.missing(_roundsMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(_createdAtMeta,
+          createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  CustomFreedivingPreset map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CustomFreedivingPreset(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      name: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}name'])!,
+      startApneaSec: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}start_apnea_sec'])!,
+      endApneaSec: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}end_apnea_sec'])!,
+      startRestSec: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}start_rest_sec'])!,
+      endRestSec: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}end_rest_sec'])!,
+      rounds: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}rounds'])!,
+      createdAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+    );
+  }
+
+  @override
+  $CustomFreedivingPresetsTable createAlias(String alias) {
+    return $CustomFreedivingPresetsTable(attachedDatabase, alias);
+  }
+}
+
+class CustomFreedivingPreset extends DataClass
+    implements Insertable<CustomFreedivingPreset> {
+  final int id;
+  final String name;
+  final int startApneaSec;
+  final int endApneaSec;
+  final int startRestSec;
+  final int endRestSec;
+  final int rounds;
+  final DateTime createdAt;
+  const CustomFreedivingPreset(
+      {required this.id,
+      required this.name,
+      required this.startApneaSec,
+      required this.endApneaSec,
+      required this.startRestSec,
+      required this.endRestSec,
+      required this.rounds,
+      required this.createdAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['name'] = Variable<String>(name);
+    map['start_apnea_sec'] = Variable<int>(startApneaSec);
+    map['end_apnea_sec'] = Variable<int>(endApneaSec);
+    map['start_rest_sec'] = Variable<int>(startRestSec);
+    map['end_rest_sec'] = Variable<int>(endRestSec);
+    map['rounds'] = Variable<int>(rounds);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  CustomFreedivingPresetsCompanion toCompanion(bool nullToAbsent) {
+    return CustomFreedivingPresetsCompanion(
+      id: Value(id),
+      name: Value(name),
+      startApneaSec: Value(startApneaSec),
+      endApneaSec: Value(endApneaSec),
+      startRestSec: Value(startRestSec),
+      endRestSec: Value(endRestSec),
+      rounds: Value(rounds),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory CustomFreedivingPreset.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CustomFreedivingPreset(
+      id: serializer.fromJson<int>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      startApneaSec: serializer.fromJson<int>(json['startApneaSec']),
+      endApneaSec: serializer.fromJson<int>(json['endApneaSec']),
+      startRestSec: serializer.fromJson<int>(json['startRestSec']),
+      endRestSec: serializer.fromJson<int>(json['endRestSec']),
+      rounds: serializer.fromJson<int>(json['rounds']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'name': serializer.toJson<String>(name),
+      'startApneaSec': serializer.toJson<int>(startApneaSec),
+      'endApneaSec': serializer.toJson<int>(endApneaSec),
+      'startRestSec': serializer.toJson<int>(startRestSec),
+      'endRestSec': serializer.toJson<int>(endRestSec),
+      'rounds': serializer.toJson<int>(rounds),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  CustomFreedivingPreset copyWith(
+          {int? id,
+          String? name,
+          int? startApneaSec,
+          int? endApneaSec,
+          int? startRestSec,
+          int? endRestSec,
+          int? rounds,
+          DateTime? createdAt}) =>
+      CustomFreedivingPreset(
+        id: id ?? this.id,
+        name: name ?? this.name,
+        startApneaSec: startApneaSec ?? this.startApneaSec,
+        endApneaSec: endApneaSec ?? this.endApneaSec,
+        startRestSec: startRestSec ?? this.startRestSec,
+        endRestSec: endRestSec ?? this.endRestSec,
+        rounds: rounds ?? this.rounds,
+        createdAt: createdAt ?? this.createdAt,
+      );
+  CustomFreedivingPreset copyWithCompanion(
+      CustomFreedivingPresetsCompanion data) {
+    return CustomFreedivingPreset(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      startApneaSec: data.startApneaSec.present
+          ? data.startApneaSec.value
+          : this.startApneaSec,
+      endApneaSec:
+          data.endApneaSec.present ? data.endApneaSec.value : this.endApneaSec,
+      startRestSec: data.startRestSec.present
+          ? data.startRestSec.value
+          : this.startRestSec,
+      endRestSec:
+          data.endRestSec.present ? data.endRestSec.value : this.endRestSec,
+      rounds: data.rounds.present ? data.rounds.value : this.rounds,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CustomFreedivingPreset(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('startApneaSec: $startApneaSec, ')
+          ..write('endApneaSec: $endApneaSec, ')
+          ..write('startRestSec: $startRestSec, ')
+          ..write('endRestSec: $endRestSec, ')
+          ..write('rounds: $rounds, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, name, startApneaSec, endApneaSec,
+      startRestSec, endRestSec, rounds, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CustomFreedivingPreset &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.startApneaSec == this.startApneaSec &&
+          other.endApneaSec == this.endApneaSec &&
+          other.startRestSec == this.startRestSec &&
+          other.endRestSec == this.endRestSec &&
+          other.rounds == this.rounds &&
+          other.createdAt == this.createdAt);
+}
+
+class CustomFreedivingPresetsCompanion
+    extends UpdateCompanion<CustomFreedivingPreset> {
+  final Value<int> id;
+  final Value<String> name;
+  final Value<int> startApneaSec;
+  final Value<int> endApneaSec;
+  final Value<int> startRestSec;
+  final Value<int> endRestSec;
+  final Value<int> rounds;
+  final Value<DateTime> createdAt;
+  const CustomFreedivingPresetsCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.startApneaSec = const Value.absent(),
+    this.endApneaSec = const Value.absent(),
+    this.startRestSec = const Value.absent(),
+    this.endRestSec = const Value.absent(),
+    this.rounds = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  CustomFreedivingPresetsCompanion.insert({
+    this.id = const Value.absent(),
+    required String name,
+    required int startApneaSec,
+    required int endApneaSec,
+    required int startRestSec,
+    required int endRestSec,
+    required int rounds,
+    required DateTime createdAt,
+  })  : name = Value(name),
+        startApneaSec = Value(startApneaSec),
+        endApneaSec = Value(endApneaSec),
+        startRestSec = Value(startRestSec),
+        endRestSec = Value(endRestSec),
+        rounds = Value(rounds),
+        createdAt = Value(createdAt);
+  static Insertable<CustomFreedivingPreset> custom({
+    Expression<int>? id,
+    Expression<String>? name,
+    Expression<int>? startApneaSec,
+    Expression<int>? endApneaSec,
+    Expression<int>? startRestSec,
+    Expression<int>? endRestSec,
+    Expression<int>? rounds,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (startApneaSec != null) 'start_apnea_sec': startApneaSec,
+      if (endApneaSec != null) 'end_apnea_sec': endApneaSec,
+      if (startRestSec != null) 'start_rest_sec': startRestSec,
+      if (endRestSec != null) 'end_rest_sec': endRestSec,
+      if (rounds != null) 'rounds': rounds,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  CustomFreedivingPresetsCompanion copyWith(
+      {Value<int>? id,
+      Value<String>? name,
+      Value<int>? startApneaSec,
+      Value<int>? endApneaSec,
+      Value<int>? startRestSec,
+      Value<int>? endRestSec,
+      Value<int>? rounds,
+      Value<DateTime>? createdAt}) {
+    return CustomFreedivingPresetsCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      startApneaSec: startApneaSec ?? this.startApneaSec,
+      endApneaSec: endApneaSec ?? this.endApneaSec,
+      startRestSec: startRestSec ?? this.startRestSec,
+      endRestSec: endRestSec ?? this.endRestSec,
+      rounds: rounds ?? this.rounds,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (startApneaSec.present) {
+      map['start_apnea_sec'] = Variable<int>(startApneaSec.value);
+    }
+    if (endApneaSec.present) {
+      map['end_apnea_sec'] = Variable<int>(endApneaSec.value);
+    }
+    if (startRestSec.present) {
+      map['start_rest_sec'] = Variable<int>(startRestSec.value);
+    }
+    if (endRestSec.present) {
+      map['end_rest_sec'] = Variable<int>(endRestSec.value);
+    }
+    if (rounds.present) {
+      map['rounds'] = Variable<int>(rounds.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CustomFreedivingPresetsCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('startApneaSec: $startApneaSec, ')
+          ..write('endApneaSec: $endApneaSec, ')
+          ..write('startRestSec: $startRestSec, ')
+          ..write('endRestSec: $endRestSec, ')
+          ..write('rounds: $rounds, ')
+          ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
   }
@@ -2810,6 +3584,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $FreedivingProfileTable(this);
   late final $FreedivingSessionLogTable freedivingSessionLog =
       $FreedivingSessionLogTable(this);
+  late final $WimHofProgressTable wimHofProgress = $WimHofProgressTable(this);
+  late final $CustomFreedivingPresetsTable customFreedivingPresets =
+      $CustomFreedivingPresetsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2821,7 +3598,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         plannedSessions,
         customPresets,
         freedivingProfile,
-        freedivingSessionLog
+        freedivingSessionLog,
+        wimHofProgress,
+        customFreedivingPresets
       ];
 }
 
@@ -2837,6 +3616,7 @@ typedef $$SessionsTableCreateCompanionBuilder = SessionsCompanion Function({
   Value<int?> spo2Avg,
   Value<int?> hrMin,
   Value<int?> hrAvg,
+  Value<int?> rpeScore,
 });
 typedef $$SessionsTableUpdateCompanionBuilder = SessionsCompanion Function({
   Value<int> id,
@@ -2850,6 +3630,7 @@ typedef $$SessionsTableUpdateCompanionBuilder = SessionsCompanion Function({
   Value<int?> spo2Avg,
   Value<int?> hrMin,
   Value<int?> hrAvg,
+  Value<int?> rpeScore,
 });
 
 class $$SessionsTableFilterComposer
@@ -2893,6 +3674,9 @@ class $$SessionsTableFilterComposer
 
   ColumnFilters<int> get hrAvg => $composableBuilder(
       column: $table.hrAvg, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get rpeScore => $composableBuilder(
+      column: $table.rpeScore, builder: (column) => ColumnFilters(column));
 }
 
 class $$SessionsTableOrderingComposer
@@ -2937,6 +3721,9 @@ class $$SessionsTableOrderingComposer
 
   ColumnOrderings<int> get hrAvg => $composableBuilder(
       column: $table.hrAvg, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get rpeScore => $composableBuilder(
+      column: $table.rpeScore, builder: (column) => ColumnOrderings(column));
 }
 
 class $$SessionsTableAnnotationComposer
@@ -2980,6 +3767,9 @@ class $$SessionsTableAnnotationComposer
 
   GeneratedColumn<int> get hrAvg =>
       $composableBuilder(column: $table.hrAvg, builder: (column) => column);
+
+  GeneratedColumn<int> get rpeScore =>
+      $composableBuilder(column: $table.rpeScore, builder: (column) => column);
 }
 
 class $$SessionsTableTableManager extends RootTableManager<
@@ -3016,6 +3806,7 @@ class $$SessionsTableTableManager extends RootTableManager<
             Value<int?> spo2Avg = const Value.absent(),
             Value<int?> hrMin = const Value.absent(),
             Value<int?> hrAvg = const Value.absent(),
+            Value<int?> rpeScore = const Value.absent(),
           }) =>
               SessionsCompanion(
             id: id,
@@ -3029,6 +3820,7 @@ class $$SessionsTableTableManager extends RootTableManager<
             spo2Avg: spo2Avg,
             hrMin: hrMin,
             hrAvg: hrAvg,
+            rpeScore: rpeScore,
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
@@ -3042,6 +3834,7 @@ class $$SessionsTableTableManager extends RootTableManager<
             Value<int?> spo2Avg = const Value.absent(),
             Value<int?> hrMin = const Value.absent(),
             Value<int?> hrAvg = const Value.absent(),
+            Value<int?> rpeScore = const Value.absent(),
           }) =>
               SessionsCompanion.insert(
             id: id,
@@ -3055,6 +3848,7 @@ class $$SessionsTableTableManager extends RootTableManager<
             spo2Avg: spo2Avg,
             hrMin: hrMin,
             hrAvg: hrAvg,
+            rpeScore: rpeScore,
           ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -4004,6 +4798,7 @@ typedef $$FreedivingSessionLogTableCreateCompanionBuilder
   required String roundsJson,
   required int durationSec,
   Value<int?> rpeScore,
+  Value<String?> symptomTag,
 });
 typedef $$FreedivingSessionLogTableUpdateCompanionBuilder
     = FreedivingSessionLogCompanion Function({
@@ -4016,6 +4811,7 @@ typedef $$FreedivingSessionLogTableUpdateCompanionBuilder
   Value<String> roundsJson,
   Value<int> durationSec,
   Value<int?> rpeScore,
+  Value<String?> symptomTag,
 });
 
 class $$FreedivingSessionLogTableFilterComposer
@@ -4054,6 +4850,9 @@ class $$FreedivingSessionLogTableFilterComposer
 
   ColumnFilters<int> get rpeScore => $composableBuilder(
       column: $table.rpeScore, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get symptomTag => $composableBuilder(
+      column: $table.symptomTag, builder: (column) => ColumnFilters(column));
 }
 
 class $$FreedivingSessionLogTableOrderingComposer
@@ -4093,6 +4892,9 @@ class $$FreedivingSessionLogTableOrderingComposer
 
   ColumnOrderings<int> get rpeScore => $composableBuilder(
       column: $table.rpeScore, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get symptomTag => $composableBuilder(
+      column: $table.symptomTag, builder: (column) => ColumnOrderings(column));
 }
 
 class $$FreedivingSessionLogTableAnnotationComposer
@@ -4130,6 +4932,9 @@ class $$FreedivingSessionLogTableAnnotationComposer
 
   GeneratedColumn<int> get rpeScore =>
       $composableBuilder(column: $table.rpeScore, builder: (column) => column);
+
+  GeneratedColumn<String> get symptomTag => $composableBuilder(
+      column: $table.symptomTag, builder: (column) => column);
 }
 
 class $$FreedivingSessionLogTableTableManager extends RootTableManager<
@@ -4171,6 +4976,7 @@ class $$FreedivingSessionLogTableTableManager extends RootTableManager<
             Value<String> roundsJson = const Value.absent(),
             Value<int> durationSec = const Value.absent(),
             Value<int?> rpeScore = const Value.absent(),
+            Value<String?> symptomTag = const Value.absent(),
           }) =>
               FreedivingSessionLogCompanion(
             id: id,
@@ -4182,6 +4988,7 @@ class $$FreedivingSessionLogTableTableManager extends RootTableManager<
             roundsJson: roundsJson,
             durationSec: durationSec,
             rpeScore: rpeScore,
+            symptomTag: symptomTag,
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
@@ -4193,6 +5000,7 @@ class $$FreedivingSessionLogTableTableManager extends RootTableManager<
             required String roundsJson,
             required int durationSec,
             Value<int?> rpeScore = const Value.absent(),
+            Value<String?> symptomTag = const Value.absent(),
           }) =>
               FreedivingSessionLogCompanion.insert(
             id: id,
@@ -4204,6 +5012,7 @@ class $$FreedivingSessionLogTableTableManager extends RootTableManager<
             roundsJson: roundsJson,
             durationSec: durationSec,
             rpeScore: rpeScore,
+            symptomTag: symptomTag,
           ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -4229,6 +5038,369 @@ typedef $$FreedivingSessionLogTableProcessedTableManager
         ),
         FreedivingSessionLogData,
         PrefetchHooks Function()>;
+typedef $$WimHofProgressTableCreateCompanionBuilder = WimHofProgressCompanion
+    Function({
+  Value<int> id,
+  Value<String> currentLevelKey,
+  Value<DateTime?> currentLevelSetAt,
+});
+typedef $$WimHofProgressTableUpdateCompanionBuilder = WimHofProgressCompanion
+    Function({
+  Value<int> id,
+  Value<String> currentLevelKey,
+  Value<DateTime?> currentLevelSetAt,
+});
+
+class $$WimHofProgressTableFilterComposer
+    extends Composer<_$AppDatabase, $WimHofProgressTable> {
+  $$WimHofProgressTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get currentLevelKey => $composableBuilder(
+      column: $table.currentLevelKey,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get currentLevelSetAt => $composableBuilder(
+      column: $table.currentLevelSetAt,
+      builder: (column) => ColumnFilters(column));
+}
+
+class $$WimHofProgressTableOrderingComposer
+    extends Composer<_$AppDatabase, $WimHofProgressTable> {
+  $$WimHofProgressTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get currentLevelKey => $composableBuilder(
+      column: $table.currentLevelKey,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get currentLevelSetAt => $composableBuilder(
+      column: $table.currentLevelSetAt,
+      builder: (column) => ColumnOrderings(column));
+}
+
+class $$WimHofProgressTableAnnotationComposer
+    extends Composer<_$AppDatabase, $WimHofProgressTable> {
+  $$WimHofProgressTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get currentLevelKey => $composableBuilder(
+      column: $table.currentLevelKey, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get currentLevelSetAt => $composableBuilder(
+      column: $table.currentLevelSetAt, builder: (column) => column);
+}
+
+class $$WimHofProgressTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $WimHofProgressTable,
+    WimHofProgressData,
+    $$WimHofProgressTableFilterComposer,
+    $$WimHofProgressTableOrderingComposer,
+    $$WimHofProgressTableAnnotationComposer,
+    $$WimHofProgressTableCreateCompanionBuilder,
+    $$WimHofProgressTableUpdateCompanionBuilder,
+    (
+      WimHofProgressData,
+      BaseReferences<_$AppDatabase, $WimHofProgressTable, WimHofProgressData>
+    ),
+    WimHofProgressData,
+    PrefetchHooks Function()> {
+  $$WimHofProgressTableTableManager(
+      _$AppDatabase db, $WimHofProgressTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$WimHofProgressTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$WimHofProgressTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$WimHofProgressTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<String> currentLevelKey = const Value.absent(),
+            Value<DateTime?> currentLevelSetAt = const Value.absent(),
+          }) =>
+              WimHofProgressCompanion(
+            id: id,
+            currentLevelKey: currentLevelKey,
+            currentLevelSetAt: currentLevelSetAt,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<String> currentLevelKey = const Value.absent(),
+            Value<DateTime?> currentLevelSetAt = const Value.absent(),
+          }) =>
+              WimHofProgressCompanion.insert(
+            id: id,
+            currentLevelKey: currentLevelKey,
+            currentLevelSetAt: currentLevelSetAt,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$WimHofProgressTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $WimHofProgressTable,
+    WimHofProgressData,
+    $$WimHofProgressTableFilterComposer,
+    $$WimHofProgressTableOrderingComposer,
+    $$WimHofProgressTableAnnotationComposer,
+    $$WimHofProgressTableCreateCompanionBuilder,
+    $$WimHofProgressTableUpdateCompanionBuilder,
+    (
+      WimHofProgressData,
+      BaseReferences<_$AppDatabase, $WimHofProgressTable, WimHofProgressData>
+    ),
+    WimHofProgressData,
+    PrefetchHooks Function()>;
+typedef $$CustomFreedivingPresetsTableCreateCompanionBuilder
+    = CustomFreedivingPresetsCompanion Function({
+  Value<int> id,
+  required String name,
+  required int startApneaSec,
+  required int endApneaSec,
+  required int startRestSec,
+  required int endRestSec,
+  required int rounds,
+  required DateTime createdAt,
+});
+typedef $$CustomFreedivingPresetsTableUpdateCompanionBuilder
+    = CustomFreedivingPresetsCompanion Function({
+  Value<int> id,
+  Value<String> name,
+  Value<int> startApneaSec,
+  Value<int> endApneaSec,
+  Value<int> startRestSec,
+  Value<int> endRestSec,
+  Value<int> rounds,
+  Value<DateTime> createdAt,
+});
+
+class $$CustomFreedivingPresetsTableFilterComposer
+    extends Composer<_$AppDatabase, $CustomFreedivingPresetsTable> {
+  $$CustomFreedivingPresetsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get name => $composableBuilder(
+      column: $table.name, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get startApneaSec => $composableBuilder(
+      column: $table.startApneaSec, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get endApneaSec => $composableBuilder(
+      column: $table.endApneaSec, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get startRestSec => $composableBuilder(
+      column: $table.startRestSec, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get endRestSec => $composableBuilder(
+      column: $table.endRestSec, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get rounds => $composableBuilder(
+      column: $table.rounds, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$CustomFreedivingPresetsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CustomFreedivingPresetsTable> {
+  $$CustomFreedivingPresetsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get name => $composableBuilder(
+      column: $table.name, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get startApneaSec => $composableBuilder(
+      column: $table.startApneaSec,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get endApneaSec => $composableBuilder(
+      column: $table.endApneaSec, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get startRestSec => $composableBuilder(
+      column: $table.startRestSec,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get endRestSec => $composableBuilder(
+      column: $table.endRestSec, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get rounds => $composableBuilder(
+      column: $table.rounds, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$CustomFreedivingPresetsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CustomFreedivingPresetsTable> {
+  $$CustomFreedivingPresetsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<int> get startApneaSec => $composableBuilder(
+      column: $table.startApneaSec, builder: (column) => column);
+
+  GeneratedColumn<int> get endApneaSec => $composableBuilder(
+      column: $table.endApneaSec, builder: (column) => column);
+
+  GeneratedColumn<int> get startRestSec => $composableBuilder(
+      column: $table.startRestSec, builder: (column) => column);
+
+  GeneratedColumn<int> get endRestSec => $composableBuilder(
+      column: $table.endRestSec, builder: (column) => column);
+
+  GeneratedColumn<int> get rounds =>
+      $composableBuilder(column: $table.rounds, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$CustomFreedivingPresetsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $CustomFreedivingPresetsTable,
+    CustomFreedivingPreset,
+    $$CustomFreedivingPresetsTableFilterComposer,
+    $$CustomFreedivingPresetsTableOrderingComposer,
+    $$CustomFreedivingPresetsTableAnnotationComposer,
+    $$CustomFreedivingPresetsTableCreateCompanionBuilder,
+    $$CustomFreedivingPresetsTableUpdateCompanionBuilder,
+    (
+      CustomFreedivingPreset,
+      BaseReferences<_$AppDatabase, $CustomFreedivingPresetsTable,
+          CustomFreedivingPreset>
+    ),
+    CustomFreedivingPreset,
+    PrefetchHooks Function()> {
+  $$CustomFreedivingPresetsTableTableManager(
+      _$AppDatabase db, $CustomFreedivingPresetsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CustomFreedivingPresetsTableFilterComposer(
+                  $db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CustomFreedivingPresetsTableOrderingComposer(
+                  $db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CustomFreedivingPresetsTableAnnotationComposer(
+                  $db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<String> name = const Value.absent(),
+            Value<int> startApneaSec = const Value.absent(),
+            Value<int> endApneaSec = const Value.absent(),
+            Value<int> startRestSec = const Value.absent(),
+            Value<int> endRestSec = const Value.absent(),
+            Value<int> rounds = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+          }) =>
+              CustomFreedivingPresetsCompanion(
+            id: id,
+            name: name,
+            startApneaSec: startApneaSec,
+            endApneaSec: endApneaSec,
+            startRestSec: startRestSec,
+            endRestSec: endRestSec,
+            rounds: rounds,
+            createdAt: createdAt,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required String name,
+            required int startApneaSec,
+            required int endApneaSec,
+            required int startRestSec,
+            required int endRestSec,
+            required int rounds,
+            required DateTime createdAt,
+          }) =>
+              CustomFreedivingPresetsCompanion.insert(
+            id: id,
+            name: name,
+            startApneaSec: startApneaSec,
+            endApneaSec: endApneaSec,
+            startRestSec: startRestSec,
+            endRestSec: endRestSec,
+            rounds: rounds,
+            createdAt: createdAt,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$CustomFreedivingPresetsTableProcessedTableManager
+    = ProcessedTableManager<
+        _$AppDatabase,
+        $CustomFreedivingPresetsTable,
+        CustomFreedivingPreset,
+        $$CustomFreedivingPresetsTableFilterComposer,
+        $$CustomFreedivingPresetsTableOrderingComposer,
+        $$CustomFreedivingPresetsTableAnnotationComposer,
+        $$CustomFreedivingPresetsTableCreateCompanionBuilder,
+        $$CustomFreedivingPresetsTableUpdateCompanionBuilder,
+        (
+          CustomFreedivingPreset,
+          BaseReferences<_$AppDatabase, $CustomFreedivingPresetsTable,
+              CustomFreedivingPreset>
+        ),
+        CustomFreedivingPreset,
+        PrefetchHooks Function()>;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -4247,4 +5419,9 @@ class $AppDatabaseManager {
       $$FreedivingProfileTableTableManager(_db, _db.freedivingProfile);
   $$FreedivingSessionLogTableTableManager get freedivingSessionLog =>
       $$FreedivingSessionLogTableTableManager(_db, _db.freedivingSessionLog);
+  $$WimHofProgressTableTableManager get wimHofProgress =>
+      $$WimHofProgressTableTableManager(_db, _db.wimHofProgress);
+  $$CustomFreedivingPresetsTableTableManager get customFreedivingPresets =>
+      $$CustomFreedivingPresetsTableTableManager(
+          _db, _db.customFreedivingPresets);
 }

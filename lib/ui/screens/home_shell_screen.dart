@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/theme.dart';
+import 'package:okrutnik_breath/logic/providers/settings_provider.dart';
 import 'package:okrutnik_breath/ui/screens/freediving/freediving_home_screen.dart';
 import 'package:okrutnik_breath/ui/screens/more_screen.dart';
 import 'package:okrutnik_breath/ui/screens/scheduler_screen.dart';
@@ -19,14 +21,14 @@ import 'package:okrutnik_breath/ui/widgets/confirm_dialog.dart';
 /// restarted the particle animation. A single shared instance persists
 /// across tab switches; only its [AppBackground.sectionAccent] changes to
 /// reflect the active tab's identity colour.
-class HomeShellScreen extends StatefulWidget {
+class HomeShellScreen extends ConsumerStatefulWidget {
   const HomeShellScreen({super.key});
 
   @override
-  State<HomeShellScreen> createState() => _HomeShellScreenState();
+  ConsumerState<HomeShellScreen> createState() => _HomeShellScreenState();
 }
 
-class _HomeShellScreenState extends State<HomeShellScreen> {
+class _HomeShellScreenState extends ConsumerState<HomeShellScreen> {
   int _index = 0;
 
   // Tabs are built lazily on first visit (then kept alive by IndexedStack) —
@@ -62,6 +64,19 @@ class _HomeShellScreenState extends State<HomeShellScreen> {
   void initState() {
     super.initState();
     _tabs[0] = _builders[0]();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowReminderMigrationNotice());
+  }
+
+  /// One-time notice for users affected by the reminder migration in
+  /// SettingsNotifier — without this, their daily reminder just silently
+  /// stopped, with nothing in the UI explaining why.
+  void _maybeShowReminderMigrationNotice() {
+    if (!ref.read(settingsProvider.notifier).consumeReminderMigrationNotice()) return;
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(L10n.get(context, 'settings_reminder_migration_notice')),
+      duration: const Duration(seconds: 6),
+    ));
   }
 
   void _selectTab(int i) {

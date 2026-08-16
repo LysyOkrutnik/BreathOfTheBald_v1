@@ -72,4 +72,19 @@
         android:textStyle="bold"
         android:textSize="13sp"
         android:letterSpacing="0.1" />
+
+    <TextView
+        android:id="@+id/widget_coldshower_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/widget_coldshower_button_bg"
+        android:paddingTop="9dp"
+        android:paddingBottom="9dp"
+        android:gravity="center"
+        android:text="COLD SHOWER"
+        android:textColor="#000000"
+        android:textStyle="bold"
+        android:textSize="11sp"
+        android:letterSpacing="0.1" />
 </LinearLayout>

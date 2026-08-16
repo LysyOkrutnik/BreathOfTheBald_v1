@@ -11,6 +11,7 @@ import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/ui/screens/custom_builder_screen.dart';
 import 'package:okrutnik_breath/ui/screens/intro_screen.dart';
 import 'package:okrutnik_breath/ui/screens/session_screen.dart';
+import 'package:okrutnik_breath/ui/widgets/confirm_dialog.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 
 /// A caption label with a trailing rule, used to introduce a section of
@@ -118,9 +119,11 @@ class LevelCard extends StatelessWidget {
       case ExerciseType.custom:
       case ExerciseType.co2Table:
       case ExerciseType.o2Table:
-        // Freediving tables never appear in this generic grid (they have
-        // their own dedicated tab); custom presets show their own
-        // description via PresetCard instead.
+      case ExerciseType.customFreedivingTable:
+      case ExerciseType.coldShower:
+        // Freediving tables and the cold shower pseudo-level never appear in
+        // this generic grid (they have their own entry points); custom
+        // presets show their own description via PresetCard instead.
         return '';
     }
   }
@@ -162,6 +165,8 @@ class LevelCard extends StatelessWidget {
                         Expanded(
                           child: Text(
                             L10n.get(context, level.title),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 17,
                               fontWeight: FontWeight.w600,
@@ -171,12 +176,15 @@ class LevelCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: AppSpacing.sm),
-                        Text(
-                          _paceLabel(context, level),
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: level.color,
+                        Flexible(
+                          child: Text(
+                            _paceLabel(context, level),
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: level.color,
+                            ),
                           ),
                         ),
                       ],
@@ -227,6 +235,19 @@ class CustomSection extends ConsumerWidget {
     Navigator.of(context).push(fadeThroughRoute(const SessionScreen()));
   }
 
+  Future<void> _delete(BuildContext context, WidgetRef ref, CustomPreset p) async {
+    final confirmed = await showGlassConfirm(
+      context,
+      title: L10n.get(context, 'delete_confirm_title'),
+      confirmLabel: L10n.get(context, 'delete_confirm_yes'),
+      cancelLabel: L10n.get(context, 'delete_confirm_cancel'),
+      icon: Icons.delete_outline_rounded,
+    );
+    if (confirmed) {
+      await ref.read(customPresetRepositoryProvider).deletePreset(p.id);
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final presets = ref.watch(customPresetsProvider).value ?? const [];
@@ -239,8 +260,7 @@ class CustomSection extends ConsumerWidget {
           PresetCard(
             preset: p,
             onTap: () => _start(context, ref, p),
-            onDelete: () =>
-                ref.read(customPresetRepositoryProvider).deletePreset(p.id),
+            onDelete: () => _delete(context, ref, p),
           ),
           const SizedBox(height: AppSpacing.md),
         ],

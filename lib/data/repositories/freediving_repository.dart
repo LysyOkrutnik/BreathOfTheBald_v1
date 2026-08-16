@@ -59,11 +59,27 @@ class FreedivingRepository {
     required List<BreathHoldRound> rounds,
     required int roundsCompleted,
     required int durationSec,
+    // Per-round "first contraction" marks (see RoundContraction) — folded
+    // into the same free-form JSON blob rather than a new column, so this
+    // needed no schema migration. Absent or shorter than [rounds] (e.g. an
+    // early-ended table) just means later rounds have no contraction data.
+    List<RoundContraction>? contractions,
   }) {
-    final roundsJson = jsonEncode(rounds
-        .map((r) =>
-            {'round': r.index, 'apneaSec': r.apneaSec, 'restSec': r.restSec})
-        .toList());
+    final roundsJson = jsonEncode(rounds.asMap().entries.map((entry) {
+      final r = entry.value;
+      final contraction = contractions != null && entry.key < contractions.length
+          ? contractions[entry.key]
+          : null;
+      return {
+        'round': r.index,
+        'apneaSec': r.apneaSec,
+        'restSec': r.restSec,
+        if (contraction?.firstContractionSec != null)
+          'firstContractionSec': contraction!.firstContractionSec,
+        if (contraction != null && contraction.markCount > 0)
+          'contractionMarks': contraction.markCount,
+      };
+    }).toList());
 
     return _db.into(_db.freedivingSessionLog).insert(
           FreedivingSessionLogCompanion.insert(
@@ -127,10 +143,39 @@ class FreedivingRepository {
               ));
   }
 
+  /// Records the post-session symptom check-in on the most recent log of
+  /// [tableType] — same "find the last log, attach it" pattern as
+  /// [recordRpeAndAdjustPb], but this doesn't touch the working PB: a
+  /// symptom report is a safety signal, not a difficulty rating.
+  Future<void> recordSymptomTag({
+    required FreedivingTableType tableType,
+    required String symptomTag,
+  }) async {
+    final typeStr = tableType == FreedivingTableType.co2 ? 'co2' : 'o2';
+    final lastLog = await (_db.select(_db.freedivingSessionLog)
+          ..where((t) => t.tableType.equals(typeStr))
+          ..orderBy([(t) => OrderingTerm.desc(t.timestamp)])
+          ..limit(1))
+        .getSingleOrNull();
+    if (lastLog == null) return;
+    await (_db.update(_db.freedivingSessionLog)
+          ..where((t) => t.id.equals(lastLog.id)))
+        .write(FreedivingSessionLogCompanion(symptomTag: Value(symptomTag)));
+  }
+
   Stream<List<FreedivingSessionLogData>> watchRecentLogs({int limit = 20}) {
     return (_db.select(_db.freedivingSessionLog)
           ..orderBy([(t) => OrderingTerm.desc(t.timestamp)])
           ..limit(limit))
+        .watch();
+  }
+
+  /// All-time session log, unbounded — used to compute cumulative per-type
+  /// counts (e.g. "how many CO2 tables ever") for the guided training path,
+  /// where a recent-only window would undercount an established user.
+  Stream<List<FreedivingSessionLogData>> watchAllLogs() {
+    return (_db.select(_db.freedivingSessionLog)
+          ..orderBy([(t) => OrderingTerm.desc(t.timestamp)]))
         .watch();
   }
 }

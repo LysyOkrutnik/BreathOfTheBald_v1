@@ -5,21 +5,25 @@ import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/responsive.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
+import 'package:okrutnik_breath/logic/providers/app_info_provider.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/logic/providers/locale_provider.dart';
 import 'package:okrutnik_breath/logic/providers/settings_provider.dart';
 import 'package:okrutnik_breath/ui/screens/instruction_screen.dart';
 import 'package:okrutnik_breath/ui/screens/privacy_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
+import 'package:okrutnik_breath/ui/widgets/confirm_dialog.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/glow_halo.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
+import 'package:okrutnik_breath/ui/widgets/week_preferences_sheet.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
-  static const _appVersion = '1.0.0';
+  static const _contactEmail = 'rafalcharciarek@gmail.com';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -27,6 +31,7 @@ class SettingsScreen extends ConsumerWidget {
     final notifier = ref.read(settingsProvider.notifier);
     final profile = ref.watch(userProfileProvider).value;
     final isPl = ref.watch(localeProvider).languageCode == 'pl';
+    final appVersion = ref.watch(appVersionProvider).value ?? '';
 
     return Scaffold(
       body: Stack(
@@ -61,7 +66,23 @@ class SettingsScreen extends ConsumerWidget {
                               value: settings.dailyReminderEnabled,
                               onChanged: (v) => _setDailyReminder(context, ref, v),
                             ),
+                            _Tile(
+                              icon: Icons.event_available_outlined,
+                              title: L10n.get(context, 'settings_availability'),
+                              trailing: const Icon(Icons.chevron_right_rounded,
+                                  color: Colors.white38),
+                              onTap: () => WeekPreferencesSheet.show(context),
+                            ),
                           ]),
+                          const SizedBox(height: AppSpacing.xs),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                            child: Text(
+                              L10n.get(context, 'settings_daily_reminder_note'),
+                              style: TextStyle(
+                                  color: AppTheme.textDim.withAlpha(180), fontSize: 11, height: 1.3),
+                            ),
+                          ),
                           const SizedBox(height: AppSpacing.lg),
 
                           _SectionHeader(L10n.get(context, 'settings_section_sound')),
@@ -95,8 +116,22 @@ class SettingsScreen extends ConsumerWidget {
                           ]),
                           const SizedBox(height: AppSpacing.lg),
 
-                          _SectionHeader(L10n.get(context, 'settings_section_about')),
+                          _SectionHeader(L10n.get(context, 'settings_section_help')),
                           _Group(children: [
+                            _Tile(
+                              icon: Icons.widgets_outlined,
+                              title: L10n.get(context, 'settings_home_widget'),
+                              trailing: const Icon(Icons.chevron_right_rounded,
+                                  color: Colors.white38),
+                              onTap: () => _showHomeWidgetInfo(context),
+                            ),
+                            _Tile(
+                              icon: Icons.mail_outline_rounded,
+                              title: L10n.get(context, 'settings_contact'),
+                              trailing: const Icon(Icons.chevron_right_rounded,
+                                  color: Colors.white38),
+                              onTap: () => _contactSupport(context),
+                            ),
                             _Tile(
                               icon: Icons.spa_outlined,
                               title: L10n.get(context, 'settings_guide'),
@@ -105,6 +140,11 @@ class SettingsScreen extends ConsumerWidget {
                               onTap: () => Navigator.of(context).push(
                                   fadeThroughRoute(const InstructionScreen())),
                             ),
+                          ]),
+                          const SizedBox(height: AppSpacing.lg),
+
+                          _SectionHeader(L10n.get(context, 'settings_section_about')),
+                          _Group(children: [
                             _Tile(
                               icon: Icons.privacy_tip_outlined,
                               title: L10n.get(context, 'settings_privacy'),
@@ -116,8 +156,8 @@ class SettingsScreen extends ConsumerWidget {
                             _Tile(
                               icon: Icons.info_outline_rounded,
                               title: L10n.get(context, 'settings_version'),
-                              trailing: const Text(_appVersion,
-                                  style: TextStyle(color: AppTheme.textDim)),
+                              trailing: Text(appVersion,
+                                  style: const TextStyle(color: AppTheme.textDim)),
                             ),
                           ]),
                         ].animate(interval: 50.ms).fadeIn(duration: AppMotion.medium),
@@ -157,11 +197,53 @@ class SettingsScreen extends ConsumerWidget {
 
   Future<void> _editName(
       BuildContext context, WidgetRef ref, String current) async {
-    final saved = await showDialog<String>(
-      context: context,
+    final saved = await showGlassDialog<String>(
+      context,
       builder: (_) => _NameEditDialog(initial: current),
     );
     if (saved != null) ref.read(settingsProvider.notifier).setProfileName(saved);
+  }
+
+  Future<void> _contactSupport(BuildContext context) async {
+    final subject = L10n.get(context, 'settings_contact_subject');
+    final uri = Uri(
+      scheme: 'mailto',
+      path: _contactEmail,
+      query: 'subject=${Uri.encodeComponent(subject)}',
+    );
+    final messenger = ScaffoldMessenger.of(context);
+    final launched = await launchUrl(uri);
+    if (!launched && context.mounted) {
+      messenger.showSnackBar(
+          SnackBar(content: Text(L10n.get(context, 'settings_contact_failed'))));
+    }
+  }
+
+  void _showHomeWidgetInfo(BuildContext context) {
+    showGlassDialog(
+      context,
+      builder: (dialogContext) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            L10n.get(context, 'settings_home_widget'),
+            style: const TextStyle(
+                color: AppTheme.textLight, fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            L10n.get(context, 'settings_home_widget_instructions'),
+            style: const TextStyle(color: AppTheme.textDim, fontSize: 13, height: 1.5),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          ElevatedButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(L10n.get(context, 'common_ok')),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -188,66 +270,53 @@ class _NameEditDialogState extends State<_NameEditDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.all(AppSpacing.lg),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        decoration: BoxDecoration(
-          color: const Color(0xFF141C24),
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          border: Border.all(color: Colors.white.withAlpha(28)),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          L10n.get(context, 'settings_profile_name'),
+          style: const TextStyle(
+              color: AppTheme.textLight, fontSize: 16, fontWeight: FontWeight.w600),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        const SizedBox(height: AppSpacing.lg),
+        TextField(
+          controller: _controller,
+          autofocus: true,
+          maxLength: 24,
+          style: const TextStyle(color: AppTheme.textLight),
+          cursorColor: AppTheme.primary,
+          textCapitalization: TextCapitalization.words,
+          decoration: InputDecoration(
+            hintText: L10n.get(context, 'settings_name_hint'),
+            hintStyle: const TextStyle(color: AppTheme.textDim),
+            counterStyle: const TextStyle(color: AppTheme.textDim),
+            enabledBorder: const UnderlineInputBorder(
+                borderSide: BorderSide(color: Colors.white24)),
+            focusedBorder: const UnderlineInputBorder(
+                borderSide: BorderSide(color: AppTheme.primary)),
+          ),
+          onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Row(
           children: [
-            Text(
-              L10n.get(context, 'settings_profile_name'),
-              style: const TextStyle(
-                  color: AppTheme.textLight,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            TextField(
-              controller: _controller,
-              autofocus: true,
-              style: const TextStyle(color: AppTheme.textLight),
-              cursorColor: AppTheme.primary,
-              textCapitalization: TextCapitalization.words,
-              decoration: InputDecoration(
-                hintText: L10n.get(context, 'settings_name_hint'),
-                hintStyle: const TextStyle(color: AppTheme.textDim),
-                enabledBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white24)),
-                focusedBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: AppTheme.primary)),
+            Expanded(
+              child: TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(L10n.get(context, 'common_cancel'),
+                    style: const TextStyle(color: Colors.white70)),
               ),
-              onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
             ),
-            const SizedBox(height: AppSpacing.lg),
-            Row(
-              children: [
-                Expanded(
-                  child: TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: Text(L10n.get(context, 'common_cancel'),
-                        style: const TextStyle(color: Colors.white70)),
-                  ),
-                ),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () =>
-                        Navigator.of(context).pop(_controller.text.trim()),
-                    child: Text(L10n.get(context, 'common_save')),
-                  ),
-                ),
-              ],
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+                child: Text(L10n.get(context, 'common_save')),
+              ),
             ),
           ],
         ),
-      ),
+      ],
     );
   }
 }
@@ -445,7 +514,8 @@ class _LangToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget chip(String label, bool active) => Container(
+    Widget chip(String label, bool active) => AnimatedContainer(
+          duration: AppMotion.fast,
           padding:
               const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 4),
           decoration: BoxDecoration(
@@ -460,7 +530,11 @@ class _LangToggle extends StatelessWidget {
         );
     return GestureDetector(
       onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      // The whole pill toggles the language on one tap — was only ~28dp
+      // tall, below the 48dp minimum recommended touch target.
       child: Container(
+        constraints: const BoxConstraints(minHeight: 48),
         padding: const EdgeInsets.all(3),
         decoration: BoxDecoration(
           color: Colors.white.withAlpha(14),

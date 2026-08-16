@@ -39,7 +39,13 @@ class FreedivingTableIntroScreen extends ConsumerWidget {
     final color = _isCo2 ? const Color(0xFF4FC3F7) : const Color(0xFFFF7043);
     final level = LevelData.freedivingTable(tableType: tableType, pbSeconds: pbSeconds);
     final rounds = level.freedivingRounds!;
-    final totalSec = rounds.fold<int>(0, (s, r) => s + r.apneaSec + r.restSec);
+    // Includes each round's breathe-up + final inhale + exhale — omitting
+    // that overhead would understate real session length by several minutes
+    // over a full table (see FreedivingSessionTiming).
+    final totalSec = rounds.fold<int>(
+        0,
+        (s, r) =>
+            s + r.apneaSec + r.restSec + FreedivingSessionTiming.perRoundOverheadSec);
 
     return Scaffold(
       body: Stack(
@@ -77,7 +83,7 @@ class FreedivingTableIntroScreen extends ConsumerWidget {
                                   child: Text(
                                     L10n.get(context, 'freediving_safety_rule1'),
                                     style: const TextStyle(
-                                        color: Color(0xFFFF8A80), fontSize: 12),
+                                        color: AppTheme.danger, fontSize: 12),
                                   ),
                                 ),
                               ],

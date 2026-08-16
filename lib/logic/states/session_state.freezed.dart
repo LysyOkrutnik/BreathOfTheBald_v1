@@ -893,7 +893,16 @@ mixin _$SessionState {
       throw _privateConstructorUsedError; // Override the default phase UI with custom text and sizing for specialized exercises like Box Breathing.
   String? get customLabel => throw _privateConstructorUsedError;
   String? get customDescription => throw _privateConstructorUsedError;
-  bool? get customIsBig => throw _privateConstructorUsedError;
+  bool? get customIsBig =>
+      throw _privateConstructorUsedError; // True right after a freediving table round was ended early (the user
+// tapped "I need to breathe"), once that round's exhale has finished —
+// the flow pauses here for an explicit continue-or-end decision instead
+// of silently ending the whole table.
+  bool get awaitingRoundDecision =>
+      throw _privateConstructorUsedError; // Live count of "first contraction" taps marked during the *current*
+// freediving hold — reset to 0 at the start of every round's hold. Only
+// meaningful while `phase` is `retention` during a freediving table.
+  int get contractionMarkCount => throw _privateConstructorUsedError;
 
   /// Create a copy of SessionState
   /// with the given fields replaced by the non-null parameter values.
@@ -920,7 +929,9 @@ abstract class $SessionStateCopyWith<$Res> {
       Duration? sessionDuration,
       String? customLabel,
       String? customDescription,
-      bool? customIsBig});
+      bool? customIsBig,
+      bool awaitingRoundDecision,
+      int contractionMarkCount});
 
   $SessionPhaseCopyWith<$Res> get phase;
 }
@@ -952,6 +963,8 @@ class _$SessionStateCopyWithImpl<$Res, $Val extends SessionState>
     Object? customLabel = freezed,
     Object? customDescription = freezed,
     Object? customIsBig = freezed,
+    Object? awaitingRoundDecision = null,
+    Object? contractionMarkCount = null,
   }) {
     return _then(_value.copyWith(
       phase: null == phase
@@ -1002,6 +1015,14 @@ class _$SessionStateCopyWithImpl<$Res, $Val extends SessionState>
           ? _value.customIsBig
           : customIsBig // ignore: cast_nullable_to_non_nullable
               as bool?,
+      awaitingRoundDecision: null == awaitingRoundDecision
+          ? _value.awaitingRoundDecision
+          : awaitingRoundDecision // ignore: cast_nullable_to_non_nullable
+              as bool,
+      contractionMarkCount: null == contractionMarkCount
+          ? _value.contractionMarkCount
+          : contractionMarkCount // ignore: cast_nullable_to_non_nullable
+              as int,
     ) as $Val);
   }
 
@@ -1036,7 +1057,9 @@ abstract class _$$SessionStateImplCopyWith<$Res>
       Duration? sessionDuration,
       String? customLabel,
       String? customDescription,
-      bool? customIsBig});
+      bool? customIsBig,
+      bool awaitingRoundDecision,
+      int contractionMarkCount});
 
   @override
   $SessionPhaseCopyWith<$Res> get phase;
@@ -1067,6 +1090,8 @@ class __$$SessionStateImplCopyWithImpl<$Res>
     Object? customLabel = freezed,
     Object? customDescription = freezed,
     Object? customIsBig = freezed,
+    Object? awaitingRoundDecision = null,
+    Object? contractionMarkCount = null,
   }) {
     return _then(_$SessionStateImpl(
       phase: null == phase
@@ -1117,6 +1142,14 @@ class __$$SessionStateImplCopyWithImpl<$Res>
           ? _value.customIsBig
           : customIsBig // ignore: cast_nullable_to_non_nullable
               as bool?,
+      awaitingRoundDecision: null == awaitingRoundDecision
+          ? _value.awaitingRoundDecision
+          : awaitingRoundDecision // ignore: cast_nullable_to_non_nullable
+              as bool,
+      contractionMarkCount: null == contractionMarkCount
+          ? _value.contractionMarkCount
+          : contractionMarkCount // ignore: cast_nullable_to_non_nullable
+              as int,
     ));
   }
 }
@@ -1136,7 +1169,9 @@ class _$SessionStateImpl implements _SessionState {
       this.sessionDuration,
       this.customLabel,
       this.customDescription,
-      this.customIsBig})
+      this.customIsBig,
+      this.awaitingRoundDecision = false,
+      this.contractionMarkCount = 0})
       : _retentionLogs = retentionLogs;
 
   @override
@@ -1170,10 +1205,23 @@ class _$SessionStateImpl implements _SessionState {
   final String? customDescription;
   @override
   final bool? customIsBig;
+// True right after a freediving table round was ended early (the user
+// tapped "I need to breathe"), once that round's exhale has finished —
+// the flow pauses here for an explicit continue-or-end decision instead
+// of silently ending the whole table.
+  @override
+  @JsonKey()
+  final bool awaitingRoundDecision;
+// Live count of "first contraction" taps marked during the *current*
+// freediving hold — reset to 0 at the start of every round's hold. Only
+// meaningful while `phase` is `retention` during a freediving table.
+  @override
+  @JsonKey()
+  final int contractionMarkCount;
 
   @override
   String toString() {
-    return 'SessionState(phase: $phase, currentRound: $currentRound, totalRounds: $totalRounds, totalBreathsInRound: $totalBreathsInRound, isGhostMode: $isGhostMode, isPanicMode: $isPanicMode, retentionLogs: $retentionLogs, startTime: $startTime, sessionDuration: $sessionDuration, customLabel: $customLabel, customDescription: $customDescription, customIsBig: $customIsBig)';
+    return 'SessionState(phase: $phase, currentRound: $currentRound, totalRounds: $totalRounds, totalBreathsInRound: $totalBreathsInRound, isGhostMode: $isGhostMode, isPanicMode: $isPanicMode, retentionLogs: $retentionLogs, startTime: $startTime, sessionDuration: $sessionDuration, customLabel: $customLabel, customDescription: $customDescription, customIsBig: $customIsBig, awaitingRoundDecision: $awaitingRoundDecision, contractionMarkCount: $contractionMarkCount)';
   }
 
   @override
@@ -1203,7 +1251,11 @@ class _$SessionStateImpl implements _SessionState {
             (identical(other.customDescription, customDescription) ||
                 other.customDescription == customDescription) &&
             (identical(other.customIsBig, customIsBig) ||
-                other.customIsBig == customIsBig));
+                other.customIsBig == customIsBig) &&
+            (identical(other.awaitingRoundDecision, awaitingRoundDecision) ||
+                other.awaitingRoundDecision == awaitingRoundDecision) &&
+            (identical(other.contractionMarkCount, contractionMarkCount) ||
+                other.contractionMarkCount == contractionMarkCount));
   }
 
   @override
@@ -1220,7 +1272,9 @@ class _$SessionStateImpl implements _SessionState {
       sessionDuration,
       customLabel,
       customDescription,
-      customIsBig);
+      customIsBig,
+      awaitingRoundDecision,
+      contractionMarkCount);
 
   /// Create a copy of SessionState
   /// with the given fields replaced by the non-null parameter values.
@@ -1244,7 +1298,9 @@ abstract class _SessionState implements SessionState {
       final Duration? sessionDuration,
       final String? customLabel,
       final String? customDescription,
-      final bool? customIsBig}) = _$SessionStateImpl;
+      final bool? customIsBig,
+      final bool awaitingRoundDecision,
+      final int contractionMarkCount}) = _$SessionStateImpl;
 
   @override
   SessionPhase get phase;
@@ -1270,7 +1326,18 @@ abstract class _SessionState implements SessionState {
   @override
   String? get customDescription;
   @override
-  bool? get customIsBig;
+  bool?
+      get customIsBig; // True right after a freediving table round was ended early (the user
+// tapped "I need to breathe"), once that round's exhale has finished —
+// the flow pauses here for an explicit continue-or-end decision instead
+// of silently ending the whole table.
+  @override
+  bool
+      get awaitingRoundDecision; // Live count of "first contraction" taps marked during the *current*
+// freediving hold — reset to 0 at the start of every round's hold. Only
+// meaningful while `phase` is `retention` during a freediving table.
+  @override
+  int get contractionMarkCount;
 
   /// Create a copy of SessionState
   /// with the given fields replaced by the non-null parameter values.

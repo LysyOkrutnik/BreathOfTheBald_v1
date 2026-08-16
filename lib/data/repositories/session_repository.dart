@@ -42,6 +42,19 @@ class SessionRepository {
         );
   }
 
+  /// Records the post-session RPE rating (1-10) for [sessionId].
+  Future<void> updateRpe(int sessionId, int rpeScore) {
+    return (_db.update(_db.sessions)..where((t) => t.id.equals(sessionId)))
+        .write(SessionsCompanion(rpeScore: Value(rpeScore)));
+  }
+
+  /// Removes a session outright — used to back out of an accidental log
+  /// (e.g. the cold-shower checklist's "undo" window) rather than leaving a
+  /// false record in history.
+  Future<void> deleteSession(int id) {
+    return (_db.delete(_db.sessions)..where((t) => t.id.equals(id))).go();
+  }
+
   /// Emits the full session history, newest first, updating on every change.
   Stream<List<Session>> watchSessions() {
     return (_db.select(_db.sessions)

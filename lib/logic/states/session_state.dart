@@ -33,6 +33,17 @@ class SessionState with _$SessionState {
     String? customLabel,
     String? customDescription,
     bool? customIsBig,
+
+    // True right after a freediving table round was ended early (the user
+    // tapped "I need to breathe"), once that round's exhale has finished —
+    // the flow pauses here for an explicit continue-or-end decision instead
+    // of silently ending the whole table.
+    @Default(false) bool awaitingRoundDecision,
+
+    // Live count of "first contraction" taps marked during the *current*
+    // freediving hold — reset to 0 at the start of every round's hold. Only
+    // meaningful while `phase` is `retention` during a freediving table.
+    @Default(0) int contractionMarkCount,
   }) = _SessionState;
 
   factory SessionState.initial() => const SessionState(
@@ -48,5 +59,7 @@ class SessionState with _$SessionState {
     customLabel: null,
     customDescription: null,
     customIsBig: null,
+    awaitingRoundDecision: false,
+    contractionMarkCount: 0,
   );
 }

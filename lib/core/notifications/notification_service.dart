@@ -52,6 +52,24 @@ class NotificationService {
     }
   }
 
+  /// Whether the app is currently allowed to schedule exact-time alarms.
+  /// Checked before ever prompting, so the (quite heavy — it navigates out
+  /// to a system Settings screen) request only ever fires once, from an
+  /// explicit in-context card, not silently on every Plan tab visit.
+  Future<bool> canScheduleExactAlarms() async {
+    try {
+      final android = _notificationsPlugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      // Null means "not applicable" (e.g. iOS, or an old Android that never
+      // needed this permission) — treat that as already fine.
+      return await android?.canScheduleExactNotifications() ?? true;
+    } catch (e, st) {
+      developer.log('Exact-alarm permission check failed',
+          name: 'NotificationService', error: e, stackTrace: st);
+      return true;
+    }
+  }
+
   /// Schedules a one-off reminder at [when]. Used for the "5 minutes before a
   /// planned session" notification. The [id] should be unique per plan.
   Future<void> scheduleOneTime({

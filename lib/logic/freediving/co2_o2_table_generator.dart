@@ -14,6 +14,72 @@ class BreathHoldRound {
 
 enum FreedivingTableType { co2, o2 }
 
+/// Fixed per-round timing that sits around a table's own apnea+rest
+/// seconds — a calm breathe-up, the final full inhale, and the exhale right
+/// after the hold. Shared between the session runner and the pre-start
+/// preview so the "~X min" estimate shown before starting stays honest
+/// rather than silently undercounting real session length.
+abstract final class FreedivingSessionTiming {
+  static const int breatheUpCycles = 3;
+  static const int breatheUpBreathSec = 4;
+  static const int finalInhaleSec = 3;
+  static const int exhaleSec = 2;
+
+  static int get perRoundOverheadSec =>
+      breatheUpCycles * breatheUpBreathSec * 2 + finalInhaleSec + exhaleSec;
+}
+
+/// One round's "first contraction" data — the moment the diaphragm's urge-
+/// to-breathe reflex first kicks in during a hold, marked by the user via
+/// the "Fala kontrakcji" control. Tracked separately from the hold's total
+/// duration since the two can move in opposite directions: a growing gap
+/// between them (contraction earlier, hold time still the same or longer)
+/// is real, measurable CO2-tolerance progress that total hold time alone
+/// doesn't show.
+class RoundContraction {
+  const RoundContraction({required this.firstContractionSec, required this.markCount});
+
+  /// Seconds into the hold when the first tap landed — null if the round
+  /// was never marked at all.
+  final int? firstContractionSec;
+
+  /// Total number of taps in the round (>= 1 whenever [firstContractionSec]
+  /// is non-null).
+  final int markCount;
+}
+
+/// A just-finished freediving table's contraction data, condensed for the
+/// summary screen — built from a list of per-round [RoundContraction].
+class RoundContractionSummary {
+  const RoundContractionSummary({
+    required this.averageFirstContractionSec,
+    required this.roundsMarked,
+    required this.totalRounds,
+    required this.totalMarks,
+  });
+
+  /// Average, across only the rounds that got at least one tap, of seconds
+  /// into the hold when the first tap landed.
+  final int averageFirstContractionSec;
+  final int roundsMarked;
+  final int totalRounds;
+  final int totalMarks;
+
+  /// Null if nothing was ever marked this session — nothing to summarize.
+  static RoundContractionSummary? fromRounds(List<RoundContraction> rounds) {
+    final marked = rounds.where((r) => r.firstContractionSec != null).toList();
+    if (marked.isEmpty) return null;
+    final avg = marked.fold<int>(0, (sum, r) => sum + r.firstContractionSec!) ~/
+        marked.length;
+    return RoundContractionSummary(
+      averageFirstContractionSec: avg,
+      roundsMarked: marked.length,
+      totalRounds: rounds.length,
+      totalMarks: rounds.fold<int>(0, (sum, r) => sum + r.markCount),
+    );
+  }
+}
+
 /// Generates CO2 and O2 static-apnea tables from a Personal Best (PB) time.
 ///
 /// CO2 tables build tolerance to carbon dioxide: apnea time is held constant
@@ -30,13 +96,13 @@ enum FreedivingTableType { co2, o2 }
 abstract final class Co2O2TableGenerator {
   static const int defaultRounds = 8;
 
-  static const double co2ApneaPct = 0.50;
-  static const int co2InitialRestSec = 120;
-  static const int co2RestFloorSec = 30;
+  static const double co2ApneaPct = 0.60;
+  static const int co2InitialRestSec = 90;
+  static const int co2RestFloorSec = 20;
 
   static const int o2RestSec = 120;
-  static const double o2StartPct = 0.40;
-  static const double o2MaxPct = 0.85;
+  static const double o2StartPct = 0.55;
+  static const double o2MaxPct = 0.92;
 
   /// Lowest PB (seconds) treated as plausible input; below this, tables would
   /// be too short to be meaningful and likely indicate a mis-typed value.
@@ -90,6 +156,27 @@ abstract final class Co2O2TableGenerator {
       // instead whenever plain rounding would exceed the safety ceiling.
       final apnea = _roundTo5Bounded(raw, min: startApnea, max: maxApnea);
       return BreathHoldRound(index: i + 1, apneaSec: apnea, restSec: o2RestSec);
+    });
+  }
+
+  /// Generates a table from explicit start/end apnea and rest bounds (linear
+  /// interpolation across rounds), for the user-defined custom table builder
+  /// — no PB or safety cap involved, since it's entirely user-specified.
+  static List<BreathHoldRound> generateCustomTable({
+    required int startApneaSec,
+    required int endApneaSec,
+    required int startRestSec,
+    required int endRestSec,
+    required int rounds,
+  }) {
+    assert(rounds >= 2, 'A table needs at least 2 rounds to show progression.');
+    final apneaStep = (endApneaSec - startApneaSec) / (rounds - 1);
+    final restStep = (endRestSec - startRestSec) / (rounds - 1);
+
+    return List.generate(rounds, (i) {
+      final apnea = (startApneaSec + apneaStep * i).round();
+      final rest = (startRestSec + restStep * i).round();
+      return BreathHoldRound(index: i + 1, apneaSec: apnea, restSec: rest);
     });
   }
 

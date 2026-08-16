@@ -6,12 +6,19 @@ import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/responsive.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
+import 'package:okrutnik_breath/config/levels.dart';
 import 'package:okrutnik_breath/data/db/database.dart';
 import 'package:okrutnik_breath/logic/freediving/co2_o2_table_generator.dart';
+import 'package:okrutnik_breath/logic/notifiers/session_notifier.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
+import 'package:okrutnik_breath/logic/providers/settings_provider.dart';
+import 'package:okrutnik_breath/ui/screens/freediving/custom_freediving_builder_screen.dart';
 import 'package:okrutnik_breath/ui/screens/freediving/freediving_table_intro_screen.dart';
 import 'package:okrutnik_breath/ui/screens/freediving/max_pb_test_screen.dart';
+import 'package:okrutnik_breath/ui/screens/session_screen.dart';
+import 'package:okrutnik_breath/ui/widgets/confirm_dialog.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
+import 'package:okrutnik_breath/ui/widgets/path_status_card.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
 
 /// The "Freediving" bottom-nav tab. Only ever shown as a shell tab root —
@@ -23,6 +30,13 @@ class FreedivingHomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(freedivingProfileProvider);
+
+    // One-way flag, no-ops once already set — Twoja Ścieżka's weekly plan
+    // uses this to hold off scheduling a "Test PB" slot until the user has
+    // actually seen where PB tests and the term itself live.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(settingsProvider.notifier).markFreedivingVisited();
+    });
 
     return SafeArea(
       child: Center(
@@ -184,13 +198,15 @@ class _SafetyConsentState extends State<_SafetyConsent> {
   }
 }
 
-class _FreedivingContent extends StatelessWidget {
+class _FreedivingContent extends ConsumerWidget {
   const _FreedivingContent({required this.profile});
   final FreedivingProfileData profile;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final hasPb = profile.verifiedPbSec != null;
+    final presets =
+        ref.watch(customFreedivingPresetsProvider).value ?? const <CustomFreedivingPreset>[];
 
     return ListView(
       physics: const BouncingScrollPhysics(),
@@ -202,28 +218,192 @@ class _FreedivingContent extends StatelessWidget {
           style: const TextStyle(color: AppTheme.textDim, fontSize: 13, height: 1.4),
         ),
         const SizedBox(height: AppSpacing.lg),
+        const PathStatusCard(),
+        const SizedBox(height: AppSpacing.lg),
         _PbCard(profile: profile),
+        if (hasPb) ...[
+          const SizedBox(height: AppSpacing.lg),
+          const _ProgressSection(),
+        ],
         const SizedBox(height: AppSpacing.xl),
-        _TableTile(
-          tableType: FreedivingTableType.co2,
-          titleKey: 'freediving_co2_title',
-          subtitleKey: 'freediving_co2_subtitle',
-          color: const Color(0xFF4FC3F7),
-          icon: Icons.co2_rounded,
-          pbSeconds: profile.virtualPbCo2Sec ?? profile.verifiedPbSec,
-          enabled: hasPb,
+        if (hasPb) ...[
+          _TableTile(
+            tableType: FreedivingTableType.co2,
+            titleKey: 'freediving_co2_title',
+            subtitleKey: 'freediving_co2_subtitle',
+            color: const Color(0xFF4FC3F7),
+            icon: Icons.co2_rounded,
+            pbSeconds: profile.virtualPbCo2Sec ?? profile.verifiedPbSec!,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _TableTile(
+            tableType: FreedivingTableType.o2,
+            titleKey: 'freediving_o2_title',
+            subtitleKey: 'freediving_o2_subtitle',
+            color: const Color(0xFFFF7043),
+            icon: Icons.bolt_rounded,
+            pbSeconds: profile.virtualPbO2Sec ?? profile.verifiedPbSec!,
+          ),
+        ] else
+          // A single dimmed placeholder instead of two separate disabled
+          // full-size tiles competing for attention with the PB card above,
+          // which is the only thing actually actionable for a new user.
+          const _LockedTablesPlaceholder(),
+        const SizedBox(height: AppSpacing.xl),
+        _CustomFreedivingSection(presets: presets),
+      ],
+    );
+  }
+}
+
+class _CustomFreedivingSection extends ConsumerWidget {
+  const _CustomFreedivingSection({required this.presets});
+  final List<CustomFreedivingPreset> presets;
+
+  Future<void> _delete(BuildContext context, WidgetRef ref, CustomFreedivingPreset p) async {
+    final confirmed = await showGlassConfirm(
+      context,
+      title: L10n.get(context, 'delete_confirm_title'),
+      confirmLabel: L10n.get(context, 'delete_confirm_yes'),
+      cancelLabel: L10n.get(context, 'delete_confirm_cancel'),
+      icon: Icons.delete_outline_rounded,
+    );
+    if (confirmed) {
+      await ref.read(customFreedivingRepositoryProvider).deletePreset(p.id);
+    }
+  }
+
+  void _start(BuildContext context, WidgetRef ref, CustomFreedivingPreset p) {
+    final rounds = Co2O2TableGenerator.generateCustomTable(
+      startApneaSec: p.startApneaSec,
+      endApneaSec: p.endApneaSec,
+      startRestSec: p.startRestSec,
+      endRestSec: p.endRestSec,
+      rounds: p.rounds,
+    );
+    final level = LevelData.customFreedivingTable(name: p.name, rounds: rounds);
+    ref.read(sessionProvider.notifier).startSession(level);
+    Navigator.of(context).push(fadeThroughRoute(const SessionScreen()));
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Text(
+              L10n.get(context, 'custom_freediving_section'),
+              style: const TextStyle(
+                color: Colors.white38,
+                fontSize: 11,
+                letterSpacing: 2.0,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(child: Container(height: 1, color: Colors.white.withAlpha(18))),
+          ],
         ),
         const SizedBox(height: AppSpacing.md),
-        _TableTile(
-          tableType: FreedivingTableType.o2,
-          titleKey: 'freediving_o2_title',
-          subtitleKey: 'freediving_o2_subtitle',
-          color: const Color(0xFFFF7043),
-          icon: Icons.bolt_rounded,
-          pbSeconds: profile.virtualPbO2Sec ?? profile.verifiedPbSec,
-          enabled: hasPb,
+        for (final p in presets) ...[
+          _CustomFreedivingPresetCard(
+            preset: p,
+            onTap: () => _start(context, ref, p),
+            onDelete: () => _delete(context, ref, p),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        PressableScale(
+          onTap: () => Navigator.of(context)
+              .push(fadeThroughRoute(const CustomFreedivingBuilderScreen())),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: AppTheme.danger.withAlpha(120)),
+              color: AppTheme.danger.withAlpha(16),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.add_rounded, color: AppTheme.danger, size: 20),
+                const SizedBox(width: AppSpacing.sm),
+                Text(
+                  L10n.get(context, 'custom_freediving_create'),
+                  style: const TextStyle(
+                    color: AppTheme.danger,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.0,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ],
+    );
+  }
+}
+
+class _CustomFreedivingPresetCard extends StatelessWidget {
+  const _CustomFreedivingPresetCard({
+    required this.preset,
+    required this.onTap,
+    required this.onDelete,
+  });
+
+  final CustomFreedivingPreset preset;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onTap,
+      child: GlassCard(
+        gradient: AppTheme.cardGradient(AppTheme.danger),
+        padding: const EdgeInsets.symmetric(
+            vertical: AppSpacing.md, horizontal: AppSpacing.lg),
+        child: Row(
+          children: [
+            const Icon(Icons.tune_rounded, color: AppTheme.danger, size: 20),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    preset.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppTheme.textLight,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    '${preset.startApneaSec}-${preset.endApneaSec}s apnea • '
+                    '${preset.startRestSec}-${preset.endRestSec}s rest • ${preset.rounds}×',
+                    style: TextStyle(
+                        fontSize: 12, color: AppTheme.textDim.withAlpha(190)),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline_rounded,
+                  color: Colors.white38, size: 20),
+              onPressed: onDelete,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -238,6 +418,11 @@ class _PbCard extends StatelessWidget {
     final locale = Localizations.localeOf(context).toString();
 
     return GlassCard(
+      // With no PB yet, this card's CTA is the one thing actually required
+      // to unlock the rest of the tab — give it a visible accent glow so it
+      // doesn't read as just another equally-weighted card next to the
+      // (now dimmed) locked tables below it.
+      gradient: verified == null ? AppTheme.cardGradient(AppTheme.primary) : null,
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -313,6 +498,120 @@ class _PbCard extends StatelessWidget {
   }
 }
 
+/// Recent-progress rollup, contextual to this tab rather than a duplicate of
+/// StatsScreen (which is unified across all disciplines and has no
+/// freediving-specific breakdown at all). Hidden entirely until there's at
+/// least one logged table — an all-zero card would just be noise for a
+/// brand-new user.
+class _ProgressSection extends ConsumerWidget {
+  const _ProgressSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final progress = ref.watch(freedivingProgressProvider);
+    if (progress.co2SessionsCompleted == 0 && progress.o2SessionsCompleted == 0) {
+      return const SizedBox.shrink();
+    }
+
+    return GlassCard(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            L10n.get(context, 'freediving_progress_title'),
+            style: const TextStyle(
+                color: AppTheme.textDim,
+                fontSize: 11,
+                letterSpacing: 1.2,
+                fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Expanded(
+                child: _ProgressStat(
+                  icon: Icons.co2_rounded,
+                  color: const Color(0xFF4FC3F7),
+                  label: L10n.get(context, 'freediving_co2_title'),
+                  value: '${progress.co2SessionsCompleted}',
+                ),
+              ),
+              Expanded(
+                child: _ProgressStat(
+                  icon: Icons.bolt_rounded,
+                  color: const Color(0xFFFF7043),
+                  label: L10n.get(context, 'freediving_o2_title'),
+                  value: '${progress.o2SessionsCompleted}',
+                ),
+              ),
+            ],
+          ),
+          if (progress.avgContractionRatio != null) ...[
+            const SizedBox(height: AppSpacing.lg),
+            Row(
+              children: [
+                const Icon(Icons.waves_rounded, color: AppTheme.accent, size: 18),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    L10n.get(context, 'freediving_progress_contraction_trend'),
+                    style: TextStyle(fontSize: 12, color: AppTheme.textDim.withAlpha(190)),
+                  ),
+                ),
+                Text(
+                  '${(progress.avgContractionRatio! * 100).round()}%',
+                  style: const TextStyle(
+                      color: AppTheme.accent, fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ProgressStat extends StatelessWidget {
+  const _ProgressStat({
+    required this.icon,
+    required this.color,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: color, size: 20),
+        const SizedBox(width: AppSpacing.sm),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              value,
+              style: const TextStyle(
+                color: AppTheme.textLight,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
+            ),
+            Text(label, style: TextStyle(fontSize: 11, color: AppTheme.textDim.withAlpha(190))),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 class _TableTile extends StatelessWidget {
   const _TableTile({
     required this.tableType,
@@ -321,7 +620,6 @@ class _TableTile extends StatelessWidget {
     required this.color,
     required this.icon,
     required this.pbSeconds,
-    required this.enabled,
   });
 
   final FreedivingTableType tableType;
@@ -329,58 +627,86 @@ class _TableTile extends StatelessWidget {
   final String subtitleKey;
   final Color color;
   final IconData icon;
-  final int? pbSeconds;
-  final bool enabled;
+  final int pbSeconds;
 
   @override
   Widget build(BuildContext context) {
-    final card = GlassCard(
-      gradient: enabled ? AppTheme.cardGradient(color) : null,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: Row(
-        children: [
-          Icon(icon, color: enabled ? color : AppTheme.textDim, size: 28),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  L10n.get(context, titleKey),
-                  style: TextStyle(
-                    color: enabled ? AppTheme.textLight : AppTheme.textDim,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1.0,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  enabled
-                      ? L10n.get(context, subtitleKey)
-                      : L10n.get(context, 'freediving_locked_no_pb'),
-                  style: TextStyle(
-                      fontSize: 12, color: AppTheme.textDim.withAlpha(190)),
-                ),
-              ],
-            ),
-          ),
-          Icon(
-            enabled ? Icons.chevron_right_rounded : Icons.lock_outline_rounded,
-            color: enabled ? color.withAlpha(160) : Colors.white24,
-            size: 20,
-          ),
-        ],
-      ),
-    );
-
-    if (!enabled) return Opacity(opacity: 0.6, child: card);
-
     return PressableScale(
       onTap: () => Navigator.of(context).push(fadeThroughRoute(
-        FreedivingTableIntroScreen(tableType: tableType, pbSeconds: pbSeconds!),
+        FreedivingTableIntroScreen(tableType: tableType, pbSeconds: pbSeconds),
       )),
-      child: card,
+      child: GlassCard(
+        gradient: AppTheme.cardGradient(color),
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 28),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    L10n.get(context, titleKey),
+                    style: const TextStyle(
+                      color: AppTheme.textLight,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    L10n.get(context, subtitleKey),
+                    style: TextStyle(fontSize: 12, color: AppTheme.textDim.withAlpha(190)),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: color.withAlpha(160), size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A single dimmed row standing in for both tables while no PB exists yet —
+/// two separate disabled full-size tiles previously competed visually with
+/// the PB card above, which is the only thing actually actionable here.
+class _LockedTablesPlaceholder extends StatelessWidget {
+  const _LockedTablesPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: 0.6,
+      child: GlassCard(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Row(
+          children: [
+            const Icon(Icons.lock_outline_rounded, color: Colors.white24, size: 24),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    L10n.get(context, 'freediving_locked_tables_title'),
+                    style: const TextStyle(
+                        color: AppTheme.textDim, fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    L10n.get(context, 'freediving_locked_no_pb'),
+                    style: TextStyle(fontSize: 12, color: AppTheme.textDim.withAlpha(190)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

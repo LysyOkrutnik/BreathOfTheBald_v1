@@ -284,11 +284,17 @@ class _StepperRow extends StatelessWidget {
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(6),
-          child: Icon(icon,
-              size: 20,
-              color: onTap == null ? Colors.white24 : AppTheme.primary),
+        // Icon+padding alone was ~32x32 — below the 48dp minimum recommended
+        // touch target, on a control tapped repeatedly while dialing in a
+        // pattern's timings.
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: Center(
+            child: Icon(icon,
+                size: 20,
+                color: onTap == null ? Colors.white24 : AppTheme.primary),
+          ),
         ),
       ),
     );

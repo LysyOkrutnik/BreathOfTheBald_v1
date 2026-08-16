@@ -30,6 +30,18 @@ class SpecialScreen extends StatelessWidget {
                 title: L10n.get(context, 'menu_section_special'),
                 showBackButton: false,
               ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                child: Text(
+                  L10n.get(context, 'menu_special_subtitle'),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.textDim.withAlpha(200),
+                    letterSpacing: 1.0,
+                  ),
+                ),
+              ),
               Expanded(
                 child: SingleChildScrollView(
                   physics: const BouncingScrollPhysics(),

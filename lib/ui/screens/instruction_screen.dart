@@ -164,6 +164,80 @@ class InstructionScreen extends StatelessWidget {
 
                       _buildTechniqueCard(
                         context: context,
+                        titleKey: "guide_freediving_title",
+                        subtitleKey: "guide_freediving_subtitle",
+                        color: const Color(0xFF4FC3F7),
+                        icon: Icons.co2_rounded,
+                        descriptionKey: "guide_freediving_desc",
+                        benefitKeys: [
+                          "guide_freediving_benefit1",
+                          "guide_freediving_benefit2",
+                          "guide_freediving_benefit3"
+                        ],
+                        warningKeys: [
+                          "guide_freediving_warning1",
+                          "guide_freediving_warning2",
+                          "guide_freediving_warning3",
+                          "guide_freediving_warning4"
+                        ],
+                        stepKeys: [
+                          "guide_freediving_step1",
+                          "guide_freediving_step2",
+                          "guide_freediving_step3",
+                          "guide_freediving_step4"
+                        ],
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      _buildTechniqueCard(
+                        context: context,
+                        titleKey: "guide_path_title",
+                        subtitleKey: "guide_path_subtitle",
+                        color: AppTheme.accent,
+                        icon: Icons.route_rounded,
+                        descriptionKey: "guide_path_desc",
+                        benefitKeys: [
+                          "guide_path_benefit1",
+                          "guide_path_benefit2",
+                        ],
+                        warningKeys: const [],
+                        stepKeys: [
+                          "guide_path_step1",
+                          "guide_path_step2",
+                          "guide_path_step3",
+                        ],
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      _buildTechniqueCard(
+                        context: context,
+                        titleKey: "guide_coldshower_title",
+                        subtitleKey: "guide_coldshower_subtitle",
+                        color: const Color(0xFF80D8FF),
+                        icon: Icons.ac_unit_rounded,
+                        descriptionKey: "guide_coldshower_desc",
+                        benefitKeys: [
+                          "guide_coldshower_benefit1",
+                          "guide_coldshower_benefit2",
+                          "guide_coldshower_benefit3",
+                        ],
+                        warningKeys: [
+                          "guide_coldshower_warning1",
+                          "guide_coldshower_warning2",
+                        ],
+                        stepKeys: [
+                          "guide_coldshower_step1",
+                          "guide_coldshower_step2",
+                          "guide_coldshower_step3",
+                        ],
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      _buildTechniqueCard(
+                        context: context,
                         titleKey: "guide_rules_title",
                         subtitleKey: "guide_rules_subtitle",
                         color: Colors.grey,
@@ -300,8 +374,8 @@ class InstructionScreen extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("• ", style: TextStyle(color: isWarning ? Colors.red : (isStep ? Colors.white54 : Colors.green), fontWeight: FontWeight.bold)),
-          Expanded(child: Text(text, style: TextStyle(color: isWarning ? const Color(0xFFFFCDD2) : Colors.white70, fontSize: 13))),
+          Text("• ", style: TextStyle(color: isWarning ? AppTheme.danger : (isStep ? Colors.white54 : Colors.green), fontWeight: FontWeight.bold)),
+          Expanded(child: Text(text, style: TextStyle(color: isWarning ? AppTheme.danger : Colors.white70, fontSize: 13))),
         ],
       ),
     );

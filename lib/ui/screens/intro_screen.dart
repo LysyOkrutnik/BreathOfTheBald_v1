@@ -236,13 +236,13 @@ class _FireWarning extends StatelessWidget {
       child: Row(
         children: [
           const Icon(Icons.warning_amber_rounded,
-              color: Color(0xFFFF8A80), size: 22),
+              color: AppTheme.danger, size: 22),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Text(
               L10n.get(context, 'warning_fire_breath'),
               style: const TextStyle(
-                  color: Color(0xFFFF8A80), fontSize: 12, fontWeight: FontWeight.bold),
+                  color: AppTheme.danger, fontSize: 12, fontWeight: FontWeight.bold),
             ),
           ),
         ],

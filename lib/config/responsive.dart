@@ -44,15 +44,4 @@ extension ResponsiveContext on BuildContext {
         medium: 560,
         expanded: 720,
       );
-
-  /// A gentle multiplier applied to type and spacing so tablets feel generous
-  /// without ballooning. Clamped to keep proportions sane.
-  double get uiScale => responsive<double>(
-        compact: 1.0,
-        medium: 1.12,
-        expanded: 1.25,
-      );
-
-  /// Scales a base dimension by [uiScale].
-  double scaled(double base) => base * uiScale;
 }
