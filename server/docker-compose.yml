@@ -1,8 +1,12 @@
-# Assumes an existing Traefik reverse proxy already attached to an external
-# network called `proxy` and terminating TLS. If your reverse proxy is
-# something else (nginx-proxy, Caddy), drop the `traefik.*` labels and wire
-# equivalent config there instead — everything else in this file is
-# proxy-agnostic.
+# Includes its own Postgres — nothing else needs to exist on the VPS beyond
+# this stack.
+#
+# Reverse proxy: Nginx Proxy Manager (NPM), not Traefik. NPM has no
+# label-based service discovery — it's configured through its own web UI —
+# so `api` just publishes a host port; point an NPM Proxy Host at
+# `<vps-ip>:${HOST_PORT}` (forwarding to breath.lysyweb.pl, SSL handled by
+# NPM's own Let's Encrypt integration). Change HOST_PORT in .env if 8080 is
+# already taken by something else on the VPS.
 #
 # Deployed straight from the prebuilt ghcr.io image (see
 # .github/workflows/server-docker.yml) — Portainer only ever pulls, it never
@@ -26,18 +30,12 @@ services:
     env_file: .env
     depends_on:
       - postgres
+    ports:
+      - "${HOST_PORT:-8080}:8080"
     volumes:
       - ./firebase-service-account.json:/run/secrets/firebase-service-account.json:ro
     networks:
       - internal
-      - proxy
-    labels:
-      - traefik.enable=true
-      - traefik.docker.network=proxy
-      - traefik.http.routers.okrutnik-breath-api.rule=Host(`${DOMAIN}`)
-      - traefik.http.routers.okrutnik-breath-api.entrypoints=websecure
-      - traefik.http.routers.okrutnik-breath-api.tls.certresolver=letsencrypt
-      - traefik.http.services.okrutnik-breath-api.loadbalancer.server.port=8080
 
   # One-off: `docker compose --profile tools run --rm migrate`. Same image as
   # `api` — `prisma` (the CLI) ships as a regular dependency precisely so
@@ -55,8 +53,6 @@ services:
 
 networks:
   internal:
-  proxy:
-    external: true
 
 volumes:
   postgres_data:
