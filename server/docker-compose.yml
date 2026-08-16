@@ -1,0 +1,62 @@
+# Assumes an existing Traefik reverse proxy already attached to an external
+# network called `proxy` and terminating TLS. If your reverse proxy is
+# something else (nginx-proxy, Caddy), drop the `traefik.*` labels and wire
+# equivalent config there instead — everything else in this file is
+# proxy-agnostic.
+#
+# Deployed straight from the prebuilt ghcr.io image (see
+# .github/workflows/server-docker.yml) — Portainer only ever pulls, it never
+# builds. Set IMAGE_TAG in .env to pin a specific tag; defaults to `latest`.
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+
+  api:
+    image: ghcr.io/lysyokrutnik/okrutnik-breath-server:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      - postgres
+    volumes:
+      - ./firebase-service-account.json:/run/secrets/firebase-service-account.json:ro
+    networks:
+      - internal
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+      - traefik.http.routers.okrutnik-breath-api.rule=Host(`${DOMAIN}`)
+      - traefik.http.routers.okrutnik-breath-api.entrypoints=websecure
+      - traefik.http.routers.okrutnik-breath-api.tls.certresolver=letsencrypt
+      - traefik.http.services.okrutnik-breath-api.loadbalancer.server.port=8080
+
+  # One-off: `docker compose --profile tools run --rm migrate`. Same image as
+  # `api` — `prisma` (the CLI) ships as a regular dependency precisely so
+  # this doesn't need a separate build-stage image.
+  migrate:
+    image: ghcr.io/lysyokrutnik/okrutnik-breath-server:${IMAGE_TAG:-latest}
+    env_file: .env
+    depends_on:
+      - postgres
+    networks:
+      - internal
+    entrypoint: ["npx", "prisma", "migrate", "deploy"]
+    profiles:
+      - tools
+
+networks:
+  internal:
+  proxy:
+    external: true
+
+volumes:
+  postgres_data:

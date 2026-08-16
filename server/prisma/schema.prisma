@@ -1,0 +1,159 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  profileName  String?
+  fcmToken     String?
+  createdAt    DateTime @default(now())
+
+  sessions                Session[]
+  freedivingLogs          FreedivingLog[]
+  customPresets           CustomPreset[]
+  customFreedivingPresets CustomFreedivingPreset[]
+  profileState            ProfileState?
+  challengeParticipants   ChallengeParticipant[]
+}
+
+/// Mirrors the local `Sessions` Drift table. Immutable once created except
+/// for `rpeScore` (rated shortly after) — append-only from the client's
+/// perspective, so merging two devices' lists is just a union by [id], never
+/// a real conflict. [id] is a client-generated UUID (not an autoincrement
+/// int, which would collide across devices), stable across sync round-trips.
+model Session {
+  id           String   @id
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  levelKey     String
+  timestamp    DateTime
+  durationSec  Int
+  rounds       Int
+  retentionSec Int
+  rpeScore     Int?
+  xpEarned     Int
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId, timestamp])
+}
+
+/// Mirrors the local `FreedivingSessionLog` table — same
+/// append-only-except-rpeScore shape as [Session].
+model FreedivingLog {
+  id              String   @id
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tableType       String
+  pbUsedSec       Int
+  roundsJson      String
+  roundsCompleted Int
+  durationSec     Int
+  timestamp       DateTime
+  rpeScore        Int?
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId, timestamp])
+}
+
+/// User-authored breathing pattern presets. Real CRUD (not append-only) —
+/// last-write-wins by [updatedAt]. Soft-deleted so a deletion on one device
+/// propagates to others instead of a re-appearing "zombie" preset.
+model CustomPreset {
+  id         String    @id
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  inhaleSec  Int
+  holdInSec  Int
+  exhaleSec  Int
+  holdOutSec Int
+  cycles     Int
+  rounds     Int
+  createdAt  DateTime
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+}
+
+/// User-authored freediving table presets — same shape as [CustomPreset].
+model CustomFreedivingPreset {
+  id            String    @id
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  startApneaSec Int
+  endApneaSec   Int
+  startRestSec  Int
+  endRestSec    Int
+  rounds        Int
+  createdAt     DateTime
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+}
+
+/// One row per user — the "singleton" state that isn't derivable purely from
+/// session history (PB verification, safety consent, the Wim Hof ladder's
+/// confirmed level, and weekly-plan preferences). Resolved last-write-wins
+/// by [updatedAt] on sync, in contrast to XP/level/streak, which the client
+/// recomputes locally from the merged session history instead of syncing.
+model ProfileState {
+  userId                  String    @id
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  verifiedPbSec           Int?
+  verifiedPbAt            DateTime?
+  safetyAcknowledgedAt    DateTime?
+  wimHofCurrentLevelKey   String?
+  wimHofCurrentLevelSetAt DateTime?
+  availableWeekdaysMask   Int?
+  availableHourStart      Int?
+  availableHourEnd        Int?
+  allowMultiplePerDay     Boolean?
+  dailyReminderEnabled    Boolean?
+
+  /// Set by the client to the local wall-clock time the underlying settings
+  /// actually changed — the basis for last-write-wins, since Prisma's own
+  /// `updatedAt` only reflects when the *row* was last written on the
+  /// server, not when the source device's data changed. A push with an
+  /// older `clientUpdatedAt` than what's already stored is ignored.
+  clientUpdatedAt DateTime
+  updatedAt       DateTime @updatedAt
+}
+
+enum ChallengeMetric {
+  STREAK
+  TOTAL_RETENTION_SEC
+  SESSION_COUNT
+}
+
+/// Backend-defined (seeded, not user-created) time-boxed challenges. The
+/// leaderboard is never stored — it's computed on read from participants'
+/// synced session data within [startsAt, endsAt], so it can never drift out
+/// of sync with the underlying sessions.
+model Challenge {
+  id          String          @id @default(uuid())
+  key         String          @unique
+  title       String
+  description String
+  metric      ChallengeMetric
+  startsAt    DateTime
+  endsAt      DateTime
+  createdAt   DateTime        @default(now())
+
+  participants ChallengeParticipant[]
+}
+
+model ChallengeParticipant {
+  id          String    @id @default(uuid())
+  challengeId String
+  challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt    DateTime  @default(now())
+
+  @@unique([challengeId, userId])
+}
