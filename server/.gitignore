@@ -1,5 +1,6 @@
 node_modules/
 dist/
 .env
+stack.env
 *.log
 firebase-service-account.json

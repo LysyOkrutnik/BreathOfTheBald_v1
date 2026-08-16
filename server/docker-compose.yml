@@ -27,7 +27,18 @@ services:
   api:
     image: ghcr.io/lysyokrutnik/okrutnik-breath-server:${IMAGE_TAG:-latest}
     restart: unless-stopped
-    env_file: .env
+    # `${VAR}` here is resolved by docker-compose itself from whatever env
+    # source is deploying the stack (Portainer's own "Environment variables"
+    # UI, a shell env, etc.) — unlike `env_file: .env`, this never depends on
+    # a literal file existing on disk next to docker-compose.yml, which
+    # broke under Portainer's git-repository deploy method (the compose file
+    # lives in server/, but Portainer's managed .env sits at the stack root).
+    environment:
+      PORT: 8080
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      FIREBASE_SERVICE_ACCOUNT_PATH: ${FIREBASE_SERVICE_ACCOUNT_PATH}
+      NOTIFICATIONS_CRON_HOUR: ${NOTIFICATIONS_CRON_HOUR:-19}
     depends_on:
       - postgres
     ports:
@@ -42,7 +53,8 @@ services:
   # this doesn't need a separate build-stage image.
   migrate:
     image: ghcr.io/lysyokrutnik/okrutnik-breath-server:${IMAGE_TAG:-latest}
-    env_file: .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
     depends_on:
       - postgres
     networks:
