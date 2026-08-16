@@ -6,6 +6,12 @@ COPY prisma.config.ts ./
 RUN npm ci
 COPY tsconfig.json ./
 COPY src ./src
+# `prisma generate` never connects to a database — it only needs the schema
+# shape — but prisma.config.ts still requires DATABASE_URL to *resolve* at
+# config-load time. The build stage has no .env, so a placeholder value that
+# satisfies that check is enough; it never carries over to the final stage
+# and has no bearing on the real connection string used at runtime.
+ENV DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
 RUN npm run prisma:generate
 RUN npm run build
 
