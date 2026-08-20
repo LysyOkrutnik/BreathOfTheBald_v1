@@ -1,20 +1,22 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/logic/providers/settings_provider.dart';
-import 'package:okrutnik_breath/ui/screens/freediving/freediving_home_screen.dart';
-import 'package:okrutnik_breath/ui/screens/more_screen.dart';
-import 'package:okrutnik_breath/ui/screens/scheduler_screen.dart';
-import 'package:okrutnik_breath/ui/screens/special_screen.dart';
-import 'package:okrutnik_breath/ui/screens/wim_hof_screen.dart';
+import 'package:okrutnik_breath/ui/screens/profile_screen.dart';
+import 'package:okrutnik_breath/ui/screens/today_screen.dart';
+import 'package:okrutnik_breath/ui/screens/training_library_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/confirm_dialog.dart';
 
-/// The app's persistent bottom-nav shell: Wim Hof / Ćwiczenia specjalne /
-/// Freediving / Plan / Więcej. Replaces the old single-scroll MenuScreen as
-/// the post-onboarding home.
+/// The app's persistent bottom-nav shell: Dziś / Trening / Ty. Replaces the
+/// old 5-tab shell (Wim Hof / Ćwiczenia specjalne / Freediving / Plan /
+/// Więcej) — Trening now hosts what used to be 3 separate tabs as segments
+/// of one, and Ty merges Więcej/Statystyki/Historia into one profile tab
+/// with the new Wyzwania (Challenges) leaderboard alongside them.
 ///
 /// The atmospheric background lives here, once, behind the [IndexedStack] —
 /// each tab used to carry its own copy, so switching tabs tore down and
@@ -32,30 +34,25 @@ class _HomeShellScreenState extends ConsumerState<HomeShellScreen> {
   int _index = 0;
 
   // Tabs are built lazily on first visit (then kept alive by IndexedStack) —
-  // eagerly constructing SchedulerScreen would fire its exact-alarm
-  // permission request on app launch, before the user ever opens that tab.
+  // eagerly constructing TrainingLibraryScreen would fire the Scheduler
+  // section's exact-alarm permission request on app launch, before the user
+  // ever opens that tab.
   static const List<Widget Function()> _builders = [
-    _buildWimHof,
-    _buildSpecial,
-    _buildFreediving,
-    _buildScheduler,
-    _buildMore,
+    _buildToday,
+    _buildTraining,
+    _buildProfile,
   ];
 
-  static Widget _buildWimHof() => const WimHofScreen();
-  static Widget _buildSpecial() => const SpecialScreen();
-  static Widget _buildFreediving() => const FreedivingHomeScreen();
-  static Widget _buildScheduler() => const SchedulerScreen();
-  static Widget _buildMore() => const MoreScreen();
+  static Widget _buildToday() => const TodayScreen();
+  static Widget _buildTraining() => const TrainingLibraryScreen();
+  static Widget _buildProfile() => const ProfileScreen();
 
   // Each tab's secondary identity colour, layered as a quiet accent on top
   // of the app-wide ocean cyan (null = no secondary tint, just the ocean).
   static const List<Color?> _sectionAccents = [
-    AppTheme.primary, // Wim Hof
-    AppTheme.accent, // Ćwiczenia specjalne
-    AppTheme.danger, // Freediving
-    AppTheme.lure, // Plan
-    null, // Więcej
+    AppTheme.primary, // Dziś
+    AppTheme.accent, // Trening
+    null, // Ty
   ];
 
   final List<Widget?> _tabs = List<Widget?>.filled(_builders.length, null);
@@ -110,6 +107,7 @@ class _HomeShellScreenState extends ConsumerState<HomeShellScreen> {
       },
       child: Scaffold(
         backgroundColor: Colors.transparent,
+        extendBody: true,
         body: Stack(
           children: [
             Positioned.fill(child: AppBackground(sectionAccent: _sectionAccents[_index])),
@@ -123,40 +121,124 @@ class _HomeShellScreenState extends ConsumerState<HomeShellScreen> {
             ),
           ],
         ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _index,
-          onDestinationSelected: _selectTab,
-          backgroundColor: AppTheme.background,
-          indicatorColor: AppTheme.primary.withAlpha(40),
-          height: 64,
-          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        bottomNavigationBar: _GlassNavBar(
+          index: _index,
+          onSelect: _selectTab,
           destinations: [
-            NavigationDestination(
-              icon: const Icon(Icons.self_improvement_outlined),
-              selectedIcon: const Icon(Icons.self_improvement_rounded, color: AppTheme.primary),
-              label: L10n.get(context, 'nav_wimhof'),
+            _NavDestination(
+              icon: Icons.wb_sunny_outlined,
+              selectedIcon: Icons.wb_sunny_rounded,
+              color: AppTheme.primary,
+              label: L10n.get(context, 'nav_today'),
             ),
-            NavigationDestination(
-              icon: const Icon(Icons.bolt_outlined),
-              selectedIcon: const Icon(Icons.bolt_rounded, color: AppTheme.accent),
-              label: L10n.get(context, 'nav_special'),
+            _NavDestination(
+              icon: Icons.fitness_center_outlined,
+              selectedIcon: Icons.fitness_center_rounded,
+              color: AppTheme.accent,
+              label: L10n.get(context, 'nav_training'),
             ),
-            NavigationDestination(
-              icon: const Icon(Icons.water_outlined),
-              selectedIcon: const Icon(Icons.water_rounded, color: AppTheme.danger),
-              label: L10n.get(context, 'nav_freediving'),
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.schedule_outlined),
-              selectedIcon: const Icon(Icons.schedule_rounded, color: AppTheme.lure),
-              label: L10n.get(context, 'nav_plan'),
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.more_horiz_rounded),
-              selectedIcon: const Icon(Icons.more_horiz_rounded, color: AppTheme.textLight),
-              label: L10n.get(context, 'nav_more'),
+            _NavDestination(
+              icon: Icons.person_outline_rounded,
+              selectedIcon: Icons.person_rounded,
+              color: AppTheme.lure,
+              label: L10n.get(context, 'nav_profile'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NavDestination {
+  const _NavDestination({
+    required this.icon,
+    required this.selectedIcon,
+    required this.color,
+    required this.label,
+  });
+  final IconData icon;
+  final IconData selectedIcon;
+  final Color color;
+  final String label;
+}
+
+/// A floating, blurred glass bar — consistent with the rest of the app's
+/// GlassCard language, replacing the old flat/solid Material [NavigationBar]
+/// which was the one piece of chrome that didn't match anything else.
+class _GlassNavBar extends StatelessWidget {
+  const _GlassNavBar({
+    required this.index,
+    required this.onSelect,
+    required this.destinations,
+  });
+
+  final int index;
+  final ValueChanged<int> onSelect;
+  final List<_NavDestination> destinations;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.sm),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: Colors.white.withAlpha(20),
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                border: Border.all(color: AppTheme.glassBorder.withAlpha(40)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  for (var i = 0; i < destinations.length; i++)
+                    _NavItem(
+                      destination: destinations[i],
+                      selected: i == index,
+                      onTap: () => onSelect(i),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  const _NavItem({required this.destination, required this.selected, required this.onTap});
+  final _NavDestination destination;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? destination.color : AppTheme.textDim;
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(selected ? destination.selectedIcon : destination.icon, color: color, size: 24),
+              const SizedBox(height: 2),
+              Text(
+                destination.label,
+                style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
         ),
       ),
     );

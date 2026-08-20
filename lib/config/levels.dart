@@ -14,6 +14,39 @@ enum ExerciseType {
   o2Table,
   customFreedivingTable,
   coldShower,
+  /// Lung-mobility/diaphragm exercises (chest stretch, Uddiyana Bandha,
+  /// resisted breathing, three-part breath) and packing — a sequence of
+  /// [GuidedStep]s run by [LevelData.guidedSteps], repeated for
+  /// [LevelData.totalRounds]. See SessionNotifier._startGuidedRoutine.
+  guidedRoutine,
+}
+
+/// Which existing [SessionPhase] a [GuidedStep] displays as. `breath` reuses
+/// the normal orb-pulse visual (inhale/exhale/rep); `hold` shows a live
+/// countdown (same visual language as freediving's rest/pause) — never
+/// `retention`, since that phase's tap-to-abort gesture and freediving
+/// contraction marker don't apply to a fixed-duration technique step.
+enum GuidedStepPhase { breath, hold }
+
+/// One step of a guided lung-mobility/packing routine — pure data, run by a
+/// single generic engine (SessionNotifier._startGuidedRoutine) instead of a
+/// bespoke method per exercise.
+class GuidedStep {
+  const GuidedStep({
+    required this.labelKey,
+    required this.durationSec,
+    required this.phase,
+    this.isInhale,
+  });
+
+  final String labelKey;
+  final int durationSec;
+  final GuidedStepPhase phase;
+
+  /// Only meaningful for [GuidedStepPhase.breath] steps — drives the orb's
+  /// pulse direction. Null for a plain repetition cue with no clear
+  /// inhale/exhale (e.g. a packing "gulp").
+  final bool? isInhale;
 }
 
 extension ExerciseTypeX on ExerciseType {
@@ -56,6 +89,10 @@ class LevelData {
   /// alongside the session log for history/audit.
   final int? freedivingPbUsedSec;
 
+  /// The step sequence for a [ExerciseType.guidedRoutine] exercise — run
+  /// once per round ([totalRounds] rounds total). Null for every other type.
+  final List<GuidedStep>? guidedSteps;
+
   // UI presentation mapping.
   final Color color;
   final String instructionTitleKey;
@@ -78,6 +115,7 @@ class LevelData {
     this.holdOutSec = 0,
     this.freedivingRounds,
     this.freedivingPbUsedSec,
+    this.guidedSteps,
     required this.color,
     required this.instructionTitleKey,
     required this.instructionDescriptionKey,
@@ -362,5 +400,120 @@ class LevelData {
       instructionDescriptionKey: "coldshower_title",
       instructionStepKeys: [],
     ),
+
+    // --- LUNG MOBILITY / DIAPHRAGM (guidedRoutine) ---
+    'stretch_chest': LevelData(
+      key: 'stretch_chest',
+      title: "exercise_stretch_chest_title",
+      subtitle: "exercise_stretch_chest_subtitle",
+      type: ExerciseType.guidedRoutine,
+      totalRounds: 3,
+      color: Color(0xFF26A69A),
+      instructionTitleKey: "exercise_stretch_chest_title",
+      instructionDescriptionKey: "exercise_stretch_chest_subtitle",
+      instructionStepKeys: [],
+      guidedSteps: [
+        GuidedStep(labelKey: "guided_stretch_right", durationSec: 25, phase: GuidedStepPhase.hold),
+        GuidedStep(labelKey: "guided_stretch_return", durationSec: 3, phase: GuidedStepPhase.hold),
+        GuidedStep(labelKey: "guided_stretch_left", durationSec: 25, phase: GuidedStepPhase.hold),
+        GuidedStep(labelKey: "guided_stretch_return", durationSec: 3, phase: GuidedStepPhase.hold),
+      ],
+    ),
+    'uddiyana_bandha': LevelData(
+      key: 'uddiyana_bandha',
+      title: "exercise_uddiyana_title",
+      subtitle: "exercise_uddiyana_subtitle",
+      type: ExerciseType.guidedRoutine,
+      totalRounds: 6,
+      color: Color(0xFF7E57C2),
+      instructionTitleKey: "exercise_uddiyana_title",
+      instructionDescriptionKey: "exercise_uddiyana_subtitle",
+      instructionStepKeys: [],
+      guidedSteps: [
+        GuidedStep(labelKey: "guided_uddiyana_inhale", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: true),
+        GuidedStep(labelKey: "guided_uddiyana_exhale", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: false),
+        GuidedStep(labelKey: "guided_uddiyana_hold", durationSec: 7, phase: GuidedStepPhase.hold),
+        GuidedStep(labelKey: "guided_uddiyana_rest", durationSec: 5, phase: GuidedStepPhase.hold),
+      ],
+    ),
+    'resisted_breathing': LevelData(
+      key: 'resisted_breathing',
+      title: "exercise_resisted_breathing_title",
+      subtitle: "exercise_resisted_breathing_subtitle",
+      type: ExerciseType.guidedRoutine,
+      totalRounds: 3,
+      color: Color(0xFF42A5F5),
+      instructionTitleKey: "exercise_resisted_breathing_title",
+      instructionDescriptionKey: "exercise_resisted_breathing_subtitle",
+      instructionStepKeys: [],
+      guidedSteps: [
+        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
+        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
+        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
+        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
+        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
+        GuidedStep(labelKey: "guided_resisted_rest", durationSec: 50, phase: GuidedStepPhase.hold),
+      ],
+    ),
+    'three_part_breath': LevelData(
+      key: 'three_part_breath',
+      title: "exercise_three_part_breath_title",
+      subtitle: "exercise_three_part_breath_subtitle",
+      type: ExerciseType.guidedRoutine,
+      totalRounds: 9,
+      color: Color(0xFF66BB6A),
+      instructionTitleKey: "exercise_three_part_breath_title",
+      instructionDescriptionKey: "exercise_three_part_breath_subtitle",
+      instructionStepKeys: [],
+      guidedSteps: [
+        GuidedStep(labelKey: "guided_threepart_belly_in", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: true),
+        GuidedStep(labelKey: "guided_threepart_ribs_in", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: true),
+        GuidedStep(labelKey: "guided_threepart_chest_in", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: true),
+        GuidedStep(labelKey: "guided_threepart_hold_full", durationSec: 2, phase: GuidedStepPhase.hold),
+        GuidedStep(labelKey: "guided_threepart_chest_out", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: false),
+        GuidedStep(labelKey: "guided_threepart_ribs_out", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: false),
+        GuidedStep(labelKey: "guided_threepart_belly_out", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: false),
+        GuidedStep(labelKey: "guided_threepart_hold_empty", durationSec: 2, phase: GuidedStepPhase.hold),
+      ],
+    ),
+    // Freediving-specific — surfaced from the Freediving section (already
+    // gated behind its safety consent), not the general Mobilność list. A
+    // one-time warning dialog (real risks: barotrauma, gas embolism,
+    // blackout) shows before its first use — see freediving_home_screen.dart.
+    'freediving_packing': LevelData(
+      key: 'freediving_packing',
+      title: "exercise_packing_title",
+      subtitle: "exercise_packing_subtitle",
+      type: ExerciseType.guidedRoutine,
+      totalRounds: 1,
+      color: Color(0xFFEF5350),
+      instructionTitleKey: "exercise_packing_title",
+      instructionDescriptionKey: "exercise_packing_subtitle",
+      instructionStepKeys: [],
+      guidedSteps: [
+        ..._packingGulps,
+        GuidedStep(labelKey: "guided_packing_hold", durationSec: 10, phase: GuidedStepPhase.hold),
+        GuidedStep(labelKey: "guided_packing_exhale", durationSec: 4, phase: GuidedStepPhase.breath, isInhale: false),
+      ],
+    ),
   };
+
+  /// One inhale+exhale rep, spread 15× into resisted_breathing's step list —
+  /// a plain `for`-generated list can't be used inside this `const` map, so
+  /// the repetition is a `...` spread of a single const rep instead.
+  static const _resistedBreathingReps = [
+    GuidedStep(labelKey: "guided_resisted_inhale", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: true),
+    GuidedStep(labelKey: "guided_resisted_exhale", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: false),
+  ];
+
+  /// One small "top-up" inhale, spread 12× into freediving_packing's step
+  /// list — same const-context reasoning as [_resistedBreathingReps].
+  static const _packingGulp = [
+    GuidedStep(labelKey: "guided_packing_gulp", durationSec: 1, phase: GuidedStepPhase.breath, isInhale: true),
+  ];
+  static const _packingGulps = [
+    ..._packingGulp, ..._packingGulp, ..._packingGulp, ..._packingGulp,
+    ..._packingGulp, ..._packingGulp, ..._packingGulp, ..._packingGulp,
+    ..._packingGulp, ..._packingGulp, ..._packingGulp, ..._packingGulp,
+  ];
 }

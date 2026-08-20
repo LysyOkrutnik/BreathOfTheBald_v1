@@ -238,6 +238,137 @@ class InstructionScreen extends StatelessWidget {
 
                       _buildTechniqueCard(
                         context: context,
+                        titleKey: "guide_stretch_chest_title",
+                        subtitleKey: "guide_stretch_chest_subtitle",
+                        color: const Color(0xFF26A69A),
+                        icon: Icons.accessibility_new_rounded,
+                        descriptionKey: "guide_stretch_chest_desc",
+                        benefitKeys: [
+                          "guide_stretch_chest_benefit1",
+                          "guide_stretch_chest_benefit2",
+                          "guide_stretch_chest_benefit3",
+                        ],
+                        warningKeys: [
+                          "guide_stretch_chest_warning1",
+                          "guide_stretch_chest_warning2",
+                        ],
+                        stepKeys: [
+                          "guide_stretch_chest_step1",
+                          "guide_stretch_chest_step2",
+                          "guide_stretch_chest_step3",
+                          "guide_stretch_chest_step4",
+                        ],
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      _buildTechniqueCard(
+                        context: context,
+                        titleKey: "guide_uddiyana_title",
+                        subtitleKey: "guide_uddiyana_subtitle",
+                        color: const Color(0xFF7E57C2),
+                        icon: Icons.self_improvement_rounded,
+                        descriptionKey: "guide_uddiyana_desc",
+                        benefitKeys: [
+                          "guide_uddiyana_benefit1",
+                          "guide_uddiyana_benefit2",
+                          "guide_uddiyana_benefit3",
+                        ],
+                        warningKeys: [
+                          "guide_uddiyana_warning1",
+                          "guide_uddiyana_warning2",
+                          "guide_uddiyana_warning3",
+                          "guide_uddiyana_warning4",
+                        ],
+                        stepKeys: [
+                          "guide_uddiyana_step1",
+                          "guide_uddiyana_step2",
+                          "guide_uddiyana_step3",
+                          "guide_uddiyana_step4",
+                          "guide_uddiyana_step5",
+                        ],
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      _buildTechniqueCard(
+                        context: context,
+                        titleKey: "guide_resisted_breathing_title",
+                        subtitleKey: "guide_resisted_breathing_subtitle",
+                        color: const Color(0xFF42A5F5),
+                        icon: Icons.filter_tilt_shift_rounded,
+                        descriptionKey: "guide_resisted_breathing_desc",
+                        benefitKeys: [
+                          "guide_resisted_breathing_benefit1",
+                          "guide_resisted_breathing_benefit2",
+                          "guide_resisted_breathing_benefit3",
+                        ],
+                        warningKeys: [
+                          "guide_resisted_breathing_warning1",
+                          "guide_resisted_breathing_warning2",
+                        ],
+                        stepKeys: [
+                          "guide_resisted_breathing_step1",
+                          "guide_resisted_breathing_step2",
+                          "guide_resisted_breathing_step3",
+                          "guide_resisted_breathing_step4",
+                        ],
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      _buildTechniqueCard(
+                        context: context,
+                        titleKey: "guide_three_part_breath_title",
+                        subtitleKey: "guide_three_part_breath_subtitle",
+                        color: const Color(0xFF66BB6A),
+                        icon: Icons.airline_seat_flat_rounded,
+                        descriptionKey: "guide_three_part_breath_desc",
+                        benefitKeys: [
+                          "guide_three_part_breath_benefit1",
+                          "guide_three_part_breath_benefit2",
+                          "guide_three_part_breath_benefit3",
+                        ],
+                        warningKeys: const [],
+                        stepKeys: [
+                          "guide_three_part_breath_step1",
+                          "guide_three_part_breath_step2",
+                          "guide_three_part_breath_step3",
+                          "guide_three_part_breath_step4",
+                        ],
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      _buildTechniqueCard(
+                        context: context,
+                        titleKey: "guide_packing_title",
+                        subtitleKey: "guide_packing_subtitle",
+                        color: const Color(0xFFEF5350),
+                        icon: Icons.warning_amber_rounded,
+                        descriptionKey: "guide_packing_desc",
+                        benefitKeys: [
+                          "guide_packing_benefit1",
+                        ],
+                        warningKeys: [
+                          "guide_packing_warning1",
+                          "guide_packing_warning2",
+                          "guide_packing_warning3",
+                          "guide_packing_warning4",
+                        ],
+                        stepKeys: [
+                          "guide_packing_step1",
+                          "guide_packing_step2",
+                          "guide_packing_step3",
+                          "guide_packing_step4",
+                          "guide_packing_step5",
+                        ],
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      _buildTechniqueCard(
+                        context: context,
                         titleKey: "guide_rules_title",
                         subtitleKey: "guide_rules_subtitle",
                         color: Colors.grey,

@@ -7,6 +7,7 @@ import 'package:okrutnik_breath/config/responsive.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
 import 'package:okrutnik_breath/core/notifications/notification_service.dart';
+import 'package:okrutnik_breath/data/db/database.dart';
 import 'package:okrutnik_breath/logic/freediving/co2_o2_table_generator.dart';
 import 'package:okrutnik_breath/logic/path/cold_shower.dart';
 import 'package:okrutnik_breath/logic/path/training_path.dart';
@@ -16,19 +17,26 @@ import 'package:okrutnik_breath/logic/providers/settings_provider.dart';
 import 'package:okrutnik_breath/ui/screens/freediving/freediving_table_intro_screen.dart';
 import 'package:okrutnik_breath/ui/screens/freediving/max_pb_test_screen.dart';
 import 'package:okrutnik_breath/ui/screens/intro_screen.dart';
-import 'package:okrutnik_breath/ui/widgets/app_background.dart';
+import 'package:okrutnik_breath/ui/widgets/cold_shower_card.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
 import 'package:okrutnik_breath/ui/widgets/week_plan_strip.dart';
 import 'package:okrutnik_breath/ui/widgets/week_preferences_sheet.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// The full "Twoja Ścieżka" view: the six-stage narrative (big picture), this
-/// week's interleaved Wim Hof/CO2/O2 rotation, and today's concrete actions.
-class TrainingPathScreen extends ConsumerWidget {
-  const TrainingPathScreen({super.key});
+/// The "Dziś" bottom-nav tab — the single hub replacing the old Wim Hof tab
+/// as the app's landing screen. Consolidates what used to be split across
+/// three places: the standalone "Twoja Ścieżka" push screen (today's plan,
+/// the week rotation, the six-stage journey), the Wim Hof tab's status card,
+/// and the cold-shower quick-log duplicated on two other screens. Only ever
+/// shown as a shell tab root — the shared background lives in
+/// HomeShellScreen so it isn't torn down and rebuilt every time the tab is
+/// switched.
+class TodayScreen extends ConsumerWidget {
+  const TodayScreen({super.key});
 
   static const _stages = PathStage.values;
+  static const _pbTestDueAfter = Duration(days: 7);
 
   Future<void> _startAction(
       BuildContext context, WidgetRef ref, PlannedAction action) async {
@@ -54,20 +62,7 @@ class TrainingPathScreen extends ConsumerWidget {
           pbSeconds: pb,
         )));
       case PathAction.coldShower:
-        // No guided screen — a plain "mark done" tap, logged immediately but
-        // reversible for a few seconds in case it was an accidental tap.
-        final messenger = ScaffoldMessenger.of(context);
-        final result = await logColdShowerSession(ref);
-        if (context.mounted) {
-          messenger.showSnackBar(SnackBar(
-            content: Text(L10n.get(context, 'coldshower_logged_toast')),
-            duration: const Duration(seconds: 5),
-            action: SnackBarAction(
-              label: L10n.get(context, 'common_undo'),
-              onPressed: () => undoColdShowerSession(ref, result),
-            ),
-          ));
-        }
+        break; // Handled by the standalone ColdShowerCard control instead.
       case PathAction.rest:
       case PathAction.maintain:
         break; // Informational only — nothing to start.
@@ -167,60 +162,133 @@ class TrainingPathScreen extends ConsumerWidget {
     }
   }
 
+  bool _pbTestDue(FreedivingProfileData? profile) {
+    if (profile == null || profile.safetyAcknowledgedAt == null) return false;
+    if (profile.verifiedPbAt == null) return true;
+    return DateTime.now().difference(profile.verifiedPbAt!) >= _pbTestDueAfter;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final path = ref.watch(trainingPathProvider);
     final plan = ref.watch(weeklyPlanProvider);
+    final userProfile = ref.watch(userProfileProvider).value;
+    final freedivingProfile = ref.watch(freedivingProfileProvider).value;
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          const Positioned.fill(child: AppBackground(sectionAccent: AppTheme.accent)),
-          SafeArea(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: context.isTablet ? 640 : 560),
-                child: Column(
-                  children: [
-                    ScreenHeader(title: L10n.get(context, 'path_title')),
-                    Expanded(
-                      child: (path == null || plan == null)
-                          ? const Center(
-                              child: CircularProgressIndicator(color: AppTheme.accent),
-                            )
-                          : ListView(
-                              physics: const BouncingScrollPhysics(),
-                              padding: const EdgeInsets.fromLTRB(
-                                  AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.xl),
-                              children: [
-                                // Today's actions first — this is the one thing a
-                                // returning user opens this screen to check daily;
-                                // the stage-by-stage journey below is informational
-                                // and doesn't change from day to day.
-                                _TodayCard(
-                                  actions: plan.days.first.actions,
-                                  onStart: (a) => _startAction(context, ref, a),
-                                ),
-                                const SizedBox(height: AppSpacing.lg),
-                                _WeekSection(
-                                  plan: plan,
-                                  onPlanWeek: () => _planWeek(context, ref, plan),
-                                ),
-                                const SizedBox(height: AppSpacing.lg),
-                                _JourneySection(stages: _stages, currentStage: path.stage),
-                              ].animate(interval: 60.ms).fadeIn(duration: AppMotion.medium),
-                            ),
-                    ),
-                  ],
-                ),
+    return SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: context.isTablet ? 640 : 560),
+          child: Column(
+            children: [
+              ScreenHeader(
+                title: L10n.get(context, 'nav_today'),
+                showBackButton: false,
               ),
-            ),
+              Expanded(
+                child: (path == null || plan == null)
+                    ? const Center(
+                        child: CircularProgressIndicator(color: AppTheme.primary),
+                      )
+                    : ListView(
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(
+                            AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.xl),
+                        children: [
+                          _ProfileHeaderRow(profile: userProfile),
+                          const SizedBox(height: AppSpacing.lg),
+                          if (_pbTestDue(freedivingProfile)) ...[
+                            _PbTestDueCard(
+                              neverTested: freedivingProfile?.verifiedPbAt == null,
+                            ),
+                            const SizedBox(height: AppSpacing.lg),
+                          ],
+                          _TodayCard(
+                            actions: plan.days.first.actions,
+                            onStart: (a) => _startAction(context, ref, a),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          _WeekSection(
+                            plan: plan,
+                            onPlanWeek: () => _planWeek(context, ref, plan),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          _JourneySection(stages: _stages, currentStage: path.stage),
+                        ].animate(interval: 60.ms).fadeIn(duration: AppMotion.medium),
+                      ),
+              ),
+            ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileHeaderRow extends StatelessWidget {
+  const _ProfileHeaderRow({required this.profile});
+  final UserProfileData? profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final level = profile?.level ?? 1;
+    final streak = profile?.dailyStreak ?? 0;
+    return GlassCard(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+      child: Row(
+        children: [
+          Icon(Icons.military_tech_outlined, color: AppTheme.primary, size: 20),
+          const SizedBox(width: AppSpacing.sm),
+          Text('${L10n.get(context, 'stats_level')} $level', style: AppTheme.titleMedium),
+          const Spacer(),
+          Icon(Icons.local_fire_department_outlined, color: AppTheme.lure, size: 20),
+          const SizedBox(width: AppSpacing.sm),
+          Text('$streak ${L10n.get(context, 'stats_streak')}', style: AppTheme.titleMedium),
         ],
       ),
     );
   }
+}
 
+class _PbTestDueCard extends StatelessWidget {
+  const _PbTestDueCard({required this.neverTested});
+  final bool neverTested;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: () =>
+          Navigator.of(context).push(fadeThroughRoute(const MaxPbTestScreen())),
+      child: GlassCard(
+        gradient: AppTheme.cardGradient(AppTheme.primary),
+        child: Row(
+          children: [
+            const Icon(Icons.timer_outlined, color: AppTheme.primary, size: 24),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    L10n.get(context, 'today_pbtest_due_title'),
+                    style: const TextStyle(
+                        color: AppTheme.primary, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    L10n.get(context,
+                        neverTested ? 'today_pbtest_due_body_new' : 'today_pbtest_due_body_retest'),
+                    style: const TextStyle(color: AppTheme.textLight, fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: AppTheme.primary, size: 20),
+          ],
+        ),
+      ),
+    ).animate().fadeIn(duration: AppMotion.medium);
+  }
 }
 
 _StageRelation _relativeTo(PathStage stage, PathStage current) {
@@ -386,8 +454,6 @@ class _JourneySectionState extends State<_JourneySection> {
             index: currentIndex + 1,
             state: _StageRelation.current,
           ),
-          // AnimatedSize so expanding/collapsing eases the card's height
-          // instead of the content just snapping in and out.
           AnimatedSize(
             duration: AppMotion.medium,
             curve: Curves.easeInOut,
@@ -451,10 +517,9 @@ class _TodayCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // The cold shower is a daily habit, not part of the interleaved
-    // discipline rotation — shown as its own always-present checkbox rather
-    // than mixed into the training list below.
+    // discipline rotation — shown via the standalone ColdShowerCard control
+    // rather than mixed into the training list below.
     final trainingActions = trainingActionsOf(actions);
-    final coldShowerDone = ref.watch(coldShowerDoneTodayProvider);
 
     return GlassCard(
       gradient: AppTheme.cardGradient(AppTheme.accent),
@@ -484,56 +549,8 @@ class _TodayCard extends ConsumerWidget {
                   onTap: () => onStart(trainingActions[i])),
             ],
           const SizedBox(height: AppSpacing.sm),
-          _ColdShowerChecklistRow(
-            done: coldShowerDone,
-            onTap: coldShowerDone
-                ? null
-                : () => onStart(const PlannedAction(type: PathAction.coldShower)),
-          ),
+          const ColdShowerCard(),
         ],
-      ),
-    );
-  }
-}
-
-class _ColdShowerChecklistRow extends StatelessWidget {
-  const _ColdShowerChecklistRow({required this.done, required this.onTap});
-  final bool done;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    const color = Color(0xFF80D8FF);
-    return PressableScale(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-            vertical: AppSpacing.sm, horizontal: AppSpacing.md),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          color: Colors.white.withAlpha(14),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              done ? Icons.check_circle_rounded : Icons.ac_unit_rounded,
-              color: color,
-              size: 20,
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Text(
-                L10n.get(context, 'coldshower_title'),
-                style: TextStyle(
-                  color: AppTheme.textLight,
-                  fontSize: 14,
-                  decoration: done ? TextDecoration.lineThrough : null,
-                  decorationColor: AppTheme.textDim,
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

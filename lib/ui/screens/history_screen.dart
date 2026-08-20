@@ -13,13 +13,11 @@ import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
 import 'package:okrutnik_breath/ui/widgets/shimmer.dart';
 
-class HistoryScreen extends ConsumerWidget {
+class HistoryScreen extends StatelessWidget {
   const HistoryScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final historyAsync = ref.watch(sessionHistoryProvider);
-
+  Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(
         children: [
@@ -31,23 +29,7 @@ class HistoryScreen extends ConsumerWidget {
                 child: Column(
                   children: [
                     ScreenHeader(title: L10n.get(context, 'history_title')),
-                    Expanded(
-                      child: historyAsync.when(
-                        loading: () => const _LoadingSkeleton(),
-                        error: (_, __) => const _EmptyState(),
-                        data: (sessions) {
-                          if (sessions.isEmpty) return const _EmptyState();
-                          return ListView.builder(
-                            padding: const EdgeInsets.all(AppSpacing.md),
-                            itemCount: sessions.length,
-                            itemBuilder: (context, index) => _SessionCard(
-                              session: sessions[index],
-                              index: index,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
+                    const Expanded(child: HistoryContent()),
                   ],
                 ),
               ),
@@ -55,6 +37,34 @@ class HistoryScreen extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The session list — extracted from [HistoryScreen] so it can be embedded
+/// directly inside a tab (no nested Scaffold/background) as well as shown as
+/// its own pushed screen.
+class HistoryContent extends ConsumerWidget {
+  const HistoryContent({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final historyAsync = ref.watch(sessionHistoryProvider);
+
+    return historyAsync.when(
+      loading: () => const _LoadingSkeleton(),
+      error: (_, __) => const _EmptyState(),
+      data: (sessions) {
+        if (sessions.isEmpty) return const _EmptyState();
+        return ListView.builder(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          itemCount: sessions.length,
+          itemBuilder: (context, index) => _SessionCard(
+            session: sessions[index],
+            index: index,
+          ),
+        );
+      },
     );
   }
 }

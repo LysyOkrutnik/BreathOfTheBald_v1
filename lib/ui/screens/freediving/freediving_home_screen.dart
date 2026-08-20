@@ -15,11 +15,12 @@ import 'package:okrutnik_breath/logic/providers/settings_provider.dart';
 import 'package:okrutnik_breath/ui/screens/freediving/custom_freediving_builder_screen.dart';
 import 'package:okrutnik_breath/ui/screens/freediving/freediving_table_intro_screen.dart';
 import 'package:okrutnik_breath/ui/screens/freediving/max_pb_test_screen.dart';
+import 'package:okrutnik_breath/ui/screens/intro_screen.dart';
 import 'package:okrutnik_breath/ui/screens/session_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/confirm_dialog.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
-import 'package:okrutnik_breath/ui/widgets/path_status_card.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// The "Freediving" bottom-nav tab. Only ever shown as a shell tab root —
 /// the shared background lives in HomeShellScreen so it isn't torn down and
@@ -218,8 +219,6 @@ class _FreedivingContent extends ConsumerWidget {
           style: const TextStyle(color: AppTheme.textDim, fontSize: 13, height: 1.4),
         ),
         const SizedBox(height: AppSpacing.lg),
-        const PathStatusCard(),
-        const SizedBox(height: AppSpacing.lg),
         _PbCard(profile: profile),
         if (hasPb) ...[
           const SizedBox(height: AppSpacing.lg),
@@ -249,6 +248,8 @@ class _FreedivingContent extends ConsumerWidget {
           // full-size tiles competing for attention with the PB card above,
           // which is the only thing actually actionable for a new user.
           const _LockedTablesPlaceholder(),
+        const SizedBox(height: AppSpacing.md),
+        const _PackingTile(),
         const SizedBox(height: AppSpacing.xl),
         _CustomFreedivingSection(presets: presets),
       ],
@@ -726,6 +727,85 @@ class _LockedTablesPlaceholder extends StatelessWidget {
                 ],
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Packing — a real freediving technique with documented medical risk
+/// (pulmonary barotrauma, gas embolism, blackout before the dive). Already
+/// sits behind this screen's safety-consent gate; on top of that, a
+/// one-time warning dialog shows before its very first use (same
+/// SharedPreferences "shown once" pattern as the session screen's Ghost
+/// Mode hint and the scheduler's week-preferences first-visit sheet) —
+/// deliberately not a repeated gate, just a single, unmissable disclosure.
+class _PackingTile extends StatefulWidget {
+  const _PackingTile();
+
+  @override
+  State<_PackingTile> createState() => _PackingTileState();
+}
+
+class _PackingTileState extends State<_PackingTile> {
+  static const _warningShownKey = 'packing_warning_shown';
+
+  Future<void> _open(BuildContext context) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!(prefs.getBool(_warningShownKey) ?? false)) {
+      if (!context.mounted) return;
+      final confirmed = await showGlassConfirm(
+        context,
+        title: L10n.get(context, 'packing_warning_title'),
+        body: L10n.get(context, 'packing_warning_body'),
+        confirmLabel: L10n.get(context, 'packing_warning_confirm'),
+        cancelLabel: L10n.get(context, 'delete_confirm_cancel'),
+        icon: Icons.warning_amber_rounded,
+        confirmColor: AppTheme.danger,
+      );
+      if (!confirmed) return;
+      await prefs.setBool(_warningShownKey, true);
+    }
+    if (!context.mounted) return;
+    final level = LevelData.levels['freediving_packing']!;
+    Navigator.of(context).push(fadeThroughRoute(IntroScreen(level: level)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final level = LevelData.levels['freediving_packing']!;
+    return PressableScale(
+      onTap: () => _open(context),
+      child: GlassCard(
+        gradient: AppTheme.cardGradient(level.color),
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: level.color, size: 26),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    L10n.get(context, 'exercise_packing_title'),
+                    style: const TextStyle(
+                      color: AppTheme.textLight,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    L10n.get(context, 'exercise_packing_subtitle'),
+                    style: TextStyle(fontSize: 12, color: AppTheme.textDim.withAlpha(190)),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: level.color.withAlpha(160), size: 20),
           ],
         ),
       ),

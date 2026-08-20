@@ -14,6 +14,7 @@ import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/glow_halo.dart';
+import 'package:okrutnik_breath/ui/widgets/primary_button.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
 
 /// A guided, in-app Personal Best test — the app's only way to set PB (no
@@ -355,7 +356,7 @@ class _IntroView extends StatelessWidget {
           style: const TextStyle(color: AppTheme.textDim, fontSize: 14, height: 1.5),
         ),
         const SizedBox(height: AppSpacing.xxl),
-        _ActionButton(
+        PrimaryButton(
           label: L10n.get(context, 'freediving_pb_test_begin'),
           color: AppTheme.primary,
           onTap: onBegin,
@@ -433,7 +434,7 @@ class _RelaxView extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.xxl),
-        _ActionButton(
+        PrimaryButton(
           label: L10n.get(context, 'freediving_pb_test_begin_hold'),
           color: AppTheme.primary,
           onTap: onBeginHold,
@@ -497,7 +498,7 @@ class _HoldingView extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.xxl),
-        _ActionButton(
+        PrimaryButton(
           label: L10n.get(context, 'freediving_pb_test_stop'),
           color: AppTheme.danger,
           onTap: onEnd,
@@ -633,7 +634,7 @@ class _ResultsView extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.lg),
         if (!saved)
-          _ActionButton(
+          PrimaryButton(
             label: L10n.get(context, 'freediving_pb_test_save'),
             color: AppTheme.primary,
             onTap: () => onSave(),
@@ -685,7 +686,7 @@ class _ResultsView extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: AppSpacing.lg),
-                _ActionButton(
+                PrimaryButton(
                   label: L10n.get(context, 'freediving_pb_test_schedule_cta'),
                   color: AppTheme.primary,
                   onTap: () => onScheduleNext(),
@@ -814,35 +815,3 @@ class _PickerTile extends StatelessWidget {
   }
 }
 
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({required this.label, required this.color, required this.onTap});
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return PressableScale(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          boxShadow: AppTheme.glow(color, blur: 22),
-        ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Colors.black,
-            fontSize: 17,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.5,
-          ),
-        ),
-      ),
-    );
-  }
-}

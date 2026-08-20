@@ -67,9 +67,15 @@ class WimHofRepository {
   Future<WimHofNextUp> refresh() async {
     final progress = await _getOrCreate();
     final sessions = await _allWimHofSessions();
+    // Read directly rather than depending on FreedivingRepository — this is
+    // the one field (verifiedPbSec) the PB-caution advisory needs, and a
+    // repository-to-repository dependency would be a lot of coupling for it.
+    final freedivingProfile =
+        await (_db.select(_db.freedivingProfile)..limit(1)).getSingleOrNull();
     final result = WimHofProgression.compute(
       progress: progress,
       allWimHofSessions: sessions,
+      verifiedPbSec: freedivingProfile?.verifiedPbSec,
     );
     if (result.currentLevelKey != progress.currentLevelKey || result.resetTrialWindow) {
       await (_db.update(_db.wimHofProgress)..where((t) => t.id.equals(progress.id)))

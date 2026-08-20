@@ -22,6 +22,16 @@ const int kDetrainingDays = 21;
 
 const int kWeeklyHardSessionCap = 4;
 
+/// If recent Wim Hof retention already reaches this fraction of the user's
+/// real, verified max PB, a recommendation to advance to a hard level comes
+/// with an advisory caution note (see [WimHofNextUp.pbCautionAdvised]).
+const double kPbCautionRetentionRatio = 0.8;
+
+/// How many of the most recent sessions at the current level feed the
+/// PB-caution average — a handful of recent holds, not the whole history,
+/// so an old, easier stretch doesn't mask a recent trend of pushing hard.
+const int kPbCautionSessionWindow = 5;
+
 /// The result of re-evaluating a user's Wim Hof ladder standing.
 class WimHofNextUp {
   const WimHofNextUp({
@@ -31,6 +41,7 @@ class WimHofNextUp {
     this.sessionsAtLevel = 0,
     this.daysAtLevel = 0,
     this.resetTrialWindow = false,
+    this.pbCautionAdvised = false,
   });
 
   /// The ladder level the app currently treats as "confirmed" (the one
@@ -60,6 +71,14 @@ class WimHofNextUp {
   /// failed it once would fail it forever — permanently blocking any future
   /// recommendation with no way for the user to earn a fresh attempt.
   final bool resetTrialWindow;
+
+  /// Set when [recommendedLevelKey] is a hard level (beast/guru) and the
+  /// user's recent Wim Hof retention is already close to their real,
+  /// normal-breath max PB — a signal they may be relying on the preceding
+  /// hyperventilation's blunted CO2 warning rather than genuine tolerance,
+  /// since Wim Hof retention isn't directly comparable to a plain
+  /// breath-hold. Advisory only — never hides or blocks the recommendation.
+  final bool pbCautionAdvised;
 }
 
 /// Pure progression logic for the Wim Hof classic ladder. The ladder itself
@@ -108,6 +127,29 @@ class WimHofProgression {
     return sum / scored.length;
   }
 
+  /// True when a recommended advance to [nextLevelKey] deserves the PB
+  /// caution note — only for hard levels, only once a real PB exists, and
+  /// only when recent retention at the current level is already close to it.
+  static bool _pbCautionFor({
+    required String nextLevelKey,
+    required List<Session> sessionsAtCurrentLevel,
+    required int? verifiedPbSec,
+  }) {
+    if (!kHardWimHofLevels.contains(nextLevelKey)) return false;
+    if (verifiedPbSec == null || verifiedPbSec <= 0) return false;
+
+    final withRetention = sessionsAtCurrentLevel
+        .where((s) => s.retentionSec > 0)
+        .toList()
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    final recent = withRetention.take(kPbCautionSessionWindow).toList();
+    if (recent.isEmpty) return false;
+
+    final avgRetention =
+        recent.fold<int>(0, (sum, s) => sum + s.retentionSec) / recent.length;
+    return avgRetention >= verifiedPbSec * kPbCautionRetentionRatio;
+  }
+
   /// Computes the next-up recommendation and any detraining rollback, given
   /// [progress] (the persisted confirmed level) and every Wim Hof session
   /// ever logged (any order). The caller persists a level change whenever
@@ -116,6 +158,7 @@ class WimHofProgression {
   static WimHofNextUp compute({
     required WimHofProgressData progress,
     required List<Session> allWimHofSessions,
+    int? verifiedPbSec,
     DateTime? now,
   }) {
     now ??= DateTime.now();
@@ -188,10 +231,11 @@ class WimHofProgression {
     }
 
     // Eligibility to recommend a trial of the next level.
-    final avgRpe = _avgRpe(_dedupeSameDay(allWimHofSessions
+    final currentLevelSessions = allWimHofSessions
         .where((s) => s.levelKey == current)
         .where((s) => since == null || !s.timestamp.isBefore(since))
-        .toList()));
+        .toList();
+    final avgRpe = _avgRpe(_dedupeSameDay(currentLevelSessions));
     final rpeOk = avgRpe == null || avgRpe <= kMaxAvgRpeToAdvance;
     final eligible = sessionsAtLevel >= kMinSessionsAtLevel &&
         daysAtLevel >= kMinDaysAtLevel &&
@@ -202,6 +246,12 @@ class WimHofProgression {
       recommendedLevelKey: eligible ? next : null,
       sessionsAtLevel: sessionsAtLevel,
       daysAtLevel: daysAtLevel,
+      pbCautionAdvised: eligible &&
+          _pbCautionFor(
+            nextLevelKey: next,
+            sessionsAtCurrentLevel: currentLevelSessions,
+            verifiedPbSec: verifiedPbSec,
+          ),
     );
   }
 }

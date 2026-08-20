@@ -41,6 +41,16 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       FIREBASE_SERVICE_ACCOUNT_PATH: ${FIREBASE_SERVICE_ACCOUNT_PATH}
       NOTIFICATIONS_CRON_HOUR: ${NOTIFICATIONS_CRON_HOUR:-19}
+      # Without these, env.ts's SMTP_* all read as unset and mailer.ts
+      # silently falls back to logging emails to the console instead of
+      # sending them — verification/reset emails looked "sent" but never
+      # actually went anywhere.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-no-reply@lysyweb.pl}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-https://breath.lysyweb.pl}
     depends_on:
       - postgres
     ports:

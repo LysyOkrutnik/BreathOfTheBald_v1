@@ -116,6 +116,10 @@ class LevelCard extends StatelessWidget {
         return '~10 min • ${L10n.get(context, 'desc_deep_sleep')}';
       case ExerciseType.fireBreathing:
         return '3 min • ${L10n.get(context, 'desc_pure_energy')}';
+      case ExerciseType.guidedRoutine:
+        final roundsKey =
+            level.totalRounds >= 5 ? 'desc_rounds_pl' : 'desc_rounds';
+        return '${level.totalRounds} ${L10n.get(context, roundsKey)}';
       case ExerciseType.custom:
       case ExerciseType.co2Table:
       case ExerciseType.o2Table:

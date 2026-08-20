@@ -19,13 +19,13 @@ import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/logic/providers/locale_provider.dart';
 import 'package:okrutnik_breath/logic/providers/settings_provider.dart';
 import 'package:okrutnik_breath/logic/providers/sync_providers.dart';
-import 'package:okrutnik_breath/ui/screens/instruction_screen.dart';
 import 'package:okrutnik_breath/ui/screens/privacy_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/confirm_dialog.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/glow_halo.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
+import 'package:okrutnik_breath/ui/widgets/section_header.dart';
 import 'package:okrutnik_breath/ui/widgets/week_preferences_sheet.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -68,11 +68,11 @@ class SettingsScreen extends ConsumerWidget {
                           ),
                           const SizedBox(height: AppSpacing.xl),
 
-                          _SectionHeader(L10n.get(context, 'settings_section_account')),
+                          SectionHeader(L10n.get(context, 'settings_section_account')),
                           const _AccountSection(),
                           const SizedBox(height: AppSpacing.lg),
 
-                          _SectionHeader(L10n.get(context, 'settings_section_reminders')),
+                          SectionHeader(L10n.get(context, 'settings_section_reminders')),
                           _Group(children: [
                             _SwitchTile(
                               icon: Icons.notifications_active_outlined,
@@ -99,7 +99,7 @@ class SettingsScreen extends ConsumerWidget {
                           ),
                           const SizedBox(height: AppSpacing.lg),
 
-                          _SectionHeader(L10n.get(context, 'settings_section_sound')),
+                          SectionHeader(L10n.get(context, 'settings_section_sound')),
                           _Group(children: [
                             _SwitchTile(
                               icon: Icons.volume_up_rounded,
@@ -116,7 +116,7 @@ class SettingsScreen extends ConsumerWidget {
                           ]),
                           const SizedBox(height: AppSpacing.lg),
 
-                          _SectionHeader(L10n.get(context, 'settings_section_language')),
+                          SectionHeader(L10n.get(context, 'settings_section_language')),
                           _Group(children: [
                             _Tile(
                               icon: Icons.language_rounded,
@@ -130,7 +130,7 @@ class SettingsScreen extends ConsumerWidget {
                           ]),
                           const SizedBox(height: AppSpacing.lg),
 
-                          _SectionHeader(L10n.get(context, 'settings_section_help')),
+                          SectionHeader(L10n.get(context, 'settings_section_help')),
                           _Group(children: [
                             _Tile(
                               icon: Icons.widgets_outlined,
@@ -146,18 +146,10 @@ class SettingsScreen extends ConsumerWidget {
                                   color: Colors.white38),
                               onTap: () => _contactSupport(context),
                             ),
-                            _Tile(
-                              icon: Icons.spa_outlined,
-                              title: L10n.get(context, 'settings_guide'),
-                              trailing: const Icon(Icons.chevron_right_rounded,
-                                  color: Colors.white38),
-                              onTap: () => Navigator.of(context).push(
-                                  fadeThroughRoute(const InstructionScreen())),
-                            ),
                           ]),
                           const SizedBox(height: AppSpacing.lg),
 
-                          _SectionHeader(L10n.get(context, 'settings_section_about')),
+                          SectionHeader(L10n.get(context, 'settings_section_about')),
                           _Group(children: [
                             _Tile(
                               icon: Icons.privacy_tip_outlined,
@@ -176,7 +168,7 @@ class SettingsScreen extends ConsumerWidget {
                           ]),
                           const SizedBox(height: AppSpacing.lg),
 
-                          _SectionHeader(L10n.get(context, 'settings_section_danger')),
+                          SectionHeader(L10n.get(context, 'settings_section_danger')),
                           _Group(children: [
                             _Tile(
                               icon: Icons.restart_alt_rounded,
@@ -1123,25 +1115,6 @@ class _ProfileHeader extends StatelessWidget {
   }
 }
 
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader(this.text);
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: AppSpacing.sm, bottom: AppSpacing.sm),
-      child: Text(
-        text,
-        style: const TextStyle(
-            color: Colors.white38,
-            fontSize: 11,
-            letterSpacing: 1.5,
-            fontWeight: FontWeight.w600),
-      ),
-    );
-  }
-}
 
 class _Group extends StatelessWidget {
   const _Group({required this.children});

@@ -142,6 +142,37 @@ class SyncApiClient {
     _checkOk(response);
   }
 
+  /// Active challenges, each flagged `joined` for the calling user.
+  Future<List<dynamic>> getChallenges() async {
+    final response = await http
+        .get(Uri.parse('$syncApiBaseUrl/challenges'), headers: await _headers())
+        .timeout(syncRequestTimeout);
+    _checkOk(response);
+    return jsonDecode(response.body) as List<dynamic>;
+  }
+
+  Future<void> joinChallenge(String id) async {
+    final response = await http
+        .post(Uri.parse('$syncApiBaseUrl/challenges/$id/join'), headers: await _headers())
+        .timeout(syncRequestTimeout);
+    _checkOk(response);
+  }
+
+  Future<void> leaveChallenge(String id) async {
+    final response = await http
+        .delete(Uri.parse('$syncApiBaseUrl/challenges/$id/join'), headers: await _headers())
+        .timeout(syncRequestTimeout);
+    _checkOk(response);
+  }
+
+  /// `{challengeId, metric, leaderboard: [{rank, userId, displayName, value}]}`.
+  Future<Map<String, dynamic>> getLeaderboard(String id) async {
+    final response = await http
+        .get(Uri.parse('$syncApiBaseUrl/challenges/$id/leaderboard'), headers: await _headers())
+        .timeout(syncRequestTimeout);
+    return _decodeObject(response);
+  }
+
   void _checkOk(http.Response response) {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw SyncApiException(response.statusCode, response.body);

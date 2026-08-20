@@ -196,6 +196,8 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
       _startCustom(level);
     } else if (level.type.isFreedivingTable) {
       _startFreedivingTable(level);
+    } else if (level.type == ExerciseType.guidedRoutine) {
+      _startGuidedRoutine(level);
     }
   }
 
@@ -587,6 +589,78 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
       _playBreathSignal(isInhale: isInhale, progress: 1.0);
     }
     await Future.delayed(Duration(seconds: seconds));
+    return _isRunning;
+  }
+
+  // ==========================================================
+  // GUIDED ROUTINE (lung-mobility/diaphragm exercises + packing)
+  // ==========================================================
+  /// Generalizes [_startCustom]'s "labeled, timed phases repeated over
+  /// rounds" loop to a data-driven [GuidedStep] list instead of a hardcoded
+  /// 4-phase inhale/hold/exhale/hold cycle — one engine for every guided
+  /// lung-mobility exercise and packing, instead of a bespoke method each.
+  Future<void> _startGuidedRoutine(LevelData level) async {
+    final steps = level.guidedSteps ?? const <GuidedStep>[];
+    if (steps.isEmpty) {
+      if (_isRunning) _finishSession();
+      return;
+    }
+    final rounds = level.totalRounds > 0 ? level.totalRounds : 1;
+
+    for (int r = 1; r <= rounds; r++) {
+      if (!_isRunning) return;
+      state = state.copyWith(
+          currentRound: r, totalRounds: rounds, totalBreathsInRound: steps.length);
+
+      for (int i = 0; i < steps.length; i++) {
+        if (!await _guidedStepPhase(steps[i], index: i + 1)) return;
+      }
+    }
+
+    if (_isRunning) _finishSession();
+  }
+
+  /// Runs one step of a guided routine. Returns false if the session was
+  /// stopped meanwhile (caller bails). A step with `durationSec <= 0` is
+  /// skipped. [GuidedStepPhase.hold] steps show a live countdown (reusing
+  /// the `recovery` phase, same visual as freediving's rest/pause) instead
+  /// of a silent delay, so a 25-second stretch hold doesn't look frozen.
+  Future<bool> _guidedStepPhase(GuidedStep step, {required int index}) async {
+    if (step.durationSec <= 0) return _isRunning;
+    if (!_isRunning) return false;
+
+    if (step.phase == GuidedStepPhase.hold) {
+      var remaining = step.durationSec;
+      state = state.copyWith(
+        customLabel: step.labelKey,
+        customDescription: null,
+        customIsBig: false,
+        phase: SessionPhase.recovery(remaining: Duration(seconds: remaining)),
+      );
+      while (remaining > 0) {
+        if (!_isRunning) return false;
+        await Future.delayed(const Duration(seconds: 1));
+        remaining--;
+        if (_isRunning) {
+          state = state.copyWith(
+              phase: SessionPhase.recovery(remaining: Duration(seconds: remaining)));
+        }
+      }
+      return _isRunning;
+    }
+
+    _updateCustomState(
+      step.labelKey,
+      "${step.durationSec}s",
+      isBig: step.isInhale ?? true,
+      isInhaling: step.isInhale ?? true,
+      duration: Duration(seconds: step.durationSec),
+      index: index,
+    );
+    if (step.isInhale != null) {
+      _playBreathSignal(isInhale: step.isInhale!, progress: 1.0);
+    }
+    await Future.delayed(Duration(seconds: step.durationSec));
     return _isRunning;
   }
 

@@ -52,6 +52,30 @@ class AppTheme {
     fontFeatures: const [FontFeature.tabularFigures()],
   );
 
+  /// Small uppercase section/group label (e.g. "KONTO I SYNCHRONIZACJA") —
+  /// consolidates a style that was previously hand-typed inline, slightly
+  /// differently, on nearly every screen with a sectioned list.
+  static const TextStyle sectionLabel = TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w600,
+    color: textDim,
+    letterSpacing: 1.5,
+  );
+
+  /// A list tile / card title — one notch below [displayLarge], for content
+  /// headings that aren't the screen's own title.
+  static const TextStyle titleMedium = TextStyle(
+    fontSize: 15,
+    fontWeight: FontWeight.w600,
+    color: textLight,
+  );
+
+  /// Secondary/supporting text — dates, hints, helper copy.
+  static const TextStyle caption = TextStyle(
+    fontSize: 12,
+    color: textDim,
+  );
+
   /// Used for skeleton/shimmer placeholders.
   static const Color shimmerBase = Color(0xFF1E2730);
   static const Color shimmerHighlight = Color(0xFF2C3845);

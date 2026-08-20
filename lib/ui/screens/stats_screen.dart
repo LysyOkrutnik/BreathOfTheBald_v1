@@ -14,17 +14,11 @@ import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
 
-class StatsScreen extends ConsumerWidget {
+class StatsScreen extends StatelessWidget {
   const StatsScreen({super.key});
 
-  static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
-
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final sessionsAsync = ref.watch(sessionHistoryProvider);
-    final sessions = sessionsAsync.value ?? const <Session>[];
-    final profile = ref.watch(userProfileProvider).value;
-
+  Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(
         children: [
@@ -38,19 +32,7 @@ class StatsScreen extends ConsumerWidget {
                     ScreenHeader(
                       title: L10n.get(context, 'stats_title'),
                     ),
-                    Expanded(
-                      // Still loading is not the same as "no sessions yet" —
-                      // collapsing both into `sessions.isEmpty` used to flash
-                      // the empty state on every cold open before the first
-                      // stream value arrived.
-                      child: sessionsAsync.isLoading
-                          ? const Center(
-                              child: CircularProgressIndicator(color: AppTheme.primary),
-                            )
-                          : sessions.isEmpty
-                              ? _empty(context)
-                              : _content(context, sessions, profile),
-                    ),
+                    const Expanded(child: StatsContent()),
                   ],
                 ),
               ),
@@ -59,6 +41,31 @@ class StatsScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+}
+
+/// The level/XP/streak summary + charts — extracted from [StatsScreen] so it
+/// can be embedded directly inside a tab (no nested Scaffold/background) as
+/// well as shown as its own pushed screen.
+class StatsContent extends ConsumerWidget {
+  const StatsContent({super.key});
+
+  static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sessionsAsync = ref.watch(sessionHistoryProvider);
+    final sessions = sessionsAsync.value ?? const <Session>[];
+    final profile = ref.watch(userProfileProvider).value;
+
+    // Still loading is not the same as "no sessions yet" — collapsing both
+    // into `sessions.isEmpty` used to flash the empty state on every cold
+    // open before the first stream value arrived.
+    return sessionsAsync.isLoading
+        ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
+        : sessions.isEmpty
+            ? _empty(context)
+            : _content(context, sessions, profile);
   }
 
   Widget _empty(BuildContext context) {
@@ -368,10 +375,10 @@ class _Heatmap extends StatelessWidget {
     const weeks = 12;
     final counts = <DateTime, int>{};
     for (final s in sessions) {
-      final d = StatsScreen._dateOnly(s.timestamp);
+      final d = StatsContent._dateOnly(s.timestamp);
       counts[d] = (counts[d] ?? 0) + 1;
     }
-    final today = StatsScreen._dateOnly(DateTime.now());
+    final today = StatsContent._dateOnly(DateTime.now());
     // Monday of the current week.
     final startMonday = today
         .subtract(Duration(days: (today.weekday - 1) + (weeks - 1) * 7));
