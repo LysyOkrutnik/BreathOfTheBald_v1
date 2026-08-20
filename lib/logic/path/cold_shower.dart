@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:okrutnik_breath/data/db/database.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
+import 'package:okrutnik_breath/logic/services/derived_gamification.dart';
 
 /// The [Session.levelKey] used for a logged cold-shower exposure.
 const String coldShowerLevelKey = 'cold_shower';
@@ -12,14 +13,12 @@ const String coldShowerLevelKey = 'cold_shower';
 /// usual breathCount/retentionSeconds formula.
 const int coldShowerXpReward = 15;
 
-/// What it takes to fully undo a logged cold shower — the inserted session's
-/// id, plus a snapshot of the profile fields it touched, taken right before
-/// the log so [undoColdShowerSession] can restore the exact prior state
-/// rather than trying to inverse-compute an XP/streak delta.
+/// What it takes to undo a logged cold shower — just the inserted session's
+/// id. Undo no longer restores a pre-log profile snapshot (see
+/// [undoColdShowerSession] for why), so nothing else needs to travel with it.
 class ColdShowerLogResult {
-  const ColdShowerLogResult({required this.sessionId, required this.previousProfile});
+  const ColdShowerLogResult({required this.sessionId});
   final int sessionId;
-  final UserProfileData previousProfile;
 }
 
 /// Logs a completed cold-shower exposure — the third pillar of the Wim Hof
@@ -32,8 +31,6 @@ class ColdShowerLogResult {
 /// home-screen widget) simply omit it, matching the previous always-0
 /// behavior.
 Future<ColdShowerLogResult> logColdShowerSession(WidgetRef ref, {int durationSec = 0}) async {
-  final previousProfile = await ref.read(userProfileRepositoryProvider).getUserProfile();
-
   final gamification = ref.read(gamificationServiceProvider);
   final xpResult = await gamification.awardFlatXp(coldShowerXpReward);
   await gamification.updateStreak();
@@ -46,20 +43,39 @@ Future<ColdShowerLogResult> logColdShowerSession(WidgetRef ref, {int durationSec
         xpEarned: xpResult.xpEarned,
       );
 
-  return ColdShowerLogResult(sessionId: sessionId, previousProfile: previousProfile);
+  return ColdShowerLogResult(sessionId: sessionId);
 }
 
 /// Reverses [logColdShowerSession] within its undo window — deletes the
-/// logged session and restores the profile fields it touched (XP, level,
-/// streak, last-session date) to their exact pre-log values.
+/// logged session, then recomputes totalXp/level/dailyStreak from the
+/// *remaining* history instead of restoring a pre-log snapshot. A snapshot
+/// restore is only correct if nothing else was logged in between; if
+/// another session landed between the cold shower and the user tapping
+/// Undo, restoring an absolute pre-log value would silently discard that
+/// other session's XP/streak effect too. Recomputing from what's actually
+/// left is correct regardless of what happened in between.
 Future<void> undoColdShowerSession(WidgetRef ref, ColdShowerLogResult result) async {
-  await ref.read(sessionRepositoryProvider).deleteSession(result.sessionId);
+  final sessionRepo = ref.read(sessionRepositoryProvider);
+  await sessionRepo.deleteSession(result.sessionId);
+  final remaining = await sessionRepo.getAllSessions();
+  final derived = DerivedGamificationState.fromSessions(remaining);
+  // Also needs fixing up: GamificationService.updateStreak() already
+  // stamped lastSessionDate to "now" (when the shower was logged) before
+  // this undo ran. Left as-is, it would make the *next* real session's
+  // incremental day-gap calculation think the streak was touched more
+  // recently than it actually was now that this entry is gone.
+  DateTime? lastSessionDate;
+  for (final s in remaining) {
+    if (lastSessionDate == null || s.timestamp.isAfter(lastSessionDate)) {
+      lastSessionDate = s.timestamp;
+    }
+  }
   await ref.read(userProfileRepositoryProvider).updateUserProfile(
         UserProfileCompanion(
-          totalXp: Value(result.previousProfile.totalXp),
-          level: Value(result.previousProfile.level),
-          dailyStreak: Value(result.previousProfile.dailyStreak),
-          lastSessionDate: Value(result.previousProfile.lastSessionDate),
+          totalXp: Value(derived.totalXp),
+          level: Value(derived.level),
+          dailyStreak: Value(derived.dailyStreak),
+          lastSessionDate: Value(lastSessionDate),
         ),
       );
 }

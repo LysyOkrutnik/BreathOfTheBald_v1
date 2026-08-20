@@ -2009,6 +2009,18 @@ class $FreedivingProfileTable extends FreedivingProfile
   late final GeneratedColumn<DateTime> verifiedPbAt = GeneratedColumn<DateTime>(
       'verified_pb_at', aliasedName, true,
       type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _verifiedPbCo2SecMeta =
+      const VerificationMeta('verifiedPbCo2Sec');
+  @override
+  late final GeneratedColumn<int> verifiedPbCo2Sec = GeneratedColumn<int>(
+      'verified_pb_co2_sec', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _verifiedPbCo2AtMeta =
+      const VerificationMeta('verifiedPbCo2At');
+  @override
+  late final GeneratedColumn<DateTime> verifiedPbCo2At =
+      GeneratedColumn<DateTime>('verified_pb_co2_at', aliasedName, true,
+          type: DriftSqlType.dateTime, requiredDuringInsert: false);
   static const VerificationMeta _virtualPbCo2SecMeta =
       const VerificationMeta('virtualPbCo2Sec');
   @override
@@ -2044,6 +2056,8 @@ class $FreedivingProfileTable extends FreedivingProfile
         id,
         verifiedPbSec,
         verifiedPbAt,
+        verifiedPbCo2Sec,
+        verifiedPbCo2At,
         virtualPbCo2Sec,
         virtualPbO2Sec,
         lastCo2SessionAt,
@@ -2075,6 +2089,18 @@ class $FreedivingProfileTable extends FreedivingProfile
           _verifiedPbAtMeta,
           verifiedPbAt.isAcceptableOrUnknown(
               data['verified_pb_at']!, _verifiedPbAtMeta));
+    }
+    if (data.containsKey('verified_pb_co2_sec')) {
+      context.handle(
+          _verifiedPbCo2SecMeta,
+          verifiedPbCo2Sec.isAcceptableOrUnknown(
+              data['verified_pb_co2_sec']!, _verifiedPbCo2SecMeta));
+    }
+    if (data.containsKey('verified_pb_co2_at')) {
+      context.handle(
+          _verifiedPbCo2AtMeta,
+          verifiedPbCo2At.isAcceptableOrUnknown(
+              data['verified_pb_co2_at']!, _verifiedPbCo2AtMeta));
     }
     if (data.containsKey('virtual_pb_co2_sec')) {
       context.handle(
@@ -2121,6 +2147,10 @@ class $FreedivingProfileTable extends FreedivingProfile
           .read(DriftSqlType.int, data['${effectivePrefix}verified_pb_sec']),
       verifiedPbAt: attachedDatabase.typeMapping.read(
           DriftSqlType.dateTime, data['${effectivePrefix}verified_pb_at']),
+      verifiedPbCo2Sec: attachedDatabase.typeMapping.read(
+          DriftSqlType.int, data['${effectivePrefix}verified_pb_co2_sec']),
+      verifiedPbCo2At: attachedDatabase.typeMapping.read(
+          DriftSqlType.dateTime, data['${effectivePrefix}verified_pb_co2_at']),
       virtualPbCo2Sec: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}virtual_pb_co2_sec']),
       virtualPbO2Sec: attachedDatabase.typeMapping
@@ -2145,14 +2175,20 @@ class FreedivingProfileData extends DataClass
     implements Insertable<FreedivingProfileData> {
   final int id;
 
-  /// The last real, guided Max PB Attempt result. Null until the user
+  /// The last real, guided inhale-hold test result. Null until the user
   /// completes their first test.
   final int? verifiedPbSec;
   final DateTime? verifiedPbAt;
 
+  /// The last real, guided exhale-hold test result. Null until the user
+  /// completes their first test.
+  final int? verifiedPbCo2Sec;
+  final DateTime? verifiedPbCo2At;
+
   /// Working PB used to generate the next table of each type. Initialized to
-  /// verifiedPbSec and adjusted ±5% per RPE feedback, clamped to
-  /// [50%, 115%] of verifiedPbSec so RPE-driven drift can never exceed a safe
+  /// the matching verified PB (CO2 from the exhale-hold, O2 from the
+  /// inhale-hold) and adjusted ±5% per RPE feedback, clamped to [50%, 115%]
+  /// of that verified value so RPE-driven drift can never exceed a safe
   /// margin above the last real test.
   final int? virtualPbCo2Sec;
   final int? virtualPbO2Sec;
@@ -2166,6 +2202,8 @@ class FreedivingProfileData extends DataClass
       {required this.id,
       this.verifiedPbSec,
       this.verifiedPbAt,
+      this.verifiedPbCo2Sec,
+      this.verifiedPbCo2At,
       this.virtualPbCo2Sec,
       this.virtualPbO2Sec,
       this.lastCo2SessionAt,
@@ -2180,6 +2218,12 @@ class FreedivingProfileData extends DataClass
     }
     if (!nullToAbsent || verifiedPbAt != null) {
       map['verified_pb_at'] = Variable<DateTime>(verifiedPbAt);
+    }
+    if (!nullToAbsent || verifiedPbCo2Sec != null) {
+      map['verified_pb_co2_sec'] = Variable<int>(verifiedPbCo2Sec);
+    }
+    if (!nullToAbsent || verifiedPbCo2At != null) {
+      map['verified_pb_co2_at'] = Variable<DateTime>(verifiedPbCo2At);
     }
     if (!nullToAbsent || virtualPbCo2Sec != null) {
       map['virtual_pb_co2_sec'] = Variable<int>(virtualPbCo2Sec);
@@ -2208,6 +2252,12 @@ class FreedivingProfileData extends DataClass
       verifiedPbAt: verifiedPbAt == null && nullToAbsent
           ? const Value.absent()
           : Value(verifiedPbAt),
+      verifiedPbCo2Sec: verifiedPbCo2Sec == null && nullToAbsent
+          ? const Value.absent()
+          : Value(verifiedPbCo2Sec),
+      verifiedPbCo2At: verifiedPbCo2At == null && nullToAbsent
+          ? const Value.absent()
+          : Value(verifiedPbCo2At),
       virtualPbCo2Sec: virtualPbCo2Sec == null && nullToAbsent
           ? const Value.absent()
           : Value(virtualPbCo2Sec),
@@ -2233,6 +2283,8 @@ class FreedivingProfileData extends DataClass
       id: serializer.fromJson<int>(json['id']),
       verifiedPbSec: serializer.fromJson<int?>(json['verifiedPbSec']),
       verifiedPbAt: serializer.fromJson<DateTime?>(json['verifiedPbAt']),
+      verifiedPbCo2Sec: serializer.fromJson<int?>(json['verifiedPbCo2Sec']),
+      verifiedPbCo2At: serializer.fromJson<DateTime?>(json['verifiedPbCo2At']),
       virtualPbCo2Sec: serializer.fromJson<int?>(json['virtualPbCo2Sec']),
       virtualPbO2Sec: serializer.fromJson<int?>(json['virtualPbO2Sec']),
       lastCo2SessionAt:
@@ -2249,6 +2301,8 @@ class FreedivingProfileData extends DataClass
       'id': serializer.toJson<int>(id),
       'verifiedPbSec': serializer.toJson<int?>(verifiedPbSec),
       'verifiedPbAt': serializer.toJson<DateTime?>(verifiedPbAt),
+      'verifiedPbCo2Sec': serializer.toJson<int?>(verifiedPbCo2Sec),
+      'verifiedPbCo2At': serializer.toJson<DateTime?>(verifiedPbCo2At),
       'virtualPbCo2Sec': serializer.toJson<int?>(virtualPbCo2Sec),
       'virtualPbO2Sec': serializer.toJson<int?>(virtualPbO2Sec),
       'lastCo2SessionAt': serializer.toJson<DateTime?>(lastCo2SessionAt),
@@ -2262,6 +2316,8 @@ class FreedivingProfileData extends DataClass
           {int? id,
           Value<int?> verifiedPbSec = const Value.absent(),
           Value<DateTime?> verifiedPbAt = const Value.absent(),
+          Value<int?> verifiedPbCo2Sec = const Value.absent(),
+          Value<DateTime?> verifiedPbCo2At = const Value.absent(),
           Value<int?> virtualPbCo2Sec = const Value.absent(),
           Value<int?> virtualPbO2Sec = const Value.absent(),
           Value<DateTime?> lastCo2SessionAt = const Value.absent(),
@@ -2273,6 +2329,12 @@ class FreedivingProfileData extends DataClass
             verifiedPbSec.present ? verifiedPbSec.value : this.verifiedPbSec,
         verifiedPbAt:
             verifiedPbAt.present ? verifiedPbAt.value : this.verifiedPbAt,
+        verifiedPbCo2Sec: verifiedPbCo2Sec.present
+            ? verifiedPbCo2Sec.value
+            : this.verifiedPbCo2Sec,
+        verifiedPbCo2At: verifiedPbCo2At.present
+            ? verifiedPbCo2At.value
+            : this.verifiedPbCo2At,
         virtualPbCo2Sec: virtualPbCo2Sec.present
             ? virtualPbCo2Sec.value
             : this.virtualPbCo2Sec,
@@ -2297,6 +2359,12 @@ class FreedivingProfileData extends DataClass
       verifiedPbAt: data.verifiedPbAt.present
           ? data.verifiedPbAt.value
           : this.verifiedPbAt,
+      verifiedPbCo2Sec: data.verifiedPbCo2Sec.present
+          ? data.verifiedPbCo2Sec.value
+          : this.verifiedPbCo2Sec,
+      verifiedPbCo2At: data.verifiedPbCo2At.present
+          ? data.verifiedPbCo2At.value
+          : this.verifiedPbCo2At,
       virtualPbCo2Sec: data.virtualPbCo2Sec.present
           ? data.virtualPbCo2Sec.value
           : this.virtualPbCo2Sec,
@@ -2321,6 +2389,8 @@ class FreedivingProfileData extends DataClass
           ..write('id: $id, ')
           ..write('verifiedPbSec: $verifiedPbSec, ')
           ..write('verifiedPbAt: $verifiedPbAt, ')
+          ..write('verifiedPbCo2Sec: $verifiedPbCo2Sec, ')
+          ..write('verifiedPbCo2At: $verifiedPbCo2At, ')
           ..write('virtualPbCo2Sec: $virtualPbCo2Sec, ')
           ..write('virtualPbO2Sec: $virtualPbO2Sec, ')
           ..write('lastCo2SessionAt: $lastCo2SessionAt, ')
@@ -2335,6 +2405,8 @@ class FreedivingProfileData extends DataClass
       id,
       verifiedPbSec,
       verifiedPbAt,
+      verifiedPbCo2Sec,
+      verifiedPbCo2At,
       virtualPbCo2Sec,
       virtualPbO2Sec,
       lastCo2SessionAt,
@@ -2347,6 +2419,8 @@ class FreedivingProfileData extends DataClass
           other.id == this.id &&
           other.verifiedPbSec == this.verifiedPbSec &&
           other.verifiedPbAt == this.verifiedPbAt &&
+          other.verifiedPbCo2Sec == this.verifiedPbCo2Sec &&
+          other.verifiedPbCo2At == this.verifiedPbCo2At &&
           other.virtualPbCo2Sec == this.virtualPbCo2Sec &&
           other.virtualPbO2Sec == this.virtualPbO2Sec &&
           other.lastCo2SessionAt == this.lastCo2SessionAt &&
@@ -2359,6 +2433,8 @@ class FreedivingProfileCompanion
   final Value<int> id;
   final Value<int?> verifiedPbSec;
   final Value<DateTime?> verifiedPbAt;
+  final Value<int?> verifiedPbCo2Sec;
+  final Value<DateTime?> verifiedPbCo2At;
   final Value<int?> virtualPbCo2Sec;
   final Value<int?> virtualPbO2Sec;
   final Value<DateTime?> lastCo2SessionAt;
@@ -2368,6 +2444,8 @@ class FreedivingProfileCompanion
     this.id = const Value.absent(),
     this.verifiedPbSec = const Value.absent(),
     this.verifiedPbAt = const Value.absent(),
+    this.verifiedPbCo2Sec = const Value.absent(),
+    this.verifiedPbCo2At = const Value.absent(),
     this.virtualPbCo2Sec = const Value.absent(),
     this.virtualPbO2Sec = const Value.absent(),
     this.lastCo2SessionAt = const Value.absent(),
@@ -2378,6 +2456,8 @@ class FreedivingProfileCompanion
     this.id = const Value.absent(),
     this.verifiedPbSec = const Value.absent(),
     this.verifiedPbAt = const Value.absent(),
+    this.verifiedPbCo2Sec = const Value.absent(),
+    this.verifiedPbCo2At = const Value.absent(),
     this.virtualPbCo2Sec = const Value.absent(),
     this.virtualPbO2Sec = const Value.absent(),
     this.lastCo2SessionAt = const Value.absent(),
@@ -2388,6 +2468,8 @@ class FreedivingProfileCompanion
     Expression<int>? id,
     Expression<int>? verifiedPbSec,
     Expression<DateTime>? verifiedPbAt,
+    Expression<int>? verifiedPbCo2Sec,
+    Expression<DateTime>? verifiedPbCo2At,
     Expression<int>? virtualPbCo2Sec,
     Expression<int>? virtualPbO2Sec,
     Expression<DateTime>? lastCo2SessionAt,
@@ -2398,6 +2480,8 @@ class FreedivingProfileCompanion
       if (id != null) 'id': id,
       if (verifiedPbSec != null) 'verified_pb_sec': verifiedPbSec,
       if (verifiedPbAt != null) 'verified_pb_at': verifiedPbAt,
+      if (verifiedPbCo2Sec != null) 'verified_pb_co2_sec': verifiedPbCo2Sec,
+      if (verifiedPbCo2At != null) 'verified_pb_co2_at': verifiedPbCo2At,
       if (virtualPbCo2Sec != null) 'virtual_pb_co2_sec': virtualPbCo2Sec,
       if (virtualPbO2Sec != null) 'virtual_pb_o2_sec': virtualPbO2Sec,
       if (lastCo2SessionAt != null) 'last_co2_session_at': lastCo2SessionAt,
@@ -2411,6 +2495,8 @@ class FreedivingProfileCompanion
       {Value<int>? id,
       Value<int?>? verifiedPbSec,
       Value<DateTime?>? verifiedPbAt,
+      Value<int?>? verifiedPbCo2Sec,
+      Value<DateTime?>? verifiedPbCo2At,
       Value<int?>? virtualPbCo2Sec,
       Value<int?>? virtualPbO2Sec,
       Value<DateTime?>? lastCo2SessionAt,
@@ -2420,6 +2506,8 @@ class FreedivingProfileCompanion
       id: id ?? this.id,
       verifiedPbSec: verifiedPbSec ?? this.verifiedPbSec,
       verifiedPbAt: verifiedPbAt ?? this.verifiedPbAt,
+      verifiedPbCo2Sec: verifiedPbCo2Sec ?? this.verifiedPbCo2Sec,
+      verifiedPbCo2At: verifiedPbCo2At ?? this.verifiedPbCo2At,
       virtualPbCo2Sec: virtualPbCo2Sec ?? this.virtualPbCo2Sec,
       virtualPbO2Sec: virtualPbO2Sec ?? this.virtualPbO2Sec,
       lastCo2SessionAt: lastCo2SessionAt ?? this.lastCo2SessionAt,
@@ -2439,6 +2527,12 @@ class FreedivingProfileCompanion
     }
     if (verifiedPbAt.present) {
       map['verified_pb_at'] = Variable<DateTime>(verifiedPbAt.value);
+    }
+    if (verifiedPbCo2Sec.present) {
+      map['verified_pb_co2_sec'] = Variable<int>(verifiedPbCo2Sec.value);
+    }
+    if (verifiedPbCo2At.present) {
+      map['verified_pb_co2_at'] = Variable<DateTime>(verifiedPbCo2At.value);
     }
     if (virtualPbCo2Sec.present) {
       map['virtual_pb_co2_sec'] = Variable<int>(virtualPbCo2Sec.value);
@@ -2465,6 +2559,8 @@ class FreedivingProfileCompanion
           ..write('id: $id, ')
           ..write('verifiedPbSec: $verifiedPbSec, ')
           ..write('verifiedPbAt: $verifiedPbAt, ')
+          ..write('verifiedPbCo2Sec: $verifiedPbCo2Sec, ')
+          ..write('verifiedPbCo2At: $verifiedPbCo2At, ')
           ..write('virtualPbCo2Sec: $virtualPbCo2Sec, ')
           ..write('virtualPbO2Sec: $virtualPbO2Sec, ')
           ..write('lastCo2SessionAt: $lastCo2SessionAt, ')
@@ -4855,6 +4951,8 @@ typedef $$FreedivingProfileTableCreateCompanionBuilder
   Value<int> id,
   Value<int?> verifiedPbSec,
   Value<DateTime?> verifiedPbAt,
+  Value<int?> verifiedPbCo2Sec,
+  Value<DateTime?> verifiedPbCo2At,
   Value<int?> virtualPbCo2Sec,
   Value<int?> virtualPbO2Sec,
   Value<DateTime?> lastCo2SessionAt,
@@ -4866,6 +4964,8 @@ typedef $$FreedivingProfileTableUpdateCompanionBuilder
   Value<int> id,
   Value<int?> verifiedPbSec,
   Value<DateTime?> verifiedPbAt,
+  Value<int?> verifiedPbCo2Sec,
+  Value<DateTime?> verifiedPbCo2At,
   Value<int?> virtualPbCo2Sec,
   Value<int?> virtualPbO2Sec,
   Value<DateTime?> lastCo2SessionAt,
@@ -4890,6 +4990,14 @@ class $$FreedivingProfileTableFilterComposer
 
   ColumnFilters<DateTime> get verifiedPbAt => $composableBuilder(
       column: $table.verifiedPbAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get verifiedPbCo2Sec => $composableBuilder(
+      column: $table.verifiedPbCo2Sec,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get verifiedPbCo2At => $composableBuilder(
+      column: $table.verifiedPbCo2At,
+      builder: (column) => ColumnFilters(column));
 
   ColumnFilters<int> get virtualPbCo2Sec => $composableBuilder(
       column: $table.virtualPbCo2Sec,
@@ -4932,6 +5040,14 @@ class $$FreedivingProfileTableOrderingComposer
       column: $table.verifiedPbAt,
       builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<int> get verifiedPbCo2Sec => $composableBuilder(
+      column: $table.verifiedPbCo2Sec,
+      builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get verifiedPbCo2At => $composableBuilder(
+      column: $table.verifiedPbCo2At,
+      builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<int> get virtualPbCo2Sec => $composableBuilder(
       column: $table.virtualPbCo2Sec,
       builder: (column) => ColumnOrderings(column));
@@ -4970,6 +5086,12 @@ class $$FreedivingProfileTableAnnotationComposer
 
   GeneratedColumn<DateTime> get verifiedPbAt => $composableBuilder(
       column: $table.verifiedPbAt, builder: (column) => column);
+
+  GeneratedColumn<int> get verifiedPbCo2Sec => $composableBuilder(
+      column: $table.verifiedPbCo2Sec, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get verifiedPbCo2At => $composableBuilder(
+      column: $table.verifiedPbCo2At, builder: (column) => column);
 
   GeneratedColumn<int> get virtualPbCo2Sec => $composableBuilder(
       column: $table.virtualPbCo2Sec, builder: (column) => column);
@@ -5019,6 +5141,8 @@ class $$FreedivingProfileTableTableManager extends RootTableManager<
             Value<int> id = const Value.absent(),
             Value<int?> verifiedPbSec = const Value.absent(),
             Value<DateTime?> verifiedPbAt = const Value.absent(),
+            Value<int?> verifiedPbCo2Sec = const Value.absent(),
+            Value<DateTime?> verifiedPbCo2At = const Value.absent(),
             Value<int?> virtualPbCo2Sec = const Value.absent(),
             Value<int?> virtualPbO2Sec = const Value.absent(),
             Value<DateTime?> lastCo2SessionAt = const Value.absent(),
@@ -5029,6 +5153,8 @@ class $$FreedivingProfileTableTableManager extends RootTableManager<
             id: id,
             verifiedPbSec: verifiedPbSec,
             verifiedPbAt: verifiedPbAt,
+            verifiedPbCo2Sec: verifiedPbCo2Sec,
+            verifiedPbCo2At: verifiedPbCo2At,
             virtualPbCo2Sec: virtualPbCo2Sec,
             virtualPbO2Sec: virtualPbO2Sec,
             lastCo2SessionAt: lastCo2SessionAt,
@@ -5039,6 +5165,8 @@ class $$FreedivingProfileTableTableManager extends RootTableManager<
             Value<int> id = const Value.absent(),
             Value<int?> verifiedPbSec = const Value.absent(),
             Value<DateTime?> verifiedPbAt = const Value.absent(),
+            Value<int?> verifiedPbCo2Sec = const Value.absent(),
+            Value<DateTime?> verifiedPbCo2At = const Value.absent(),
             Value<int?> virtualPbCo2Sec = const Value.absent(),
             Value<int?> virtualPbO2Sec = const Value.absent(),
             Value<DateTime?> lastCo2SessionAt = const Value.absent(),
@@ -5049,6 +5177,8 @@ class $$FreedivingProfileTableTableManager extends RootTableManager<
             id: id,
             verifiedPbSec: verifiedPbSec,
             verifiedPbAt: verifiedPbAt,
+            verifiedPbCo2Sec: verifiedPbCo2Sec,
+            verifiedPbCo2At: verifiedPbCo2At,
             virtualPbCo2Sec: virtualPbCo2Sec,
             virtualPbO2Sec: virtualPbO2Sec,
             lastCo2SessionAt: lastCo2SessionAt,

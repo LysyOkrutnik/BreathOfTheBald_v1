@@ -99,17 +99,30 @@ class CustomPresets extends Table {
 /// used to generate CO2/O2 tables (which drifts with RPE feedback but is
 /// safety-capped relative to the last verified test — see
 /// FreedivingRepository.recordRpeAndAdjustPb).
+///
+/// The guided Max PB Test measures two separate breath-holds — an
+/// exhale-hold (CO2 tolerance) and an inhale-hold (O2/capacity) — since one
+/// number alone conflates two different physiological limits. `verifiedPbSec`
+/// (kept under its original name for migration simplicity) holds the
+/// inhale-hold result and anchors the O2 table; `verifiedPbCo2Sec` holds the
+/// exhale-hold result and anchors the CO2 table.
 class FreedivingProfile extends Table {
   IntColumn get id => integer().autoIncrement()();
 
-  /// The last real, guided Max PB Attempt result. Null until the user
+  /// The last real, guided inhale-hold test result. Null until the user
   /// completes their first test.
   IntColumn get verifiedPbSec => integer().nullable()();
   DateTimeColumn get verifiedPbAt => dateTime().nullable()();
 
+  /// The last real, guided exhale-hold test result. Null until the user
+  /// completes their first test.
+  IntColumn get verifiedPbCo2Sec => integer().nullable()();
+  DateTimeColumn get verifiedPbCo2At => dateTime().nullable()();
+
   /// Working PB used to generate the next table of each type. Initialized to
-  /// verifiedPbSec and adjusted ±5% per RPE feedback, clamped to
-  /// [50%, 115%] of verifiedPbSec so RPE-driven drift can never exceed a safe
+  /// the matching verified PB (CO2 from the exhale-hold, O2 from the
+  /// inhale-hold) and adjusted ±5% per RPE feedback, clamped to [50%, 115%]
+  /// of that verified value so RPE-driven drift can never exceed a safe
   /// margin above the last real test.
   IntColumn get virtualPbCo2Sec => integer().nullable()();
   IntColumn get virtualPbO2Sec => integer().nullable()();
@@ -206,7 +219,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -228,12 +241,26 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(customPresets);
           }
           // v4 -> v5: SpO2 columns on sessions.
-          if (from < 5) {
+          //
+          // Every `addColumn` below is additionally guarded on `from >= N`,
+          // where N is the version whose `createTable`/recreate call above
+          // already bakes in *today's* full column set (Drift's migration
+          // API builds a table from the current Dart definition, not a
+          // historical snapshot — there's no partial-schema table to target
+          // otherwise). Without that lower bound, a device jumping several
+          // versions in one upgrade (e.g. from v1 straight to v11, plausible
+          // for an install that sat unused for a while) would recreate
+          // `sessions` at the `from < 2` branch above with spo2Min/spo2Avg
+          // already present, then this block would try to add those same
+          // columns again — SQLite raises "duplicate column name", the
+          // whole migration transaction fails, and the app can't open its
+          // database at all afterwards.
+          if (from >= 2 && from < 5) {
             await m.addColumn(sessions, sessions.spo2Min);
             await m.addColumn(sessions, sessions.spo2Avg);
           }
           // v5 -> v6: heart-rate columns on sessions.
-          if (from < 6) {
+          if (from >= 2 && from < 6) {
             await m.addColumn(sessions, sessions.hrMin);
             await m.addColumn(sessions, sessions.hrAvg);
           }
@@ -243,8 +270,10 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(freedivingSessionLog);
           }
           // v7 -> v8: RPE on regular sessions + Wim Hof ladder progression.
-          if (from < 8) {
+          if (from >= 2 && from < 8) {
             await m.addColumn(sessions, sessions.rpeScore);
+          }
+          if (from < 8) {
             await m.createTable(wimHofProgress);
           }
           // v8 -> v9: user-defined custom freediving table presets.
@@ -252,21 +281,36 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(customFreedivingPresets);
           }
           // v9 -> v10: post-session symptom check-in on freediving logs.
-          if (from < 10) {
+          if (from >= 7 && from < 10) {
             await m.addColumn(freedivingSessionLog, freedivingSessionLog.symptomTag);
           }
           // v10 -> v11: cross-device sync — a client-generated syncId on
           // every syncable row, plus soft-delete on presets so a deletion on
           // one device propagates instead of the server's still-active copy
           // reappearing here.
-          if (from < 11) {
+          if (from >= 2 && from < 11) {
             await m.addColumn(sessions, sessions.syncId);
+          }
+          if (from >= 7 && from < 11) {
             await m.addColumn(freedivingSessionLog, freedivingSessionLog.syncId);
+          }
+          if (from >= 4 && from < 11) {
             await m.addColumn(customPresets, customPresets.syncId);
             await m.addColumn(customPresets, customPresets.deletedAt);
+          }
+          if (from >= 9 && from < 11) {
             await m.addColumn(customFreedivingPresets, customFreedivingPresets.syncId);
             await m.addColumn(customFreedivingPresets, customFreedivingPresets.deletedAt);
+          }
+          if (from < 11) {
             await _backfillSyncIds();
+          }
+          // v11 -> v12: the guided Max PB Test now measures an exhale-hold
+          // (CO2 tolerance) separately from the inhale-hold (verifiedPbSec,
+          // unchanged) — new columns for that second, independent baseline.
+          if (from >= 7 && from < 12) {
+            await m.addColumn(freedivingProfile, freedivingProfile.verifiedPbCo2Sec);
+            await m.addColumn(freedivingProfile, freedivingProfile.verifiedPbCo2At);
           }
         },
       );

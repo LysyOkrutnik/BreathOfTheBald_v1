@@ -23,17 +23,15 @@ class SessionScreen extends ConsumerWidget {
 
     ref.listen(sessionProvider, (prev, next) {
       if (next.phase == const SessionPhase.finished()) {
+        // If a dialog is open when the session finishes on its own (e.g. the
+        // last round completes while the exit-confirm dialog is still up),
+        // dismiss it first — otherwise it lingers as an orphaned overlay on
+        // top of the screen `pushReplacement` navigates to next.
+        if (_sessionDialogOpen) {
+          Navigator.of(context).pop();
+          _sessionDialogOpen = false;
+        }
         Navigator.of(context).pushReplacement(fadeThroughRoute(const SummaryScreen()));
-      }
-    });
-
-    // A real interruption (phone call, long time away) while backgrounded —
-    // let the user explicitly decide whether to continue rather than
-    // silently resuming as if nothing happened.
-    ref.listen(sessionInterruptedProvider, (prev, next) {
-      if (next) {
-        ref.read(sessionInterruptedProvider.notifier).state = false;
-        _showExitDialog(context, notifier);
       }
     });
 
@@ -679,7 +677,17 @@ class _ProgressBar extends StatelessWidget {
   }
 }
 
+/// Guards [_showExitDialog]/[_showRoundIncompleteDialog] against stacking on
+/// top of each other — e.g. a background/foreground interruption firing the
+/// exit-confirm dialog while the missed-round dialog is already open would
+/// otherwise leave two `DialogRoute`s on the stack; popping the top one then
+/// left the *other* dialog, not the actual SessionScreen route, as the
+/// target of a subsequent `pushReplacement`.
+bool _sessionDialogOpen = false;
+
 void _showExitDialog(BuildContext context, SessionNotifier notifier) {
+  if (_sessionDialogOpen) return;
+  _sessionDialogOpen = true;
   showDialog(
     context: context,
     barrierColor: Colors.black.withAlpha(160),
@@ -745,8 +753,15 @@ void _showExitDialog(BuildContext context, SessionNotifier notifier) {
                       onPressed: () {
                         notifier.stopSession();
                         Navigator.of(dialogContext).pop();
-                        Navigator.of(context)
-                            .pushReplacement(fadeThroughRoute(const HomeShellScreen()));
+                        // The session can finish on its own while this dialog
+                        // is still open (e.g. the last round completes while
+                        // the user is deciding) — that already navigated
+                        // `context`'s route away via pushReplacement, so
+                        // reusing it here would hit a deactivated widget.
+                        if (context.mounted) {
+                          Navigator.of(context)
+                              .pushReplacement(fadeThroughRoute(const HomeShellScreen()));
+                        }
                       },
                       child: Text(
                         L10n.get(context, 'session_exit_dialog_finish'),
@@ -762,7 +777,7 @@ void _showExitDialog(BuildContext context, SessionNotifier notifier) {
         ),
       ),
     ),
-  );
+  ).then((_) => _sessionDialogOpen = false);
 }
 
 /// Shown once a freediving table round ends early (the hold itself always
@@ -770,6 +785,8 @@ void _showExitDialog(BuildContext context, SessionNotifier notifier) {
 /// barrier-tap or back-button dismissal: leaving the session mid-decision
 /// with a stale `awaitingRoundDecision` would strand the flow.
 void _showRoundIncompleteDialog(BuildContext context, SessionNotifier notifier) {
+  if (_sessionDialogOpen) return;
+  _sessionDialogOpen = true;
   showDialog(
     context: context,
     barrierDismissible: false,
@@ -854,5 +871,5 @@ void _showRoundIncompleteDialog(BuildContext context, SessionNotifier notifier) 
         ),
       ),
     ),
-  );
+  ).then((_) => _sessionDialogOpen = false);
 }

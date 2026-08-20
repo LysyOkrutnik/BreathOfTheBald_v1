@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -251,6 +252,14 @@ class SettingsScreen extends ConsumerWidget {
   /// freediving safety consent (a one-time acknowledgment, not progress)
   /// are deliberately left untouched.
   Future<void> _resetProgress(BuildContext context, WidgetRef ref) async {
+    // A logged-in user's reset gets pushed by the next sync (resetting
+    // FreedivingProfile/WimHofProgress also bumps ProfileSyncMarker, so it's
+    // treated as a genuine, newer change) — the confirmation must say so, or
+    // "reset progress" silently becomes a server-side data-loss event too,
+    // with nothing in the dialog hinting at that beyond "local" progress.
+    final isSyncing = await ref.read(authServiceProvider).isLoggedIn;
+    if (!context.mounted) return;
+
     final confirmed = await showGlassDialog<bool>(
       context,
       builder: (dialogContext) => Column(
@@ -274,6 +283,14 @@ class SettingsScreen extends ConsumerWidget {
             textAlign: TextAlign.center,
             style: const TextStyle(color: Colors.white54, fontSize: 13, height: 1.4),
           ),
+          if (isSyncing) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              L10n.get(context, 'settings_reset_progress_confirm_sync_note'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppTheme.danger, fontSize: 12, height: 1.4),
+            ),
+          ],
           const SizedBox(height: AppSpacing.xl),
           Row(
             children: [
@@ -533,19 +550,39 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
       _loading = true;
       _errorKey = null;
     });
-    final result = await ref.read(syncServiceProvider).syncNow();
-    if (!mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    final message = L10n.get(context, switch (result.outcome) {
-      SyncOutcome.success => 'account_sync_success',
-      SyncOutcome.authExpired => 'account_sync_auth_expired',
-      _ => 'account_sync_failed',
-    });
+    try {
+      final result = await ref.read(syncServiceProvider).syncNow();
+      if (result.message != null) {
+        // Not shown to the user (a raw status code + response body isn't
+        // helpful copy), but without this the actual cause of a sync
+        // failure — a 500, a timeout, a malformed response — was never
+        // recorded anywhere, indistinguishable from any other failure.
+        developer.log('Sync failed: ${result.message}', name: 'SettingsScreen');
+      }
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+      final message = L10n.get(context, switch (result.outcome) {
+        SyncOutcome.success => 'account_sync_success',
+        SyncOutcome.authExpired => 'account_sync_auth_expired',
+        _ => 'account_sync_failed',
+      });
 
-    await _refreshState();
-    if (!mounted) return;
-    setState(() => _loading = false);
-    messenger.showSnackBar(SnackBar(content: Text(message)));
+      await _refreshState();
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(message)));
+    } catch (e, st) {
+      developer.log('Unexpected error during sync', name: 'SettingsScreen', error: e, stackTrace: st);
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(L10n.get(context, 'account_sync_failed'))));
+      }
+    } finally {
+      // Guaranteed regardless of how the above exits — previously an
+      // exception here (from syncNow() or _refreshState()) left `_loading`
+      // stuck true forever, permanently disabling the "Sync now" tile with
+      // no error shown at all.
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _logout() async {

@@ -210,6 +210,12 @@ class _ColdShowerCardState extends ConsumerState<_ColdShowerCard> {
     // visually compete with the actual recommendation/warning cards above it
     // or the level ladder below.
     const color = Color(0xFF80D8FF);
+    // `_durationFor` itself uses `ref.read` (it's also called from callbacks,
+    // where `watch` isn't legal) — without this explicit `watch` here, the
+    // card never rebuilt when a shower logged from elsewhere (the scheduler,
+    // Twoja Ścieżka) changed the "last used" default, since this tab's
+    // State is never torn down/rebuilt on its own between tab switches.
+    ref.watch(lastColdShowerDurationSecProvider);
     final duration = _durationFor(ref);
     return PressableScale(
       onTap: () => _log(context, ref),

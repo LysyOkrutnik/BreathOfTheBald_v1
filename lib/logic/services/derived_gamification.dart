@@ -16,12 +16,12 @@ class DerivedGamificationState {
   final int level;
   final int dailyStreak;
 
-  /// [dailyStreak] here is the longest run of consecutive calendar days (up
-  /// to and including the most recent one) with at least one session — no
-  /// one-day grace, unlike the incremental version. On a single device with
-  /// no pending grace day this always agrees with the incremental value; the
-  /// only place it can differ is while the user is currently sitting inside
-  /// a just-forgiven gap, where this reads one day short until their next
+  /// [dailyStreak] here is the longest run of consecutive calendar days,
+  /// ending at the most recent day with a session — no one-day grace,
+  /// unlike the incremental version. On a single device with no pending
+  /// grace day this always agrees with the incremental value; the only
+  /// place it can differ is while the user is currently sitting inside a
+  /// just-forgiven gap, where this reads one day short until their next
   /// session. An accepted simplification: replicating the incremental
   /// grace's exact history-dependent behavior from a merged multi-device
   /// dataset isn't worth the complexity for a cosmetic streak number.
@@ -42,6 +42,15 @@ class DerivedGamificationState {
     if (days.isNotEmpty) {
       final now = DateTime.now();
       var cursor = DateTime(now.year, now.month, now.day);
+      // The run must end *today or yesterday* to still count as "current" —
+      // anchoring strictly at today would otherwise zero out a real,
+      // unbroken streak on the ordinary case of syncing before training
+      // today (this was a real bug: every sync recomputes and overwrites
+      // dailyStreak unconditionally, so it fired on any sync performed
+      // before the day's first session, not just the grace-day edge case).
+      if (!days.contains(cursor)) {
+        cursor = cursor.subtract(const Duration(days: 1));
+      }
       while (days.contains(cursor)) {
         streak++;
         cursor = cursor.subtract(const Duration(days: 1));

@@ -11,7 +11,14 @@ class UserProfileRepository {
     final profile = await (_db.select(_db.userProfile)..limit(1)).getSingleOrNull();
     if (profile == null) {
       final newProfile = UserProfileCompanion.insert(id: const Value(1));
-      await _db.into(_db.userProfile).insert(newProfile);
+      // insertOrIgnore, not insert: two near-simultaneous first calls (quite
+      // plausible right at app startup, from independent providers) could
+      // both see `profile == null` above and both reach this insert with
+      // the same fixed id=1 — a plain insert would throw a primary-key
+      // uniqueness violation for the loser. Ignoring that conflict and just
+      // re-reading below is fine either way: whichever row exists now is a
+      // fresh-default profile regardless of which call created it.
+      await _db.into(_db.userProfile).insert(newProfile, mode: InsertMode.insertOrIgnore);
       return await (_db.select(_db.userProfile)..limit(1)).getSingle();
     }
     return profile;

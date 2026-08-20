@@ -7,6 +7,12 @@ import { prisma } from './prismaClient';
 
 export const app = express();
 
+// Sits behind Nginx Proxy Manager on the same Docker network — every request
+// carries an X-Forwarded-For header from that one hop. Without this,
+// express-rate-limit refuses to trust that header (ERR_ERL_UNEXPECTED_X_FORWARDED_FOR)
+// and throws on every rate-limited request, breaking login/register/sync entirely.
+app.set('trust proxy', 1);
+
 // No CORS middleware at all, deliberately — this API has no browser-based
 // client (only the Flutter app's plain HTTP requests, which aren't subject
 // to CORS in the first place). Enabling `cors()` here would only ever have

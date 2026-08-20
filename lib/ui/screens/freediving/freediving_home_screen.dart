@@ -463,6 +463,28 @@ class _PbCard extends StatelessWidget {
                 style: TextStyle(color: AppTheme.textDim.withAlpha(180), fontSize: 11),
               ),
             ],
+            if (profile.verifiedPbCo2Sec != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                children: [
+                  Icon(Icons.timer_outlined, color: AppTheme.accent, size: 18),
+                  const SizedBox(width: AppSpacing.md),
+                  Text(
+                    '${profile.verifiedPbCo2Sec! ~/ 60}:'
+                    '${(profile.verifiedPbCo2Sec! % 60).toString().padLeft(2, '0')}',
+                    style: const TextStyle(
+                      color: AppTheme.textLight,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      fontFeatures: [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(L10n.get(context, 'freediving_pb_verified_co2_label'),
+                      style: const TextStyle(color: AppTheme.textDim, fontSize: 12)),
+                ],
+              ),
+            ],
           ] else
             Text(
               L10n.get(context, 'freediving_pb_none'),

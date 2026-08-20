@@ -13,6 +13,7 @@ import 'package:okrutnik_breath/data/db/database.dart';
 import 'package:okrutnik_breath/logic/freediving/co2_o2_table_generator.dart';
 import 'package:okrutnik_breath/logic/path/cold_shower.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
+import 'package:okrutnik_breath/logic/wimhof/wimhof_progression.dart' show kHardWimHofLevels;
 import 'package:okrutnik_breath/ui/screens/freediving/max_pb_test_screen.dart';
 import 'package:okrutnik_breath/ui/screens/intro_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/confirm_dialog.dart';
@@ -468,6 +469,33 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(L10n.get(context, 'planner_time_in_past'))));
       return;
+    }
+
+    // A weekly Max PB Test needs to be the day's one demanding effort — a
+    // hard session stacked on the same day risks skewing the test (fatigue,
+    // residual CO2) or just isn't smart training. This is a warning, not a
+    // hard block: the user can still confirm and add it anyway.
+    final isHardLevel = level.key != 'freediving_pb_test' &&
+        (level.type == ExerciseType.co2Table ||
+            level.type == ExerciseType.o2Table ||
+            (level.type == ExerciseType.wimHof && kHardWimHofLevels.contains(level.key)));
+    if (isHardLevel) {
+      final plans = ref.read(plannedSessionsProvider).value ?? const <PlannedSession>[];
+      final hasPbTestThatDay = plans.any((p) =>
+          p.levelKey == 'freediving_pb_test' &&
+          MonthCalendar.dateOnly(p.scheduledAt) == MonthCalendar.dateOnly(scheduledAt));
+      if (hasPbTestThatDay) {
+        final confirmed = await showGlassConfirm(
+          context,
+          title: L10n.get(context, 'planner_pbtest_day_warning_title'),
+          body: L10n.get(context, 'planner_pbtest_day_warning_body'),
+          confirmLabel: L10n.get(context, 'planner_pbtest_day_warning_confirm'),
+          cancelLabel: L10n.get(context, 'delete_confirm_cancel'),
+          icon: Icons.warning_amber_rounded,
+          confirmColor: AppTheme.danger,
+        );
+        if (!confirmed || !mounted) return;
+      }
     }
 
     final reminderTitle = L10n.get(context, 'planner_reminder_title');

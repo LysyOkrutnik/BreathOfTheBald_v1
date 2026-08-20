@@ -156,9 +156,9 @@ class _MoreTile extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       subtitle!,
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: color.withAlpha(200), fontSize: 12),
+                      style: TextStyle(color: color.withAlpha(200), fontSize: 12, height: 1.3),
                     ),
                   ],
                 ],

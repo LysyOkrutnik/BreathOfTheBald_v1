@@ -4,6 +4,9 @@
 *.pyc
 *.swp
 .DS_Store
+
+# Local dev/debugging screenshots (adb capture tooling), not app assets
+/screenshots/
 .atom/
 .build/
 .buildlog/

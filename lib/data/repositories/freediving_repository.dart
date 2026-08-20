@@ -12,17 +12,24 @@ class FreedivingRepository {
 
   final AppDatabase _db;
 
-  /// Ensures a single profile row exists and returns it.
-  Future<FreedivingProfileData> getProfile() async {
-    final existing =
-        await (_db.select(_db.freedivingProfile)..limit(1)).getSingleOrNull();
-    if (existing != null) return existing;
+  /// Ensures a single profile row exists and returns it. Wrapped in a
+  /// transaction so two near-simultaneous first calls (plausible right at
+  /// app startup) can't both see "no row yet" and both insert one —
+  /// Drift serializes transactions against each other on this app's single
+  /// database connection, so the second caller's select-then-insert
+  /// correctly waits for the first's to fully land first.
+  Future<FreedivingProfileData> getProfile() {
+    return _db.transaction(() async {
+      final existing =
+          await (_db.select(_db.freedivingProfile)..limit(1)).getSingleOrNull();
+      if (existing != null) return existing;
 
-    final id = await _db
-        .into(_db.freedivingProfile)
-        .insert(const FreedivingProfileCompanion());
-    return (_db.select(_db.freedivingProfile)..where((t) => t.id.equals(id)))
-        .getSingle();
+      final id = await _db
+          .into(_db.freedivingProfile)
+          .insert(const FreedivingProfileCompanion());
+      return (_db.select(_db.freedivingProfile)..where((t) => t.id.equals(id)))
+          .getSingle();
+    });
   }
 
   Stream<FreedivingProfileData?> watchProfile() {
@@ -38,20 +45,30 @@ class FreedivingRepository {
     await ProfileSyncMarker.markChanged();
   }
 
-  /// Records a completed guided Max PB Attempt: sets the new verified PB and
-  /// resets both working (virtual) PBs to match it, since a fresh, real test
-  /// is the most trustworthy data point available.
-  Future<void> recordVerifiedPb(int pbSeconds) async {
-    final profile = await getProfile();
+  /// Records a completed guided Max PB Test: the exhale-hold result anchors
+  /// the CO2 baseline, the inhale-hold result anchors the O2 baseline, and
+  /// both working (virtual) PBs reset to match their matching baseline —
+  /// a fresh, real test is the most trustworthy data point available for
+  /// each. Returns the profile as it was *before* this write, so the caller
+  /// can show a "vs. last time" comparison without a separate read.
+  Future<FreedivingProfileData> recordVerifiedPb({
+    required int exhalePbSeconds,
+    required int inhalePbSeconds,
+  }) async {
+    final previous = await getProfile();
+    final now = DateTime.now();
     await (_db.update(_db.freedivingProfile)
-          ..where((t) => t.id.equals(profile.id)))
+          ..where((t) => t.id.equals(previous.id)))
         .write(FreedivingProfileCompanion(
-      verifiedPbSec: Value(pbSeconds),
-      verifiedPbAt: Value(DateTime.now()),
-      virtualPbCo2Sec: Value(pbSeconds),
-      virtualPbO2Sec: Value(pbSeconds),
+      verifiedPbSec: Value(inhalePbSeconds),
+      verifiedPbAt: Value(now),
+      verifiedPbCo2Sec: Value(exhalePbSeconds),
+      verifiedPbCo2At: Value(now),
+      virtualPbCo2Sec: Value(exhalePbSeconds),
+      virtualPbO2Sec: Value(inhalePbSeconds),
     ));
     await ProfileSyncMarker.markChanged();
+    return previous;
   }
 
   /// Persists a just-finished table session (called right after the generic
@@ -121,7 +138,12 @@ class FreedivingRepository {
     }
 
     final profile = await getProfile();
-    final verifiedPb = profile.verifiedPbSec;
+    // Each table type is safety-capped against its OWN matching real test —
+    // CO2 against the exhale-hold, O2 against the inhale-hold — not a single
+    // shared verified PB, since the two measure different physiological
+    // limits and can differ substantially.
+    final verifiedPb =
+        tableType == FreedivingTableType.co2 ? profile.verifiedPbCo2Sec : profile.verifiedPbSec;
     if (verifiedPb == null) return; // No baseline yet; nothing to adjust.
 
     final currentVirtual = tableType == FreedivingTableType.co2
@@ -192,6 +214,8 @@ class FreedivingRepository {
   Future<void> applyProfileStateFromSync({
     required int? verifiedPbSec,
     required DateTime? verifiedPbAt,
+    required int? verifiedPbCo2Sec,
+    required DateTime? verifiedPbCo2At,
     required DateTime? safetyAcknowledgedAt,
   }) async {
     final profile = await getProfile();
@@ -199,6 +223,8 @@ class FreedivingRepository {
         .write(FreedivingProfileCompanion(
       verifiedPbSec: Value(verifiedPbSec),
       verifiedPbAt: Value(verifiedPbAt),
+      verifiedPbCo2Sec: Value(verifiedPbCo2Sec),
+      verifiedPbCo2At: Value(verifiedPbCo2At),
       safetyAcknowledgedAt: Value(safetyAcknowledgedAt),
     ));
   }
@@ -215,6 +241,8 @@ class FreedivingRepository {
         .write(const FreedivingProfileCompanion(
       verifiedPbSec: Value(null),
       verifiedPbAt: Value(null),
+      verifiedPbCo2Sec: Value(null),
+      verifiedPbCo2At: Value(null),
       virtualPbCo2Sec: Value(null),
       virtualPbO2Sec: Value(null),
       lastCo2SessionAt: Value(null),

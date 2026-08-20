@@ -50,18 +50,27 @@ class FreedivingProgressSummary {
 
     final ratios = <double>[];
     for (final log in logs) {
+      List<dynamic> rounds;
       try {
-        final rounds = jsonDecode(log.roundsJson) as List<dynamic>;
-        for (final r in rounds) {
+        rounds = jsonDecode(log.roundsJson) as List<dynamic>;
+      } catch (_) {
+        // The whole log's JSON is unparsable — nothing to salvage from it.
+        continue;
+      }
+      for (final r in rounds) {
+        // Scoped per round, not per log: one malformed/still-mid-sync round
+        // (e.g. a numeric field that arrived as a string) used to throw and
+        // discard every *other*, perfectly valid round in the same log too.
+        try {
           final round = r as Map<String, dynamic>;
           final apnea = round['apneaSec'] as int?;
           final firstContraction = round['firstContractionSec'] as int?;
           if (apnea != null && apnea > 0 && firstContraction != null) {
             ratios.add(firstContraction / apnea);
           }
+        } catch (_) {
+          // This round contributes nothing; the rest of the log still does.
         }
-      } catch (_) {
-        // Malformed/older-shape JSON simply contributes nothing.
       }
     }
 

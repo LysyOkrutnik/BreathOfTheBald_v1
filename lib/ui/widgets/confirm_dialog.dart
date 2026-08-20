@@ -50,6 +50,7 @@ Future<bool> showGlassConfirm(
   required String title,
   required String confirmLabel,
   required String cancelLabel,
+  String? body,
   IconData icon = Icons.logout_rounded,
   Color confirmColor = AppTheme.danger,
 }) async {
@@ -70,6 +71,14 @@ Future<bool> showGlassConfirm(
             letterSpacing: 2.0,
           ),
         ),
+        if (body != null) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            body,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+          ),
+        ],
         const SizedBox(height: AppSpacing.xl),
         Row(
           children: [

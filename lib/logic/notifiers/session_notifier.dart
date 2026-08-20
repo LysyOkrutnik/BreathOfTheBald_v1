@@ -21,16 +21,6 @@ final sessionProvider = StateNotifierProvider<SessionNotifier, SessionState>((re
   return SessionNotifier(audioManager, ref);
 });
 
-/// Flips to true exactly once whenever a session was backgrounded for long
-/// enough that it should no longer be trusted to resume silently — the phase
-/// timers keep counting real elapsed time while backgrounded (a hold's
-/// `DateTime.now().difference(start)` accounting is correct either way), but
-/// the user themselves may no longer be in a state to safely continue a
-/// breath-hold practice after a real interruption. SessionScreen listens for
-/// this and surfaces the same exit dialog used for a manual exit, resetting
-/// it back to false immediately after.
-final sessionInterruptedProvider = StateProvider<bool>((ref) => false);
-
 class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObserver {
   final AudioManager _audioManager;
   final HapticEngine _hapticEngine = HapticEngine();
@@ -83,14 +73,6 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
   /// on this before touching state.
   bool get _isRunning => _isSessionActive && mounted;
 
-  /// Set when an active session goes to the background; cleared on resume.
-  DateTime? _backgroundedAt;
-
-  /// Below this, a quick peek at a notification shade or app switcher isn't
-  /// worth interrupting the user over; at or above it, they may have taken a
-  /// phone call, put the phone down, or otherwise stepped away for real.
-  static const _backgroundInterruptionThreshold = Duration(seconds: 20);
-
   SessionNotifier(this._audioManager, this._ref) : super(SessionState.initial()) {
     WidgetsBinding.instance.addObserver(this);
   }
@@ -102,8 +84,16 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
   void didChangeAppLifecycleState(AppLifecycleState appState) {
     if (!_isSessionActive) return;
 
+    // Deliberately does nothing beyond pacing the drone — a session is
+    // meant to keep running exactly as timed whether the screen is on or
+    // locked (e.g. a passive Wim Hof/meditation session on a bus or with
+    // eyes closed). Phase timing is wall-clock based (`DateTime.now()`
+    // diffs), so nothing drifts while backgrounded. This used to also flag
+    // any backgrounding of 20+ seconds as a suspicious "interruption" and
+    // force the exit-confirmation dialog on resume — which fired on every
+    // ordinary screen lock, since locking the screen for the whole session
+    // is exactly what a real breathing/meditation practice looks like.
     if (appState == AppLifecycleState.paused) {
-      _backgroundedAt = DateTime.now();
       // Silences the ambient drone while backgrounded — nothing is visible
       // to pace against anyway, and it's the one part of a session that
       // would otherwise keep audibly running from inside a pocket or bag.
@@ -111,17 +101,10 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
         _audioManager.stopDrone();
       } catch (_) {}
     } else if (appState == AppLifecycleState.resumed) {
-      final backgroundedAt = _backgroundedAt;
-      _backgroundedAt = null;
       if (!_isRunning) return;
       try {
         _audioManager.startDrone();
       } catch (_) {}
-      if (backgroundedAt != null &&
-          DateTime.now().difference(backgroundedAt) >=
-              _backgroundInterruptionThreshold) {
-        _ref.read(sessionInterruptedProvider.notifier).state = true;
-      }
     }
   }
 

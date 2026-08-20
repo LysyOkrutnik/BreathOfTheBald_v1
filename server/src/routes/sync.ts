@@ -63,6 +63,8 @@ const customFreedivingPresetSchema = z.object({
 const profileStateSchema = z.object({
   verifiedPbSec: z.number().int().nullable().optional(),
   verifiedPbAt: z.string().datetime().nullable().optional(),
+  verifiedPbCo2Sec: z.number().int().nullable().optional(),
+  verifiedPbCo2At: z.string().datetime().nullable().optional(),
   safetyAcknowledgedAt: z.string().datetime().nullable().optional(),
   wimHofCurrentLevelKey: z.string().nullable().optional(),
   wimHofCurrentLevelSetAt: z.string().datetime().nullable().optional(),
@@ -255,6 +257,7 @@ router.post('/', async (req: AuthedRequest, res) => {
       {
         ...rest,
         verifiedPbAt: rest.verifiedPbAt ? new Date(rest.verifiedPbAt) : null,
+        verifiedPbCo2At: rest.verifiedPbCo2At ? new Date(rest.verifiedPbCo2At) : null,
         safetyAcknowledgedAt: rest.safetyAcknowledgedAt ? new Date(rest.safetyAcknowledgedAt) : null,
         wimHofCurrentLevelSetAt: rest.wimHofCurrentLevelSetAt
           ? new Date(rest.wimHofCurrentLevelSetAt)

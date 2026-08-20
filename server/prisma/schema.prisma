@@ -138,6 +138,8 @@ model ProfileState {
   user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   verifiedPbSec           Int?
   verifiedPbAt            DateTime?
+  verifiedPbCo2Sec        Int?
+  verifiedPbCo2At         DateTime?
   safetyAcknowledgedAt    DateTime?
   wimHofCurrentLevelKey   String?
   wimHofCurrentLevelSetAt DateTime?

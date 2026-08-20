@@ -126,7 +126,14 @@ abstract final class Co2O2TableGenerator {
     int rounds = defaultRounds,
   }) {
     assert(rounds >= 2, 'A table needs at least 2 rounds to show progression.');
-    final apnea = _roundTo5Bounded(pbSeconds * co2ApneaPct, min: 10, max: pbSeconds);
+    // validatePb only *warns* below minPlausiblePbSec, it doesn't block —
+    // without this floor, a PB under ~17s makes the min:10 bound exceed
+    // max:pbSeconds below, and _roundTo5Bounded's clamp-up-then-down nets
+    // out at apnea == pbSeconds: a CO2 table (meant to hold at a fixed 60%
+    // of PB) would instead ask for the user's *entire* max breath-hold,
+    // repeated 8 times with shrinking rest.
+    final safePb = pbSeconds < minPlausiblePbSec ? minPlausiblePbSec : pbSeconds;
+    final apnea = _roundTo5Bounded(safePb * co2ApneaPct, min: 10, max: safePb);
     final decrement = (co2InitialRestSec - co2RestFloorSec) / (rounds - 1);
 
     return List.generate(rounds, (i) {

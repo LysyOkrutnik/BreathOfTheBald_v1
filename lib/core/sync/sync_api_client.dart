@@ -78,19 +78,23 @@ class SyncApiClient {
   }
 
   /// Sliding session: exchanges a still-valid token for a fresh 90-day one.
-  /// Returns null (rather than throwing) on any failure — the caller
-  /// (SyncService, on a 401) treats "couldn't refresh" as "must re-login"
-  /// either way, so there's nothing more specific to surface.
+  /// Returns null ONLY on an explicit 401 (the token itself was rejected —
+  /// caller treats that as "must re-login"). Anything else — a timeout, a
+  /// dropped connection, a 500/429 from the server — is a transient failure,
+  /// not proof the session is gone, so it's rethrown (a SyncApiException for
+  /// a non-2xx response, or the raw exception otherwise) rather than
+  /// swallowed to null. Previously ANY failure here — including the server
+  /// briefly erroring — forced a full logout, turning a passing server hiccup
+  /// into a "log in again" support ticket.
   Future<String?> refreshToken() async {
-    try {
-      final response = await http
-          .post(Uri.parse('$syncApiBaseUrl/auth/refresh'), headers: await _headers())
-          .timeout(syncRequestTimeout);
-      if (response.statusCode != 200) return null;
-      return (jsonDecode(response.body) as Map<String, dynamic>)['token'] as String?;
-    } catch (_) {
-      return null;
+    final response = await http
+        .post(Uri.parse('$syncApiBaseUrl/auth/refresh'), headers: await _headers())
+        .timeout(syncRequestTimeout);
+    if (response.statusCode == 401) return null;
+    if (response.statusCode != 200) {
+      throw SyncApiException(response.statusCode, response.body);
     }
+    return (jsonDecode(response.body) as Map<String, dynamic>)['token'] as String?;
   }
 
   Future<void> resendVerificationEmail() async {

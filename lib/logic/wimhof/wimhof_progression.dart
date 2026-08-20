@@ -30,6 +30,7 @@ class WimHofNextUp {
     this.justRolledBackFrom,
     this.sessionsAtLevel = 0,
     this.daysAtLevel = 0,
+    this.resetTrialWindow = false,
   });
 
   /// The ladder level the app currently treats as "confirmed" (the one
@@ -50,6 +51,15 @@ class WimHofNextUp {
   /// yes/no eligibility flag.
   final int sessionsAtLevel;
   final int daysAtLevel;
+
+  /// Set the one time a trial at the next level up was just judged "too
+  /// hard" — the caller must bump `currentLevelSetAt` to now even though
+  /// `currentLevelKey` itself didn't change. Without that, the failed
+  /// trial's sessions never age out of the `since`-filtered window this
+  /// same computation re-derives every time, so the average RPE that
+  /// failed it once would fail it forever — permanently blocking any future
+  /// recommendation with no way for the user to earn a fresh attempt.
+  final bool resetTrialWindow;
 }
 
 /// Pure progression logic for the Wim Hof classic ladder. The ladder itself
@@ -167,11 +177,13 @@ class WimHofProgression {
       if (!tooHard) {
         return WimHofNextUp(currentLevelKey: next);
       }
-      // Too hard — stay put; don't keep recommending it every time.
+      // Too hard — stay put, and reset the trial window so these same
+      // failed sessions don't keep failing every future recommendation.
       return WimHofNextUp(
         currentLevelKey: current,
-        sessionsAtLevel: sessionsAtLevel,
-        daysAtLevel: daysAtLevel,
+        sessionsAtLevel: 0,
+        daysAtLevel: 0,
+        resetTrialWindow: true,
       );
     }
 

@@ -9,18 +9,22 @@ class WimHofRepository {
 
   final AppDatabase _db;
 
-  Future<WimHofProgressData> _getOrCreate() async {
-    final existing =
-        await (_db.select(_db.wimHofProgress)..limit(1)).getSingleOrNull();
-    if (existing != null) return existing;
+  /// Wrapped in a transaction — see FreedivingRepository.getProfile for why
+  /// this select-then-insert needs to be atomic against a concurrent caller.
+  Future<WimHofProgressData> _getOrCreate() {
+    return _db.transaction(() async {
+      final existing =
+          await (_db.select(_db.wimHofProgress)..limit(1)).getSingleOrNull();
+      if (existing != null) return existing;
 
-    final id = await _db.into(_db.wimHofProgress).insert(
-          WimHofProgressCompanion.insert(
-            currentLevelSetAt: Value(DateTime.now()),
-          ),
-        );
-    return (_db.select(_db.wimHofProgress)..where((t) => t.id.equals(id)))
-        .getSingle();
+      final id = await _db.into(_db.wimHofProgress).insert(
+            WimHofProgressCompanion.insert(
+              currentLevelSetAt: Value(DateTime.now()),
+            ),
+          );
+      return (_db.select(_db.wimHofProgress)..where((t) => t.id.equals(id)))
+          .getSingle();
+    });
   }
 
   /// Exposes the raw progress row — used by SyncService to read the current
@@ -67,7 +71,7 @@ class WimHofRepository {
       progress: progress,
       allWimHofSessions: sessions,
     );
-    if (result.currentLevelKey != progress.currentLevelKey) {
+    if (result.currentLevelKey != progress.currentLevelKey || result.resetTrialWindow) {
       await (_db.update(_db.wimHofProgress)..where((t) => t.id.equals(progress.id)))
           .write(WimHofProgressCompanion(
         currentLevelKey: Value(result.currentLevelKey),

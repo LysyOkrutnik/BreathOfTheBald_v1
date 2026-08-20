@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -45,11 +46,16 @@ class SyncService {
   }
 
   Future<SyncResult> syncNow() async {
-    if (!await _authService.isLoggedIn) {
-      return const SyncResult(SyncOutcome.notLoggedIn);
-    }
-
     try {
+      // Inside the same try as everything else below — `isLoggedIn` reads
+      // secure storage, which can throw (a stale/invalidated Keystore entry
+      // after an OS update or backup-restore) instead of just returning
+      // null. Left uncaught, that exception used to escape syncNow()
+      // entirely instead of resolving to a SyncResult like every other
+      // failure path here, permanently wedging whatever awaited it.
+      if (!await _authService.isLoggedIn) {
+        return const SyncResult(SyncOutcome.notLoggedIn);
+      }
       return await _runSync();
     } on SyncApiException catch (e) {
       if (!e.isAuthError) return SyncResult(SyncOutcome.network, message: e.toString());
@@ -60,14 +66,18 @@ class SyncService {
       // network error, and the user was stuck retrying a sync that could
       // never succeed until they happened to log out and back in
       // themselves.
-      final refreshedToken = await _apiClient.refreshToken();
-      if (refreshedToken == null) {
-        await _authService.logout();
-        return const SyncResult(SyncOutcome.authExpired);
-      }
-      await _authService.updateToken(refreshedToken);
-
+      // `updateToken` (a secure-storage write) is deliberately inside this
+      // same try — it previously sat between the two try/catch blocks,
+      // uncaught by either, so a keystore/keychain failure there would
+      // propagate out of syncNow() entirely uncaught instead of resolving
+      // to a SyncResult like every other failure path here.
       try {
+        final refreshedToken = await _apiClient.refreshToken();
+        if (refreshedToken == null) {
+          await _authService.logout();
+          return const SyncResult(SyncOutcome.authExpired);
+        }
+        await _authService.updateToken(refreshedToken);
         return await _runSync();
       } on SyncApiException catch (e2) {
         if (e2.isAuthError) {
@@ -85,11 +95,26 @@ class SyncService {
 
   Future<SyncResult> _runSync() async {
     await _push();
-    await _pullAllPages();
+    final fullyDrained = await _pullAllPages();
     await _recomputeDerivedGamificationState();
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_lastSyncKey, DateTime.now().toIso8601String());
+    // Only advance the cursor if the pull actually reached the end —
+    // otherwise (the pagination cursor stalled; see _pullAllPages) the next
+    // sync needs to retry from the *same* `since` rather than resuming past
+    // rows it never actually pulled. Re-merging an already-merged page is
+    // harmless (idempotent upserts); silently advancing past un-pulled rows
+    // was the bug — they'd never be reachable again.
+    if (fullyDrained) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_lastSyncKey, DateTime.now().toIso8601String());
+    } else {
+      // Not an error — the pull cursor stalled on a tied `updatedAt` run
+      // (see _pullAllPages) and will retry from the same `since` next time.
+      // Logged only so a persistent stall (which would otherwise look like
+      // ordinary silent success forever) is at least visible in diagnostics.
+      developer.log('Sync cursor stalled — will retry from the same point next sync',
+          name: 'SyncService');
+    }
     return const SyncResult(SyncOutcome.success);
   }
 
@@ -173,6 +198,8 @@ class SyncService {
       'profileState': {
         'verifiedPbSec': freedivingProfile.verifiedPbSec,
         'verifiedPbAt': freedivingProfile.verifiedPbAt?.toIso8601String(),
+        'verifiedPbCo2Sec': freedivingProfile.verifiedPbCo2Sec,
+        'verifiedPbCo2At': freedivingProfile.verifiedPbCo2At?.toIso8601String(),
         'safetyAcknowledgedAt': freedivingProfile.safetyAcknowledgedAt?.toIso8601String(),
         'wimHofCurrentLevelKey': wimHofProgress.currentLevelKey,
         'wimHofCurrentLevelSetAt': wimHofProgress.currentLevelSetAt?.toIso8601String(),
@@ -193,20 +220,26 @@ class SyncService {
   /// first page's worth on a full (no-`since`) sync. Each page's own max
   /// `updatedAt` becomes the next page's `since`, rather than any single
   /// fixed cursor computed up front.
-  Future<void> _pullAllPages() async {
+  ///
+  /// Returns `true` only if pulling actually reached the end (`hasMore` went
+  /// false). Returns `false` if the cursor stalled — plausible when many
+  /// rows share the exact same `updatedAt` (e.g. a bulk migration/backfill)
+  /// and a page boundary lands inside that run, so no timestamp in the page
+  /// is strictly after the page's own `since`. The caller must NOT advance
+  /// `lastSyncedAt` when this returns false, or the un-pulled remainder of
+  /// that tied group becomes permanently unreachable (every future sync
+  /// would start its cursor past it).
+  Future<bool> _pullAllPages() async {
     var since = await lastSyncedAt;
     while (true) {
       final pulled = await _apiClient.pullSync(since: since);
       await _mergePulled(pulled);
 
       final hasMore = pulled['hasMore'] == true;
-      if (!hasMore) return;
+      if (!hasMore) return true;
 
       final next = _maxUpdatedAt(pulled);
-      // Safety net: without forward progress this would loop forever: bail
-      // rather than hang if the server ever reports hasMore with no
-      // parseable rows to advance the cursor from.
-      if (next == null || (since != null && !next.isAfter(since))) return;
+      if (next == null || (since != null && !next.isAfter(since))) return false;
       since = next;
     }
   }
@@ -303,6 +336,10 @@ class SyncService {
         verifiedPbSec: profileState['verifiedPbSec'] as int?,
         verifiedPbAt: profileState['verifiedPbAt'] != null
             ? DateTime.parse(profileState['verifiedPbAt'] as String)
+            : null,
+        verifiedPbCo2Sec: profileState['verifiedPbCo2Sec'] as int?,
+        verifiedPbCo2At: profileState['verifiedPbCo2At'] != null
+            ? DateTime.parse(profileState['verifiedPbCo2At'] as String)
             : null,
         safetyAcknowledgedAt: profileState['safetyAcknowledgedAt'] != null
             ? DateTime.parse(profileState['safetyAcknowledgedAt'] as String)
