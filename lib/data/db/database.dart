@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:drift/native.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import 'package:uuid/uuid.dart';
 
 part 'database.g.dart';
 
@@ -35,6 +36,13 @@ class Sessions extends Table {
   /// answered (currently asked after Wim Hof sessions, to drive ladder
   /// auto-progression — see WimHofProgression).
   IntColumn get rpeScore => integer().nullable()();
+
+  /// Stable cross-device identifier used by the sync backend — a
+  /// client-generated UUID, distinct from the local autoincrement [id]
+  /// (which only has meaning on this device). Nullable only because rows
+  /// written before schemaVersion 11 are backfilled by that migration;
+  /// every row inserted going forward always has one.
+  TextColumn get syncId => text().nullable()();
 }
 
 class UserProfile extends Table {
@@ -76,6 +84,15 @@ class CustomPresets extends Table {
   IntColumn get cycles => integer().withDefault(const Constant(8))();
   IntColumn get rounds => integer().withDefault(const Constant(1))();
   DateTimeColumn get createdAt => dateTime()();
+
+  /// See [Sessions.syncId].
+  TextColumn get syncId => text().nullable()();
+
+  /// Soft-delete marker: set instead of a real row delete so a deletion on
+  /// one device propagates to others on next sync, rather than the server's
+  /// still-active copy silently reappearing here. Rows with this set are
+  /// filtered out of [CustomPresetRepository.watchPresets].
+  DateTimeColumn get deletedAt => dateTime().nullable()();
 }
 
 /// Single-row profile tracking freediving Personal Best and the "virtual" PB
@@ -138,6 +155,9 @@ class FreedivingSessionLog extends Table {
   /// so it's kept as its own field rather than folded into rpeScore, which
   /// only measures perceived effort.
   TextColumn get symptomTag => text().nullable()();
+
+  /// See [Sessions.syncId].
+  TextColumn get syncId => text().nullable()();
 }
 
 /// A user-defined breath-hold table (the custom freediving builder): a fixed
@@ -152,6 +172,12 @@ class CustomFreedivingPresets extends Table {
   IntColumn get endRestSec => integer()();
   IntColumn get rounds => integer()();
   DateTimeColumn get createdAt => dateTime()();
+
+  /// See [Sessions.syncId].
+  TextColumn get syncId => text().nullable()();
+
+  /// See [CustomPresets.deletedAt].
+  DateTimeColumn get deletedAt => dateTime().nullable()();
 }
 
 /// Single-row tracker for the Wim Hof classic-ladder auto-progression.
@@ -180,7 +206,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -229,8 +255,53 @@ class AppDatabase extends _$AppDatabase {
           if (from < 10) {
             await m.addColumn(freedivingSessionLog, freedivingSessionLog.symptomTag);
           }
+          // v10 -> v11: cross-device sync — a client-generated syncId on
+          // every syncable row, plus soft-delete on presets so a deletion on
+          // one device propagates instead of the server's still-active copy
+          // reappearing here.
+          if (from < 11) {
+            await m.addColumn(sessions, sessions.syncId);
+            await m.addColumn(freedivingSessionLog, freedivingSessionLog.syncId);
+            await m.addColumn(customPresets, customPresets.syncId);
+            await m.addColumn(customPresets, customPresets.deletedAt);
+            await m.addColumn(customFreedivingPresets, customFreedivingPresets.syncId);
+            await m.addColumn(customFreedivingPresets, customFreedivingPresets.deletedAt);
+            await _backfillSyncIds();
+          }
         },
       );
+
+  /// One-time backfill for rows written before syncId existed — every row
+  /// needs a stable identity before the first sync push, or it would look
+  /// new (and get duplicated) on the server every time.
+  Future<void> _backfillSyncIds() async {
+    const uuid = Uuid();
+
+    for (final row in await select(sessions).get()) {
+      if (row.syncId == null) {
+        await (update(sessions)..where((t) => t.id.equals(row.id)))
+            .write(SessionsCompanion(syncId: Value(uuid.v4())));
+      }
+    }
+    for (final row in await select(freedivingSessionLog).get()) {
+      if (row.syncId == null) {
+        await (update(freedivingSessionLog)..where((t) => t.id.equals(row.id)))
+            .write(FreedivingSessionLogCompanion(syncId: Value(uuid.v4())));
+      }
+    }
+    for (final row in await select(customPresets).get()) {
+      if (row.syncId == null) {
+        await (update(customPresets)..where((t) => t.id.equals(row.id)))
+            .write(CustomPresetsCompanion(syncId: Value(uuid.v4())));
+      }
+    }
+    for (final row in await select(customFreedivingPresets).get()) {
+      if (row.syncId == null) {
+        await (update(customFreedivingPresets)..where((t) => t.id.equals(row.id)))
+            .write(CustomFreedivingPresetsCompanion(syncId: Value(uuid.v4())));
+      }
+    }
+  }
 }
 
 LazyDatabase _openConnection() {

@@ -1,8 +1,10 @@
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
+import 'package:okrutnik_breath/core/sync/profile_sync_marker.dart';
 import 'package:okrutnik_breath/data/db/database.dart';
 import 'package:okrutnik_breath/logic/freediving/co2_o2_table_generator.dart';
+import 'package:uuid/uuid.dart';
 
 /// CRUD + progression logic for the freediving CO2/O2 table feature.
 class FreedivingRepository {
@@ -33,6 +35,7 @@ class FreedivingRepository {
           ..where((t) => t.id.equals(profile.id)))
         .write(FreedivingProfileCompanion(
             safetyAcknowledgedAt: Value(DateTime.now())));
+    await ProfileSyncMarker.markChanged();
   }
 
   /// Records a completed guided Max PB Attempt: sets the new verified PB and
@@ -48,6 +51,7 @@ class FreedivingRepository {
       virtualPbCo2Sec: Value(pbSeconds),
       virtualPbO2Sec: Value(pbSeconds),
     ));
+    await ProfileSyncMarker.markChanged();
   }
 
   /// Persists a just-finished table session (called right after the generic
@@ -90,6 +94,7 @@ class FreedivingRepository {
             roundsCompleted: roundsCompleted,
             roundsJson: roundsJson,
             durationSec: durationSec,
+            syncId: Value(const Uuid().v4()),
           ),
         );
   }
@@ -177,5 +182,88 @@ class FreedivingRepository {
     return (_db.select(_db.freedivingSessionLog)
           ..orderBy([(t) => OrderingTerm.desc(t.timestamp)]))
         .watch();
+  }
+
+  /// Overwrites the ProfileState-relevant fields of the profile row from a
+  /// sync pull (the server already decided this was the newer side of the
+  /// last-write-wins comparison). Deliberately leaves the RPE-driven virtual
+  /// PBs untouched — those aren't part of ProfileState, they're recomputed
+  /// locally per-table from RPE feedback, not synced directly.
+  Future<void> applyProfileStateFromSync({
+    required int? verifiedPbSec,
+    required DateTime? verifiedPbAt,
+    required DateTime? safetyAcknowledgedAt,
+  }) async {
+    final profile = await getProfile();
+    await (_db.update(_db.freedivingProfile)..where((t) => t.id.equals(profile.id)))
+        .write(FreedivingProfileCompanion(
+      verifiedPbSec: Value(verifiedPbSec),
+      verifiedPbAt: Value(verifiedPbAt),
+      safetyAcknowledgedAt: Value(safetyAcknowledgedAt),
+    ));
+  }
+
+  /// Part of the "reset progress" flow: wipes every table-session log and
+  /// clears the verified/virtual PBs, but deliberately keeps
+  /// [FreedivingProfileData.safetyAcknowledgedAt] — that's a one-time
+  /// consent, not progress, and re-showing the safety disclaimer wouldn't
+  /// serve the user starting over.
+  Future<void> resetProgress() async {
+    await _db.delete(_db.freedivingSessionLog).go();
+    final profile = await getProfile();
+    await (_db.update(_db.freedivingProfile)..where((t) => t.id.equals(profile.id)))
+        .write(const FreedivingProfileCompanion(
+      verifiedPbSec: Value(null),
+      verifiedPbAt: Value(null),
+      virtualPbCo2Sec: Value(null),
+      virtualPbO2Sec: Value(null),
+      lastCo2SessionAt: Value(null),
+      lastO2SessionAt: Value(null),
+    ));
+    await ProfileSyncMarker.markChanged();
+  }
+
+  /// One-shot read of every log — used by SyncService to build a push
+  /// payload.
+  Future<List<FreedivingSessionLogData>> getAllLogsOnce() =>
+      _db.select(_db.freedivingSessionLog).get();
+
+  /// Applied during a sync pull — same insert-or-refresh-mutable-fields
+  /// pattern as [SessionRepository.upsertFromSync].
+  Future<void> upsertFromSync({
+    required String syncId,
+    required String tableType,
+    required int pbUsedSec,
+    required int roundsPlanned,
+    required int roundsCompleted,
+    required String roundsJson,
+    required int durationSec,
+    required DateTime timestamp,
+    int? rpeScore,
+    String? symptomTag,
+  }) async {
+    final existing = await (_db.select(_db.freedivingSessionLog)
+          ..where((t) => t.syncId.equals(syncId)))
+        .getSingleOrNull();
+    if (existing != null) {
+      await (_db.update(_db.freedivingSessionLog)..where((t) => t.id.equals(existing.id)))
+          .write(FreedivingSessionLogCompanion(
+        rpeScore: Value(rpeScore),
+        symptomTag: Value(symptomTag),
+      ));
+      return;
+    }
+    await _db.into(_db.freedivingSessionLog).insert(FreedivingSessionLogCompanion.insert(
+          timestamp: timestamp,
+          tableType: tableType,
+          pbUsedSec: pbUsedSec,
+          roundsPlanned: roundsPlanned,
+          roundsCompleted: roundsCompleted,
+          roundsJson: roundsJson,
+          durationSec: durationSec,
+          rpeScore: Value(rpeScore),
+          symptomTag: Value(symptomTag),
+          syncId: Value(syncId),
+        ));
   }
 }

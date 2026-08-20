@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -24,6 +25,11 @@ void main() async {
   // Load locale data so DateFormat can render localized month/weekday names
   // (used by the planner calendar).
   await initializeDateFormatting();
+
+  // Android-only app — no firebase_options.dart needed; the google-services
+  // Gradle plugin already injects the config from google-services.json at
+  // build time, which Firebase.initializeApp() picks up natively.
+  await Firebase.initializeApp();
 
   // Initialize notifications once; the same instance is shared app-wide via the
   // provider override below.

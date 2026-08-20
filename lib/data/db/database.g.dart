@@ -84,6 +84,11 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
   late final GeneratedColumn<int> rpeScore = GeneratedColumn<int>(
       'rpe_score', aliasedName, true,
       type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _syncIdMeta = const VerificationMeta('syncId');
+  @override
+  late final GeneratedColumn<String> syncId = GeneratedColumn<String>(
+      'sync_id', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
   @override
   List<GeneratedColumn> get $columns => [
         id,
@@ -97,7 +102,8 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
         spo2Avg,
         hrMin,
         hrAvg,
-        rpeScore
+        rpeScore,
+        syncId
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -168,6 +174,10 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
       context.handle(_rpeScoreMeta,
           rpeScore.isAcceptableOrUnknown(data['rpe_score']!, _rpeScoreMeta));
     }
+    if (data.containsKey('sync_id')) {
+      context.handle(_syncIdMeta,
+          syncId.isAcceptableOrUnknown(data['sync_id']!, _syncIdMeta));
+    }
     return context;
   }
 
@@ -201,6 +211,8 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
           .read(DriftSqlType.int, data['${effectivePrefix}hr_avg']),
       rpeScore: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}rpe_score']),
+      syncId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}sync_id']),
     );
   }
 
@@ -238,6 +250,13 @@ class Session extends DataClass implements Insertable<Session> {
   /// answered (currently asked after Wim Hof sessions, to drive ladder
   /// auto-progression — see WimHofProgression).
   final int? rpeScore;
+
+  /// Stable cross-device identifier used by the sync backend — a
+  /// client-generated UUID, distinct from the local autoincrement [id]
+  /// (which only has meaning on this device). Nullable only because rows
+  /// written before schemaVersion 11 are backfilled by that migration;
+  /// every row inserted going forward always has one.
+  final String? syncId;
   const Session(
       {required this.id,
       required this.timestamp,
@@ -250,7 +269,8 @@ class Session extends DataClass implements Insertable<Session> {
       this.spo2Avg,
       this.hrMin,
       this.hrAvg,
-      this.rpeScore});
+      this.rpeScore,
+      this.syncId});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -275,6 +295,9 @@ class Session extends DataClass implements Insertable<Session> {
     }
     if (!nullToAbsent || rpeScore != null) {
       map['rpe_score'] = Variable<int>(rpeScore);
+    }
+    if (!nullToAbsent || syncId != null) {
+      map['sync_id'] = Variable<String>(syncId);
     }
     return map;
   }
@@ -301,6 +324,8 @@ class Session extends DataClass implements Insertable<Session> {
       rpeScore: rpeScore == null && nullToAbsent
           ? const Value.absent()
           : Value(rpeScore),
+      syncId:
+          syncId == null && nullToAbsent ? const Value.absent() : Value(syncId),
     );
   }
 
@@ -320,6 +345,7 @@ class Session extends DataClass implements Insertable<Session> {
       hrMin: serializer.fromJson<int?>(json['hrMin']),
       hrAvg: serializer.fromJson<int?>(json['hrAvg']),
       rpeScore: serializer.fromJson<int?>(json['rpeScore']),
+      syncId: serializer.fromJson<String?>(json['syncId']),
     );
   }
   @override
@@ -338,6 +364,7 @@ class Session extends DataClass implements Insertable<Session> {
       'hrMin': serializer.toJson<int?>(hrMin),
       'hrAvg': serializer.toJson<int?>(hrAvg),
       'rpeScore': serializer.toJson<int?>(rpeScore),
+      'syncId': serializer.toJson<String?>(syncId),
     };
   }
 
@@ -353,7 +380,8 @@ class Session extends DataClass implements Insertable<Session> {
           Value<int?> spo2Avg = const Value.absent(),
           Value<int?> hrMin = const Value.absent(),
           Value<int?> hrAvg = const Value.absent(),
-          Value<int?> rpeScore = const Value.absent()}) =>
+          Value<int?> rpeScore = const Value.absent(),
+          Value<String?> syncId = const Value.absent()}) =>
       Session(
         id: id ?? this.id,
         timestamp: timestamp ?? this.timestamp,
@@ -367,6 +395,7 @@ class Session extends DataClass implements Insertable<Session> {
         hrMin: hrMin.present ? hrMin.value : this.hrMin,
         hrAvg: hrAvg.present ? hrAvg.value : this.hrAvg,
         rpeScore: rpeScore.present ? rpeScore.value : this.rpeScore,
+        syncId: syncId.present ? syncId.value : this.syncId,
       );
   Session copyWithCompanion(SessionsCompanion data) {
     return Session(
@@ -385,6 +414,7 @@ class Session extends DataClass implements Insertable<Session> {
       hrMin: data.hrMin.present ? data.hrMin.value : this.hrMin,
       hrAvg: data.hrAvg.present ? data.hrAvg.value : this.hrAvg,
       rpeScore: data.rpeScore.present ? data.rpeScore.value : this.rpeScore,
+      syncId: data.syncId.present ? data.syncId.value : this.syncId,
     );
   }
 
@@ -402,14 +432,15 @@ class Session extends DataClass implements Insertable<Session> {
           ..write('spo2Avg: $spo2Avg, ')
           ..write('hrMin: $hrMin, ')
           ..write('hrAvg: $hrAvg, ')
-          ..write('rpeScore: $rpeScore')
+          ..write('rpeScore: $rpeScore, ')
+          ..write('syncId: $syncId')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode => Object.hash(id, timestamp, levelKey, durationSec, rounds,
-      retentionSec, xpEarned, spo2Min, spo2Avg, hrMin, hrAvg, rpeScore);
+      retentionSec, xpEarned, spo2Min, spo2Avg, hrMin, hrAvg, rpeScore, syncId);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -425,7 +456,8 @@ class Session extends DataClass implements Insertable<Session> {
           other.spo2Avg == this.spo2Avg &&
           other.hrMin == this.hrMin &&
           other.hrAvg == this.hrAvg &&
-          other.rpeScore == this.rpeScore);
+          other.rpeScore == this.rpeScore &&
+          other.syncId == this.syncId);
 }
 
 class SessionsCompanion extends UpdateCompanion<Session> {
@@ -441,6 +473,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
   final Value<int?> hrMin;
   final Value<int?> hrAvg;
   final Value<int?> rpeScore;
+  final Value<String?> syncId;
   const SessionsCompanion({
     this.id = const Value.absent(),
     this.timestamp = const Value.absent(),
@@ -454,6 +487,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     this.hrMin = const Value.absent(),
     this.hrAvg = const Value.absent(),
     this.rpeScore = const Value.absent(),
+    this.syncId = const Value.absent(),
   });
   SessionsCompanion.insert({
     this.id = const Value.absent(),
@@ -468,6 +502,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     this.hrMin = const Value.absent(),
     this.hrAvg = const Value.absent(),
     this.rpeScore = const Value.absent(),
+    this.syncId = const Value.absent(),
   })  : timestamp = Value(timestamp),
         levelKey = Value(levelKey),
         durationSec = Value(durationSec),
@@ -485,6 +520,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     Expression<int>? hrMin,
     Expression<int>? hrAvg,
     Expression<int>? rpeScore,
+    Expression<String>? syncId,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -499,6 +535,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
       if (hrMin != null) 'hr_min': hrMin,
       if (hrAvg != null) 'hr_avg': hrAvg,
       if (rpeScore != null) 'rpe_score': rpeScore,
+      if (syncId != null) 'sync_id': syncId,
     });
   }
 
@@ -514,7 +551,8 @@ class SessionsCompanion extends UpdateCompanion<Session> {
       Value<int?>? spo2Avg,
       Value<int?>? hrMin,
       Value<int?>? hrAvg,
-      Value<int?>? rpeScore}) {
+      Value<int?>? rpeScore,
+      Value<String?>? syncId}) {
     return SessionsCompanion(
       id: id ?? this.id,
       timestamp: timestamp ?? this.timestamp,
@@ -528,6 +566,7 @@ class SessionsCompanion extends UpdateCompanion<Session> {
       hrMin: hrMin ?? this.hrMin,
       hrAvg: hrAvg ?? this.hrAvg,
       rpeScore: rpeScore ?? this.rpeScore,
+      syncId: syncId ?? this.syncId,
     );
   }
 
@@ -570,6 +609,9 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     if (rpeScore.present) {
       map['rpe_score'] = Variable<int>(rpeScore.value);
     }
+    if (syncId.present) {
+      map['sync_id'] = Variable<String>(syncId.value);
+    }
     return map;
   }
 
@@ -587,7 +629,8 @@ class SessionsCompanion extends UpdateCompanion<Session> {
           ..write('spo2Avg: $spo2Avg, ')
           ..write('hrMin: $hrMin, ')
           ..write('hrAvg: $hrAvg, ')
-          ..write('rpeScore: $rpeScore')
+          ..write('rpeScore: $rpeScore, ')
+          ..write('syncId: $syncId')
           ..write(')'))
         .toString();
   }
@@ -1469,6 +1512,17 @@ class $CustomPresetsTable extends CustomPresets
   late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
       'created_at', aliasedName, false,
       type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _syncIdMeta = const VerificationMeta('syncId');
+  @override
+  late final GeneratedColumn<String> syncId = GeneratedColumn<String>(
+      'sync_id', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _deletedAtMeta =
+      const VerificationMeta('deletedAt');
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+      'deleted_at', aliasedName, true,
+      type: DriftSqlType.dateTime, requiredDuringInsert: false);
   @override
   List<GeneratedColumn> get $columns => [
         id,
@@ -1479,7 +1533,9 @@ class $CustomPresetsTable extends CustomPresets
         holdOutSec,
         cycles,
         rounds,
-        createdAt
+        createdAt,
+        syncId,
+        deletedAt
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1538,6 +1594,14 @@ class $CustomPresetsTable extends CustomPresets
     } else if (isInserting) {
       context.missing(_createdAtMeta);
     }
+    if (data.containsKey('sync_id')) {
+      context.handle(_syncIdMeta,
+          syncId.isAcceptableOrUnknown(data['sync_id']!, _syncIdMeta));
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(_deletedAtMeta,
+          deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta));
+    }
     return context;
   }
 
@@ -1565,6 +1629,10 @@ class $CustomPresetsTable extends CustomPresets
           .read(DriftSqlType.int, data['${effectivePrefix}rounds'])!,
       createdAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+      syncId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}sync_id']),
+      deletedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}deleted_at']),
     );
   }
 
@@ -1584,6 +1652,15 @@ class CustomPreset extends DataClass implements Insertable<CustomPreset> {
   final int cycles;
   final int rounds;
   final DateTime createdAt;
+
+  /// See [Sessions.syncId].
+  final String? syncId;
+
+  /// Soft-delete marker: set instead of a real row delete so a deletion on
+  /// one device propagates to others on next sync, rather than the server's
+  /// still-active copy silently reappearing here. Rows with this set are
+  /// filtered out of [CustomPresetRepository.watchPresets].
+  final DateTime? deletedAt;
   const CustomPreset(
       {required this.id,
       required this.name,
@@ -1593,7 +1670,9 @@ class CustomPreset extends DataClass implements Insertable<CustomPreset> {
       required this.holdOutSec,
       required this.cycles,
       required this.rounds,
-      required this.createdAt});
+      required this.createdAt,
+      this.syncId,
+      this.deletedAt});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -1606,6 +1685,12 @@ class CustomPreset extends DataClass implements Insertable<CustomPreset> {
     map['cycles'] = Variable<int>(cycles);
     map['rounds'] = Variable<int>(rounds);
     map['created_at'] = Variable<DateTime>(createdAt);
+    if (!nullToAbsent || syncId != null) {
+      map['sync_id'] = Variable<String>(syncId);
+    }
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
     return map;
   }
 
@@ -1620,6 +1705,11 @@ class CustomPreset extends DataClass implements Insertable<CustomPreset> {
       cycles: Value(cycles),
       rounds: Value(rounds),
       createdAt: Value(createdAt),
+      syncId:
+          syncId == null && nullToAbsent ? const Value.absent() : Value(syncId),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
     );
   }
 
@@ -1636,6 +1726,8 @@ class CustomPreset extends DataClass implements Insertable<CustomPreset> {
       cycles: serializer.fromJson<int>(json['cycles']),
       rounds: serializer.fromJson<int>(json['rounds']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      syncId: serializer.fromJson<String?>(json['syncId']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
     );
   }
   @override
@@ -1651,6 +1743,8 @@ class CustomPreset extends DataClass implements Insertable<CustomPreset> {
       'cycles': serializer.toJson<int>(cycles),
       'rounds': serializer.toJson<int>(rounds),
       'createdAt': serializer.toJson<DateTime>(createdAt),
+      'syncId': serializer.toJson<String?>(syncId),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
     };
   }
 
@@ -1663,7 +1757,9 @@ class CustomPreset extends DataClass implements Insertable<CustomPreset> {
           int? holdOutSec,
           int? cycles,
           int? rounds,
-          DateTime? createdAt}) =>
+          DateTime? createdAt,
+          Value<String?> syncId = const Value.absent(),
+          Value<DateTime?> deletedAt = const Value.absent()}) =>
       CustomPreset(
         id: id ?? this.id,
         name: name ?? this.name,
@@ -1674,6 +1770,8 @@ class CustomPreset extends DataClass implements Insertable<CustomPreset> {
         cycles: cycles ?? this.cycles,
         rounds: rounds ?? this.rounds,
         createdAt: createdAt ?? this.createdAt,
+        syncId: syncId.present ? syncId.value : this.syncId,
+        deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
       );
   CustomPreset copyWithCompanion(CustomPresetsCompanion data) {
     return CustomPreset(
@@ -1687,6 +1785,8 @@ class CustomPreset extends DataClass implements Insertable<CustomPreset> {
       cycles: data.cycles.present ? data.cycles.value : this.cycles,
       rounds: data.rounds.present ? data.rounds.value : this.rounds,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      syncId: data.syncId.present ? data.syncId.value : this.syncId,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
     );
   }
 
@@ -1701,14 +1801,16 @@ class CustomPreset extends DataClass implements Insertable<CustomPreset> {
           ..write('holdOutSec: $holdOutSec, ')
           ..write('cycles: $cycles, ')
           ..write('rounds: $rounds, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('syncId: $syncId, ')
+          ..write('deletedAt: $deletedAt')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode => Object.hash(id, name, inhaleSec, holdInSec, exhaleSec,
-      holdOutSec, cycles, rounds, createdAt);
+      holdOutSec, cycles, rounds, createdAt, syncId, deletedAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1721,7 +1823,9 @@ class CustomPreset extends DataClass implements Insertable<CustomPreset> {
           other.holdOutSec == this.holdOutSec &&
           other.cycles == this.cycles &&
           other.rounds == this.rounds &&
-          other.createdAt == this.createdAt);
+          other.createdAt == this.createdAt &&
+          other.syncId == this.syncId &&
+          other.deletedAt == this.deletedAt);
 }
 
 class CustomPresetsCompanion extends UpdateCompanion<CustomPreset> {
@@ -1734,6 +1838,8 @@ class CustomPresetsCompanion extends UpdateCompanion<CustomPreset> {
   final Value<int> cycles;
   final Value<int> rounds;
   final Value<DateTime> createdAt;
+  final Value<String?> syncId;
+  final Value<DateTime?> deletedAt;
   const CustomPresetsCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
@@ -1744,6 +1850,8 @@ class CustomPresetsCompanion extends UpdateCompanion<CustomPreset> {
     this.cycles = const Value.absent(),
     this.rounds = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.syncId = const Value.absent(),
+    this.deletedAt = const Value.absent(),
   });
   CustomPresetsCompanion.insert({
     this.id = const Value.absent(),
@@ -1755,6 +1863,8 @@ class CustomPresetsCompanion extends UpdateCompanion<CustomPreset> {
     this.cycles = const Value.absent(),
     this.rounds = const Value.absent(),
     required DateTime createdAt,
+    this.syncId = const Value.absent(),
+    this.deletedAt = const Value.absent(),
   })  : name = Value(name),
         inhaleSec = Value(inhaleSec),
         exhaleSec = Value(exhaleSec),
@@ -1769,6 +1879,8 @@ class CustomPresetsCompanion extends UpdateCompanion<CustomPreset> {
     Expression<int>? cycles,
     Expression<int>? rounds,
     Expression<DateTime>? createdAt,
+    Expression<String>? syncId,
+    Expression<DateTime>? deletedAt,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1780,6 +1892,8 @@ class CustomPresetsCompanion extends UpdateCompanion<CustomPreset> {
       if (cycles != null) 'cycles': cycles,
       if (rounds != null) 'rounds': rounds,
       if (createdAt != null) 'created_at': createdAt,
+      if (syncId != null) 'sync_id': syncId,
+      if (deletedAt != null) 'deleted_at': deletedAt,
     });
   }
 
@@ -1792,7 +1906,9 @@ class CustomPresetsCompanion extends UpdateCompanion<CustomPreset> {
       Value<int>? holdOutSec,
       Value<int>? cycles,
       Value<int>? rounds,
-      Value<DateTime>? createdAt}) {
+      Value<DateTime>? createdAt,
+      Value<String?>? syncId,
+      Value<DateTime?>? deletedAt}) {
     return CustomPresetsCompanion(
       id: id ?? this.id,
       name: name ?? this.name,
@@ -1803,6 +1919,8 @@ class CustomPresetsCompanion extends UpdateCompanion<CustomPreset> {
       cycles: cycles ?? this.cycles,
       rounds: rounds ?? this.rounds,
       createdAt: createdAt ?? this.createdAt,
+      syncId: syncId ?? this.syncId,
+      deletedAt: deletedAt ?? this.deletedAt,
     );
   }
 
@@ -1836,6 +1954,12 @@ class CustomPresetsCompanion extends UpdateCompanion<CustomPreset> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (syncId.present) {
+      map['sync_id'] = Variable<String>(syncId.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
     return map;
   }
 
@@ -1850,7 +1974,9 @@ class CustomPresetsCompanion extends UpdateCompanion<CustomPreset> {
           ..write('holdOutSec: $holdOutSec, ')
           ..write('cycles: $cycles, ')
           ..write('rounds: $rounds, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('syncId: $syncId, ')
+          ..write('deletedAt: $deletedAt')
           ..write(')'))
         .toString();
   }
@@ -2418,6 +2544,11 @@ class $FreedivingSessionLogTable extends FreedivingSessionLog
   late final GeneratedColumn<String> symptomTag = GeneratedColumn<String>(
       'symptom_tag', aliasedName, true,
       type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _syncIdMeta = const VerificationMeta('syncId');
+  @override
+  late final GeneratedColumn<String> syncId = GeneratedColumn<String>(
+      'sync_id', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
   @override
   List<GeneratedColumn> get $columns => [
         id,
@@ -2429,7 +2560,8 @@ class $FreedivingSessionLogTable extends FreedivingSessionLog
         roundsJson,
         durationSec,
         rpeScore,
-        symptomTag
+        symptomTag,
+        syncId
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -2507,6 +2639,10 @@ class $FreedivingSessionLogTable extends FreedivingSessionLog
           symptomTag.isAcceptableOrUnknown(
               data['symptom_tag']!, _symptomTagMeta));
     }
+    if (data.containsKey('sync_id')) {
+      context.handle(_syncIdMeta,
+          syncId.isAcceptableOrUnknown(data['sync_id']!, _syncIdMeta));
+    }
     return context;
   }
 
@@ -2537,6 +2673,8 @@ class $FreedivingSessionLogTable extends FreedivingSessionLog
           .read(DriftSqlType.int, data['${effectivePrefix}rpe_score']),
       symptomTag: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}symptom_tag']),
+      syncId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}sync_id']),
     );
   }
 
@@ -2576,6 +2714,9 @@ class FreedivingSessionLogData extends DataClass
   /// so it's kept as its own field rather than folded into rpeScore, which
   /// only measures perceived effort.
   final String? symptomTag;
+
+  /// See [Sessions.syncId].
+  final String? syncId;
   const FreedivingSessionLogData(
       {required this.id,
       required this.timestamp,
@@ -2586,7 +2727,8 @@ class FreedivingSessionLogData extends DataClass
       required this.roundsJson,
       required this.durationSec,
       this.rpeScore,
-      this.symptomTag});
+      this.symptomTag,
+      this.syncId});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -2603,6 +2745,9 @@ class FreedivingSessionLogData extends DataClass
     }
     if (!nullToAbsent || symptomTag != null) {
       map['symptom_tag'] = Variable<String>(symptomTag);
+    }
+    if (!nullToAbsent || syncId != null) {
+      map['sync_id'] = Variable<String>(syncId);
     }
     return map;
   }
@@ -2623,6 +2768,8 @@ class FreedivingSessionLogData extends DataClass
       symptomTag: symptomTag == null && nullToAbsent
           ? const Value.absent()
           : Value(symptomTag),
+      syncId:
+          syncId == null && nullToAbsent ? const Value.absent() : Value(syncId),
     );
   }
 
@@ -2640,6 +2787,7 @@ class FreedivingSessionLogData extends DataClass
       durationSec: serializer.fromJson<int>(json['durationSec']),
       rpeScore: serializer.fromJson<int?>(json['rpeScore']),
       symptomTag: serializer.fromJson<String?>(json['symptomTag']),
+      syncId: serializer.fromJson<String?>(json['syncId']),
     );
   }
   @override
@@ -2656,6 +2804,7 @@ class FreedivingSessionLogData extends DataClass
       'durationSec': serializer.toJson<int>(durationSec),
       'rpeScore': serializer.toJson<int?>(rpeScore),
       'symptomTag': serializer.toJson<String?>(symptomTag),
+      'syncId': serializer.toJson<String?>(syncId),
     };
   }
 
@@ -2669,7 +2818,8 @@ class FreedivingSessionLogData extends DataClass
           String? roundsJson,
           int? durationSec,
           Value<int?> rpeScore = const Value.absent(),
-          Value<String?> symptomTag = const Value.absent()}) =>
+          Value<String?> symptomTag = const Value.absent(),
+          Value<String?> syncId = const Value.absent()}) =>
       FreedivingSessionLogData(
         id: id ?? this.id,
         timestamp: timestamp ?? this.timestamp,
@@ -2681,6 +2831,7 @@ class FreedivingSessionLogData extends DataClass
         durationSec: durationSec ?? this.durationSec,
         rpeScore: rpeScore.present ? rpeScore.value : this.rpeScore,
         symptomTag: symptomTag.present ? symptomTag.value : this.symptomTag,
+        syncId: syncId.present ? syncId.value : this.syncId,
       );
   FreedivingSessionLogData copyWithCompanion(
       FreedivingSessionLogCompanion data) {
@@ -2702,6 +2853,7 @@ class FreedivingSessionLogData extends DataClass
       rpeScore: data.rpeScore.present ? data.rpeScore.value : this.rpeScore,
       symptomTag:
           data.symptomTag.present ? data.symptomTag.value : this.symptomTag,
+      syncId: data.syncId.present ? data.syncId.value : this.syncId,
     );
   }
 
@@ -2717,7 +2869,8 @@ class FreedivingSessionLogData extends DataClass
           ..write('roundsJson: $roundsJson, ')
           ..write('durationSec: $durationSec, ')
           ..write('rpeScore: $rpeScore, ')
-          ..write('symptomTag: $symptomTag')
+          ..write('symptomTag: $symptomTag, ')
+          ..write('syncId: $syncId')
           ..write(')'))
         .toString();
   }
@@ -2733,7 +2886,8 @@ class FreedivingSessionLogData extends DataClass
       roundsJson,
       durationSec,
       rpeScore,
-      symptomTag);
+      symptomTag,
+      syncId);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -2747,7 +2901,8 @@ class FreedivingSessionLogData extends DataClass
           other.roundsJson == this.roundsJson &&
           other.durationSec == this.durationSec &&
           other.rpeScore == this.rpeScore &&
-          other.symptomTag == this.symptomTag);
+          other.symptomTag == this.symptomTag &&
+          other.syncId == this.syncId);
 }
 
 class FreedivingSessionLogCompanion
@@ -2762,6 +2917,7 @@ class FreedivingSessionLogCompanion
   final Value<int> durationSec;
   final Value<int?> rpeScore;
   final Value<String?> symptomTag;
+  final Value<String?> syncId;
   const FreedivingSessionLogCompanion({
     this.id = const Value.absent(),
     this.timestamp = const Value.absent(),
@@ -2773,6 +2929,7 @@ class FreedivingSessionLogCompanion
     this.durationSec = const Value.absent(),
     this.rpeScore = const Value.absent(),
     this.symptomTag = const Value.absent(),
+    this.syncId = const Value.absent(),
   });
   FreedivingSessionLogCompanion.insert({
     this.id = const Value.absent(),
@@ -2785,6 +2942,7 @@ class FreedivingSessionLogCompanion
     required int durationSec,
     this.rpeScore = const Value.absent(),
     this.symptomTag = const Value.absent(),
+    this.syncId = const Value.absent(),
   })  : timestamp = Value(timestamp),
         tableType = Value(tableType),
         pbUsedSec = Value(pbUsedSec),
@@ -2803,6 +2961,7 @@ class FreedivingSessionLogCompanion
     Expression<int>? durationSec,
     Expression<int>? rpeScore,
     Expression<String>? symptomTag,
+    Expression<String>? syncId,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -2815,6 +2974,7 @@ class FreedivingSessionLogCompanion
       if (durationSec != null) 'duration_sec': durationSec,
       if (rpeScore != null) 'rpe_score': rpeScore,
       if (symptomTag != null) 'symptom_tag': symptomTag,
+      if (syncId != null) 'sync_id': syncId,
     });
   }
 
@@ -2828,7 +2988,8 @@ class FreedivingSessionLogCompanion
       Value<String>? roundsJson,
       Value<int>? durationSec,
       Value<int?>? rpeScore,
-      Value<String?>? symptomTag}) {
+      Value<String?>? symptomTag,
+      Value<String?>? syncId}) {
     return FreedivingSessionLogCompanion(
       id: id ?? this.id,
       timestamp: timestamp ?? this.timestamp,
@@ -2840,6 +3001,7 @@ class FreedivingSessionLogCompanion
       durationSec: durationSec ?? this.durationSec,
       rpeScore: rpeScore ?? this.rpeScore,
       symptomTag: symptomTag ?? this.symptomTag,
+      syncId: syncId ?? this.syncId,
     );
   }
 
@@ -2876,6 +3038,9 @@ class FreedivingSessionLogCompanion
     if (symptomTag.present) {
       map['symptom_tag'] = Variable<String>(symptomTag.value);
     }
+    if (syncId.present) {
+      map['sync_id'] = Variable<String>(syncId.value);
+    }
     return map;
   }
 
@@ -2891,7 +3056,8 @@ class FreedivingSessionLogCompanion
           ..write('roundsJson: $roundsJson, ')
           ..write('durationSec: $durationSec, ')
           ..write('rpeScore: $rpeScore, ')
-          ..write('symptomTag: $symptomTag')
+          ..write('symptomTag: $symptomTag, ')
+          ..write('syncId: $syncId')
           ..write(')'))
         .toString();
   }
@@ -3191,6 +3357,17 @@ class $CustomFreedivingPresetsTable extends CustomFreedivingPresets
   late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
       'created_at', aliasedName, false,
       type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _syncIdMeta = const VerificationMeta('syncId');
+  @override
+  late final GeneratedColumn<String> syncId = GeneratedColumn<String>(
+      'sync_id', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _deletedAtMeta =
+      const VerificationMeta('deletedAt');
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+      'deleted_at', aliasedName, true,
+      type: DriftSqlType.dateTime, requiredDuringInsert: false);
   @override
   List<GeneratedColumn> get $columns => [
         id,
@@ -3200,7 +3377,9 @@ class $CustomFreedivingPresetsTable extends CustomFreedivingPresets
         startRestSec,
         endRestSec,
         rounds,
-        createdAt
+        createdAt,
+        syncId,
+        deletedAt
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -3266,6 +3445,14 @@ class $CustomFreedivingPresetsTable extends CustomFreedivingPresets
     } else if (isInserting) {
       context.missing(_createdAtMeta);
     }
+    if (data.containsKey('sync_id')) {
+      context.handle(_syncIdMeta,
+          syncId.isAcceptableOrUnknown(data['sync_id']!, _syncIdMeta));
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(_deletedAtMeta,
+          deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta));
+    }
     return context;
   }
 
@@ -3291,6 +3478,10 @@ class $CustomFreedivingPresetsTable extends CustomFreedivingPresets
           .read(DriftSqlType.int, data['${effectivePrefix}rounds'])!,
       createdAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+      syncId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}sync_id']),
+      deletedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}deleted_at']),
     );
   }
 
@@ -3310,6 +3501,12 @@ class CustomFreedivingPreset extends DataClass
   final int endRestSec;
   final int rounds;
   final DateTime createdAt;
+
+  /// See [Sessions.syncId].
+  final String? syncId;
+
+  /// See [CustomPresets.deletedAt].
+  final DateTime? deletedAt;
   const CustomFreedivingPreset(
       {required this.id,
       required this.name,
@@ -3318,7 +3515,9 @@ class CustomFreedivingPreset extends DataClass
       required this.startRestSec,
       required this.endRestSec,
       required this.rounds,
-      required this.createdAt});
+      required this.createdAt,
+      this.syncId,
+      this.deletedAt});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -3330,6 +3529,12 @@ class CustomFreedivingPreset extends DataClass
     map['end_rest_sec'] = Variable<int>(endRestSec);
     map['rounds'] = Variable<int>(rounds);
     map['created_at'] = Variable<DateTime>(createdAt);
+    if (!nullToAbsent || syncId != null) {
+      map['sync_id'] = Variable<String>(syncId);
+    }
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
     return map;
   }
 
@@ -3343,6 +3548,11 @@ class CustomFreedivingPreset extends DataClass
       endRestSec: Value(endRestSec),
       rounds: Value(rounds),
       createdAt: Value(createdAt),
+      syncId:
+          syncId == null && nullToAbsent ? const Value.absent() : Value(syncId),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
     );
   }
 
@@ -3358,6 +3568,8 @@ class CustomFreedivingPreset extends DataClass
       endRestSec: serializer.fromJson<int>(json['endRestSec']),
       rounds: serializer.fromJson<int>(json['rounds']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      syncId: serializer.fromJson<String?>(json['syncId']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
     );
   }
   @override
@@ -3372,6 +3584,8 @@ class CustomFreedivingPreset extends DataClass
       'endRestSec': serializer.toJson<int>(endRestSec),
       'rounds': serializer.toJson<int>(rounds),
       'createdAt': serializer.toJson<DateTime>(createdAt),
+      'syncId': serializer.toJson<String?>(syncId),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
     };
   }
 
@@ -3383,7 +3597,9 @@ class CustomFreedivingPreset extends DataClass
           int? startRestSec,
           int? endRestSec,
           int? rounds,
-          DateTime? createdAt}) =>
+          DateTime? createdAt,
+          Value<String?> syncId = const Value.absent(),
+          Value<DateTime?> deletedAt = const Value.absent()}) =>
       CustomFreedivingPreset(
         id: id ?? this.id,
         name: name ?? this.name,
@@ -3393,6 +3609,8 @@ class CustomFreedivingPreset extends DataClass
         endRestSec: endRestSec ?? this.endRestSec,
         rounds: rounds ?? this.rounds,
         createdAt: createdAt ?? this.createdAt,
+        syncId: syncId.present ? syncId.value : this.syncId,
+        deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
       );
   CustomFreedivingPreset copyWithCompanion(
       CustomFreedivingPresetsCompanion data) {
@@ -3411,6 +3629,8 @@ class CustomFreedivingPreset extends DataClass
           data.endRestSec.present ? data.endRestSec.value : this.endRestSec,
       rounds: data.rounds.present ? data.rounds.value : this.rounds,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      syncId: data.syncId.present ? data.syncId.value : this.syncId,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
     );
   }
 
@@ -3424,14 +3644,16 @@ class CustomFreedivingPreset extends DataClass
           ..write('startRestSec: $startRestSec, ')
           ..write('endRestSec: $endRestSec, ')
           ..write('rounds: $rounds, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('syncId: $syncId, ')
+          ..write('deletedAt: $deletedAt')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode => Object.hash(id, name, startApneaSec, endApneaSec,
-      startRestSec, endRestSec, rounds, createdAt);
+      startRestSec, endRestSec, rounds, createdAt, syncId, deletedAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -3443,7 +3665,9 @@ class CustomFreedivingPreset extends DataClass
           other.startRestSec == this.startRestSec &&
           other.endRestSec == this.endRestSec &&
           other.rounds == this.rounds &&
-          other.createdAt == this.createdAt);
+          other.createdAt == this.createdAt &&
+          other.syncId == this.syncId &&
+          other.deletedAt == this.deletedAt);
 }
 
 class CustomFreedivingPresetsCompanion
@@ -3456,6 +3680,8 @@ class CustomFreedivingPresetsCompanion
   final Value<int> endRestSec;
   final Value<int> rounds;
   final Value<DateTime> createdAt;
+  final Value<String?> syncId;
+  final Value<DateTime?> deletedAt;
   const CustomFreedivingPresetsCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
@@ -3465,6 +3691,8 @@ class CustomFreedivingPresetsCompanion
     this.endRestSec = const Value.absent(),
     this.rounds = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.syncId = const Value.absent(),
+    this.deletedAt = const Value.absent(),
   });
   CustomFreedivingPresetsCompanion.insert({
     this.id = const Value.absent(),
@@ -3475,6 +3703,8 @@ class CustomFreedivingPresetsCompanion
     required int endRestSec,
     required int rounds,
     required DateTime createdAt,
+    this.syncId = const Value.absent(),
+    this.deletedAt = const Value.absent(),
   })  : name = Value(name),
         startApneaSec = Value(startApneaSec),
         endApneaSec = Value(endApneaSec),
@@ -3491,6 +3721,8 @@ class CustomFreedivingPresetsCompanion
     Expression<int>? endRestSec,
     Expression<int>? rounds,
     Expression<DateTime>? createdAt,
+    Expression<String>? syncId,
+    Expression<DateTime>? deletedAt,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -3501,6 +3733,8 @@ class CustomFreedivingPresetsCompanion
       if (endRestSec != null) 'end_rest_sec': endRestSec,
       if (rounds != null) 'rounds': rounds,
       if (createdAt != null) 'created_at': createdAt,
+      if (syncId != null) 'sync_id': syncId,
+      if (deletedAt != null) 'deleted_at': deletedAt,
     });
   }
 
@@ -3512,7 +3746,9 @@ class CustomFreedivingPresetsCompanion
       Value<int>? startRestSec,
       Value<int>? endRestSec,
       Value<int>? rounds,
-      Value<DateTime>? createdAt}) {
+      Value<DateTime>? createdAt,
+      Value<String?>? syncId,
+      Value<DateTime?>? deletedAt}) {
     return CustomFreedivingPresetsCompanion(
       id: id ?? this.id,
       name: name ?? this.name,
@@ -3522,6 +3758,8 @@ class CustomFreedivingPresetsCompanion
       endRestSec: endRestSec ?? this.endRestSec,
       rounds: rounds ?? this.rounds,
       createdAt: createdAt ?? this.createdAt,
+      syncId: syncId ?? this.syncId,
+      deletedAt: deletedAt ?? this.deletedAt,
     );
   }
 
@@ -3552,6 +3790,12 @@ class CustomFreedivingPresetsCompanion
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (syncId.present) {
+      map['sync_id'] = Variable<String>(syncId.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
     return map;
   }
 
@@ -3565,7 +3809,9 @@ class CustomFreedivingPresetsCompanion
           ..write('startRestSec: $startRestSec, ')
           ..write('endRestSec: $endRestSec, ')
           ..write('rounds: $rounds, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('syncId: $syncId, ')
+          ..write('deletedAt: $deletedAt')
           ..write(')'))
         .toString();
   }
@@ -3617,6 +3863,7 @@ typedef $$SessionsTableCreateCompanionBuilder = SessionsCompanion Function({
   Value<int?> hrMin,
   Value<int?> hrAvg,
   Value<int?> rpeScore,
+  Value<String?> syncId,
 });
 typedef $$SessionsTableUpdateCompanionBuilder = SessionsCompanion Function({
   Value<int> id,
@@ -3631,6 +3878,7 @@ typedef $$SessionsTableUpdateCompanionBuilder = SessionsCompanion Function({
   Value<int?> hrMin,
   Value<int?> hrAvg,
   Value<int?> rpeScore,
+  Value<String?> syncId,
 });
 
 class $$SessionsTableFilterComposer
@@ -3677,6 +3925,9 @@ class $$SessionsTableFilterComposer
 
   ColumnFilters<int> get rpeScore => $composableBuilder(
       column: $table.rpeScore, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get syncId => $composableBuilder(
+      column: $table.syncId, builder: (column) => ColumnFilters(column));
 }
 
 class $$SessionsTableOrderingComposer
@@ -3724,6 +3975,9 @@ class $$SessionsTableOrderingComposer
 
   ColumnOrderings<int> get rpeScore => $composableBuilder(
       column: $table.rpeScore, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get syncId => $composableBuilder(
+      column: $table.syncId, builder: (column) => ColumnOrderings(column));
 }
 
 class $$SessionsTableAnnotationComposer
@@ -3770,6 +4024,9 @@ class $$SessionsTableAnnotationComposer
 
   GeneratedColumn<int> get rpeScore =>
       $composableBuilder(column: $table.rpeScore, builder: (column) => column);
+
+  GeneratedColumn<String> get syncId =>
+      $composableBuilder(column: $table.syncId, builder: (column) => column);
 }
 
 class $$SessionsTableTableManager extends RootTableManager<
@@ -3807,6 +4064,7 @@ class $$SessionsTableTableManager extends RootTableManager<
             Value<int?> hrMin = const Value.absent(),
             Value<int?> hrAvg = const Value.absent(),
             Value<int?> rpeScore = const Value.absent(),
+            Value<String?> syncId = const Value.absent(),
           }) =>
               SessionsCompanion(
             id: id,
@@ -3821,6 +4079,7 @@ class $$SessionsTableTableManager extends RootTableManager<
             hrMin: hrMin,
             hrAvg: hrAvg,
             rpeScore: rpeScore,
+            syncId: syncId,
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
@@ -3835,6 +4094,7 @@ class $$SessionsTableTableManager extends RootTableManager<
             Value<int?> hrMin = const Value.absent(),
             Value<int?> hrAvg = const Value.absent(),
             Value<int?> rpeScore = const Value.absent(),
+            Value<String?> syncId = const Value.absent(),
           }) =>
               SessionsCompanion.insert(
             id: id,
@@ -3849,6 +4109,7 @@ class $$SessionsTableTableManager extends RootTableManager<
             hrMin: hrMin,
             hrAvg: hrAvg,
             rpeScore: rpeScore,
+            syncId: syncId,
           ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -4343,6 +4604,8 @@ typedef $$CustomPresetsTableCreateCompanionBuilder = CustomPresetsCompanion
   Value<int> cycles,
   Value<int> rounds,
   required DateTime createdAt,
+  Value<String?> syncId,
+  Value<DateTime?> deletedAt,
 });
 typedef $$CustomPresetsTableUpdateCompanionBuilder = CustomPresetsCompanion
     Function({
@@ -4355,6 +4618,8 @@ typedef $$CustomPresetsTableUpdateCompanionBuilder = CustomPresetsCompanion
   Value<int> cycles,
   Value<int> rounds,
   Value<DateTime> createdAt,
+  Value<String?> syncId,
+  Value<DateTime?> deletedAt,
 });
 
 class $$CustomPresetsTableFilterComposer
@@ -4392,6 +4657,12 @@ class $$CustomPresetsTableFilterComposer
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get syncId => $composableBuilder(
+      column: $table.syncId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+      column: $table.deletedAt, builder: (column) => ColumnFilters(column));
 }
 
 class $$CustomPresetsTableOrderingComposer
@@ -4429,6 +4700,12 @@ class $$CustomPresetsTableOrderingComposer
 
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get syncId => $composableBuilder(
+      column: $table.syncId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+      column: $table.deletedAt, builder: (column) => ColumnOrderings(column));
 }
 
 class $$CustomPresetsTableAnnotationComposer
@@ -4466,6 +4743,12 @@ class $$CustomPresetsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<String> get syncId =>
+      $composableBuilder(column: $table.syncId, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
 }
 
 class $$CustomPresetsTableTableManager extends RootTableManager<
@@ -4503,6 +4786,8 @@ class $$CustomPresetsTableTableManager extends RootTableManager<
             Value<int> cycles = const Value.absent(),
             Value<int> rounds = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
+            Value<String?> syncId = const Value.absent(),
+            Value<DateTime?> deletedAt = const Value.absent(),
           }) =>
               CustomPresetsCompanion(
             id: id,
@@ -4514,6 +4799,8 @@ class $$CustomPresetsTableTableManager extends RootTableManager<
             cycles: cycles,
             rounds: rounds,
             createdAt: createdAt,
+            syncId: syncId,
+            deletedAt: deletedAt,
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
@@ -4525,6 +4812,8 @@ class $$CustomPresetsTableTableManager extends RootTableManager<
             Value<int> cycles = const Value.absent(),
             Value<int> rounds = const Value.absent(),
             required DateTime createdAt,
+            Value<String?> syncId = const Value.absent(),
+            Value<DateTime?> deletedAt = const Value.absent(),
           }) =>
               CustomPresetsCompanion.insert(
             id: id,
@@ -4536,6 +4825,8 @@ class $$CustomPresetsTableTableManager extends RootTableManager<
             cycles: cycles,
             rounds: rounds,
             createdAt: createdAt,
+            syncId: syncId,
+            deletedAt: deletedAt,
           ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -4799,6 +5090,7 @@ typedef $$FreedivingSessionLogTableCreateCompanionBuilder
   required int durationSec,
   Value<int?> rpeScore,
   Value<String?> symptomTag,
+  Value<String?> syncId,
 });
 typedef $$FreedivingSessionLogTableUpdateCompanionBuilder
     = FreedivingSessionLogCompanion Function({
@@ -4812,6 +5104,7 @@ typedef $$FreedivingSessionLogTableUpdateCompanionBuilder
   Value<int> durationSec,
   Value<int?> rpeScore,
   Value<String?> symptomTag,
+  Value<String?> syncId,
 });
 
 class $$FreedivingSessionLogTableFilterComposer
@@ -4853,6 +5146,9 @@ class $$FreedivingSessionLogTableFilterComposer
 
   ColumnFilters<String> get symptomTag => $composableBuilder(
       column: $table.symptomTag, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get syncId => $composableBuilder(
+      column: $table.syncId, builder: (column) => ColumnFilters(column));
 }
 
 class $$FreedivingSessionLogTableOrderingComposer
@@ -4895,6 +5191,9 @@ class $$FreedivingSessionLogTableOrderingComposer
 
   ColumnOrderings<String> get symptomTag => $composableBuilder(
       column: $table.symptomTag, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get syncId => $composableBuilder(
+      column: $table.syncId, builder: (column) => ColumnOrderings(column));
 }
 
 class $$FreedivingSessionLogTableAnnotationComposer
@@ -4935,6 +5234,9 @@ class $$FreedivingSessionLogTableAnnotationComposer
 
   GeneratedColumn<String> get symptomTag => $composableBuilder(
       column: $table.symptomTag, builder: (column) => column);
+
+  GeneratedColumn<String> get syncId =>
+      $composableBuilder(column: $table.syncId, builder: (column) => column);
 }
 
 class $$FreedivingSessionLogTableTableManager extends RootTableManager<
@@ -4977,6 +5279,7 @@ class $$FreedivingSessionLogTableTableManager extends RootTableManager<
             Value<int> durationSec = const Value.absent(),
             Value<int?> rpeScore = const Value.absent(),
             Value<String?> symptomTag = const Value.absent(),
+            Value<String?> syncId = const Value.absent(),
           }) =>
               FreedivingSessionLogCompanion(
             id: id,
@@ -4989,6 +5292,7 @@ class $$FreedivingSessionLogTableTableManager extends RootTableManager<
             durationSec: durationSec,
             rpeScore: rpeScore,
             symptomTag: symptomTag,
+            syncId: syncId,
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
@@ -5001,6 +5305,7 @@ class $$FreedivingSessionLogTableTableManager extends RootTableManager<
             required int durationSec,
             Value<int?> rpeScore = const Value.absent(),
             Value<String?> symptomTag = const Value.absent(),
+            Value<String?> syncId = const Value.absent(),
           }) =>
               FreedivingSessionLogCompanion.insert(
             id: id,
@@ -5013,6 +5318,7 @@ class $$FreedivingSessionLogTableTableManager extends RootTableManager<
             durationSec: durationSec,
             rpeScore: rpeScore,
             symptomTag: symptomTag,
+            syncId: syncId,
           ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
@@ -5190,6 +5496,8 @@ typedef $$CustomFreedivingPresetsTableCreateCompanionBuilder
   required int endRestSec,
   required int rounds,
   required DateTime createdAt,
+  Value<String?> syncId,
+  Value<DateTime?> deletedAt,
 });
 typedef $$CustomFreedivingPresetsTableUpdateCompanionBuilder
     = CustomFreedivingPresetsCompanion Function({
@@ -5201,6 +5509,8 @@ typedef $$CustomFreedivingPresetsTableUpdateCompanionBuilder
   Value<int> endRestSec,
   Value<int> rounds,
   Value<DateTime> createdAt,
+  Value<String?> syncId,
+  Value<DateTime?> deletedAt,
 });
 
 class $$CustomFreedivingPresetsTableFilterComposer
@@ -5235,6 +5545,12 @@ class $$CustomFreedivingPresetsTableFilterComposer
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get syncId => $composableBuilder(
+      column: $table.syncId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+      column: $table.deletedAt, builder: (column) => ColumnFilters(column));
 }
 
 class $$CustomFreedivingPresetsTableOrderingComposer
@@ -5271,6 +5587,12 @@ class $$CustomFreedivingPresetsTableOrderingComposer
 
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get syncId => $composableBuilder(
+      column: $table.syncId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+      column: $table.deletedAt, builder: (column) => ColumnOrderings(column));
 }
 
 class $$CustomFreedivingPresetsTableAnnotationComposer
@@ -5305,6 +5627,12 @@ class $$CustomFreedivingPresetsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<String> get syncId =>
+      $composableBuilder(column: $table.syncId, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
 }
 
 class $$CustomFreedivingPresetsTableTableManager extends RootTableManager<
@@ -5346,6 +5674,8 @@ class $$CustomFreedivingPresetsTableTableManager extends RootTableManager<
             Value<int> endRestSec = const Value.absent(),
             Value<int> rounds = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
+            Value<String?> syncId = const Value.absent(),
+            Value<DateTime?> deletedAt = const Value.absent(),
           }) =>
               CustomFreedivingPresetsCompanion(
             id: id,
@@ -5356,6 +5686,8 @@ class $$CustomFreedivingPresetsTableTableManager extends RootTableManager<
             endRestSec: endRestSec,
             rounds: rounds,
             createdAt: createdAt,
+            syncId: syncId,
+            deletedAt: deletedAt,
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
@@ -5366,6 +5698,8 @@ class $$CustomFreedivingPresetsTableTableManager extends RootTableManager<
             required int endRestSec,
             required int rounds,
             required DateTime createdAt,
+            Value<String?> syncId = const Value.absent(),
+            Value<DateTime?> deletedAt = const Value.absent(),
           }) =>
               CustomFreedivingPresetsCompanion.insert(
             id: id,
@@ -5376,6 +5710,8 @@ class $$CustomFreedivingPresetsTableTableManager extends RootTableManager<
             endRestSec: endRestSec,
             rounds: rounds,
             createdAt: createdAt,
+            syncId: syncId,
+            deletedAt: deletedAt,
           ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))

@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:okrutnik_breath/core/sync/profile_sync_marker.dart';
 import 'package:okrutnik_breath/data/db/database.dart';
 import 'package:okrutnik_breath/logic/wimhof/wimhof_progression.dart';
 
@@ -20,6 +21,34 @@ class WimHofRepository {
         );
     return (_db.select(_db.wimHofProgress)..where((t) => t.id.equals(id)))
         .getSingle();
+  }
+
+  /// Exposes the raw progress row — used by SyncService to read the current
+  /// ladder position for a ProfileState push.
+  Future<WimHofProgressData> getProgress() => _getOrCreate();
+
+  /// Overwrites the ladder position from a sync pull (the server already
+  /// decided this was the newer side of the last-write-wins comparison).
+  Future<void> applyFromSync({
+    required String currentLevelKey,
+    required DateTime? currentLevelSetAt,
+  }) async {
+    final progress = await _getOrCreate();
+    await (_db.update(_db.wimHofProgress)..where((t) => t.id.equals(progress.id)))
+        .write(WimHofProgressCompanion(
+      currentLevelKey: Value(currentLevelKey),
+      currentLevelSetAt: Value(currentLevelSetAt),
+    ));
+  }
+
+  /// Part of the "reset progress" flow.
+  Future<void> resetProgress() async {
+    final progress = await _getOrCreate();
+    await (_db.update(_db.wimHofProgress)..where((t) => t.id.equals(progress.id)))
+        .write(WimHofProgressCompanion(
+      currentLevelKey: const Value('mild'),
+      currentLevelSetAt: Value(DateTime.now()),
+    ));
   }
 
   Future<List<Session>> _allWimHofSessions() {
@@ -44,6 +73,7 @@ class WimHofRepository {
         currentLevelKey: Value(result.currentLevelKey),
         currentLevelSetAt: Value(DateTime.now()),
       ));
+      await ProfileSyncMarker.markChanged();
     }
     return result;
   }

@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:okrutnik_breath/core/notifications/notification_service.dart';
+import 'package:okrutnik_breath/core/sync/profile_sync_marker.dart';
 import 'package:okrutnik_breath/logic/path/weekly_plan.dart' show kAllWeekdays;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -139,7 +140,7 @@ class SettingsNotifier extends StateNotifier<Settings> {
       soundEnabled: p.getBool(_kSound) ?? true,
       hapticsEnabled: p.getBool(_kHaptics) ?? true,
       dailyReminderEnabled: p.getBool(_kDailyReminder) ?? false,
-      availableWeekdays: _weekdaysFromMask(p.getInt(_kAvailableWeekdaysMask)),
+      availableWeekdays: weekdaysFromMask(p.getInt(_kAvailableWeekdaysMask)),
       availableHourStart: p.getInt(_kAvailableHourStart) ?? 6,
       availableHourEnd: p.getInt(_kAvailableHourEnd) ?? 21,
       allowMultipleSessionsPerDay: p.getBool(_kAllowMultiplePerDay) ?? true,
@@ -147,13 +148,13 @@ class SettingsNotifier extends StateNotifier<Settings> {
     );
   }
 
-  static Set<int> _weekdaysFromMask(int? mask) {
+  static Set<int> weekdaysFromMask(int? mask) {
     if (mask == null) return kAllWeekdays;
     return {for (var weekday = 1; weekday <= 7; weekday++)
         if (mask & (1 << (weekday - 1)) != 0) weekday};
   }
 
-  static int _maskFromWeekdays(Set<int> weekdays) =>
+  static int maskFromWeekdays(Set<int> weekdays) =>
       weekdays.fold(0, (mask, weekday) => mask | (1 << (weekday - 1)));
 
   Future<void> setProfileName(String value) async {
@@ -186,10 +187,11 @@ class SettingsNotifier extends StateNotifier<Settings> {
       allowMultipleSessionsPerDay: allowMultipleSessionsPerDay,
     );
     final p = await SharedPreferences.getInstance();
-    await p.setInt(_kAvailableWeekdaysMask, _maskFromWeekdays(availableWeekdays));
+    await p.setInt(_kAvailableWeekdaysMask, maskFromWeekdays(availableWeekdays));
     await p.setInt(_kAvailableHourStart, availableHourStart);
     await p.setInt(_kAvailableHourEnd, availableHourEnd);
     await p.setBool(_kAllowMultiplePerDay, allowMultipleSessionsPerDay);
+    await ProfileSyncMarker.markChanged();
   }
 
   /// Marks the Freediving tab as visited at least once — a one-way flag,
@@ -218,6 +220,35 @@ class SettingsNotifier extends StateNotifier<Settings> {
     }
     state = state.copyWith(dailyReminderEnabled: value);
     (await SharedPreferences.getInstance()).setBool(_kDailyReminder, value);
+    await ProfileSyncMarker.markChanged();
+  }
+
+  /// Overwrites the ProfileState-relevant fields from a sync pull (the
+  /// server already decided this was the newer side of the last-write-wins
+  /// comparison). Deliberately doesn't touch the OS-level alarm the way
+  /// [setDailyReminderEnabled] does — this only reconciles the stored
+  /// preference; the alarm itself catches up next time a session finishes or
+  /// the user opens Settings (see SessionNotifier.refreshDailyReminderContent).
+  Future<void> applyProfileStateFromSync({
+    required Set<int> availableWeekdays,
+    required int availableHourStart,
+    required int availableHourEnd,
+    required bool allowMultipleSessionsPerDay,
+    required bool dailyReminderEnabled,
+  }) async {
+    state = state.copyWith(
+      availableWeekdays: availableWeekdays,
+      availableHourStart: availableHourStart,
+      availableHourEnd: availableHourEnd,
+      allowMultipleSessionsPerDay: allowMultipleSessionsPerDay,
+      dailyReminderEnabled: dailyReminderEnabled,
+    );
+    final p = await SharedPreferences.getInstance();
+    await p.setInt(_kAvailableWeekdaysMask, maskFromWeekdays(availableWeekdays));
+    await p.setInt(_kAvailableHourStart, availableHourStart);
+    await p.setInt(_kAvailableHourEnd, availableHourEnd);
+    await p.setBool(_kAllowMultiplePerDay, allowMultipleSessionsPerDay);
+    await p.setBool(_kDailyReminder, dailyReminderEnabled);
   }
 }
 

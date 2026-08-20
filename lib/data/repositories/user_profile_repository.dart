@@ -30,6 +30,14 @@ class UserProfileRepository {
   Future<void> updateUserProfile(UserProfileCompanion entry) async {
     await (_db.update(_db.userProfile)..where((tbl) => tbl.id.equals(1))).write(entry);
   }
+
+  /// Part of the "reset progress" flow.
+  Future<void> resetProgress() => updateUserProfile(const UserProfileCompanion(
+        level: Value(1),
+        totalXp: Value(0),
+        dailyStreak: Value(0),
+        lastSessionDate: Value(null),
+      ));
 }
 
 // Provider for the repository will be added later.

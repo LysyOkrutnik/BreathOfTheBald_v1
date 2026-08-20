@@ -1,14 +1,23 @@
+import 'dart:async';
+
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/responsive.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
+import 'package:okrutnik_breath/core/sync/auth_service.dart';
+import 'package:okrutnik_breath/core/sync/push_registration.dart';
+import 'package:okrutnik_breath/core/sync/sync_api_client.dart';
+import 'package:okrutnik_breath/core/sync/sync_service.dart';
 import 'package:okrutnik_breath/logic/providers/app_info_provider.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/logic/providers/locale_provider.dart';
 import 'package:okrutnik_breath/logic/providers/settings_provider.dart';
+import 'package:okrutnik_breath/logic/providers/sync_providers.dart';
 import 'package:okrutnik_breath/ui/screens/instruction_screen.dart';
 import 'package:okrutnik_breath/ui/screens/privacy_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
@@ -57,6 +66,10 @@ class SettingsScreen extends ConsumerWidget {
                             onEdit: () => _editName(context, ref, settings.profileName),
                           ),
                           const SizedBox(height: AppSpacing.xl),
+
+                          _SectionHeader(L10n.get(context, 'settings_section_account')),
+                          const _AccountSection(),
+                          const SizedBox(height: AppSpacing.lg),
 
                           _SectionHeader(L10n.get(context, 'settings_section_reminders')),
                           _Group(children: [
@@ -160,6 +173,19 @@ class SettingsScreen extends ConsumerWidget {
                                   style: const TextStyle(color: AppTheme.textDim)),
                             ),
                           ]),
+                          const SizedBox(height: AppSpacing.lg),
+
+                          _SectionHeader(L10n.get(context, 'settings_section_danger')),
+                          _Group(children: [
+                            _Tile(
+                              icon: Icons.restart_alt_rounded,
+                              title: L10n.get(context, 'settings_reset_progress'),
+                              color: AppTheme.danger,
+                              trailing: Icon(Icons.chevron_right_rounded,
+                                  color: AppTheme.danger.withAlpha(160)),
+                              onTap: () => _resetProgress(context, ref),
+                            ),
+                          ]),
                         ].animate(interval: 50.ms).fadeIn(duration: AppMotion.medium),
                       ),
                     ),
@@ -216,6 +242,72 @@ class SettingsScreen extends ConsumerWidget {
     if (!launched && context.mounted) {
       messenger.showSnackBar(
           SnackBar(content: Text(L10n.get(context, 'settings_contact_failed'))));
+    }
+  }
+
+  /// Wipes Sessions/FreedivingSessionLog and resets level/XP/streak, PB, and
+  /// the Wim Hof ladder back to their starting state — a fresh start, not a
+  /// logout. Custom presets (user-authored content, not progress) and the
+  /// freediving safety consent (a one-time acknowledgment, not progress)
+  /// are deliberately left untouched.
+  Future<void> _resetProgress(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showGlassDialog<bool>(
+      context,
+      builder: (dialogContext) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.warning_amber_rounded, color: AppTheme.danger, size: 34),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            L10n.get(context, 'settings_reset_progress_confirm_title'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.w300,
+              letterSpacing: 2.0,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            L10n.get(context, 'settings_reset_progress_confirm_body'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white54, fontSize: 13, height: 1.4),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Row(
+            children: [
+              Expanded(
+                child: TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: Text(L10n.get(context, 'common_cancel'),
+                      style: const TextStyle(color: Colors.white70)),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: Text(L10n.get(context, 'settings_reset_progress_confirm_yes'),
+                      style: const TextStyle(color: Colors.white)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    await ref.read(sessionRepositoryProvider).deleteAll();
+    await ref.read(freedivingRepositoryProvider).resetProgress();
+    await ref.read(userProfileRepositoryProvider).resetProgress();
+    await ref.read(wimHofRepositoryProvider).resetProgress();
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(L10n.get(context, 'settings_reset_progress_done'))));
     }
   }
 
@@ -316,6 +408,604 @@ class _NameEditDialogState extends State<_NameEditDialog> {
             ),
           ],
         ),
+      ],
+    );
+  }
+}
+
+/// Registration/login + sync controls. Deliberately its own small state
+/// machine (logged-in-ness and last-synced time are read from secure
+/// storage / SharedPreferences, not the reactive Settings state) rather than
+/// threading auth state through the whole app — only this section needs it.
+class _AccountSection extends ConsumerStatefulWidget {
+  const _AccountSection();
+
+  @override
+  ConsumerState<_AccountSection> createState() => _AccountSectionState();
+}
+
+class _AccountSectionState extends ConsumerState<_AccountSection> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+
+  // A deliberately simple format check — good enough to catch typos before
+  // a round trip to the server, not a full RFC 5322 validator.
+  static final _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+  static const _minPasswordLength = 8;
+
+  bool _loading = false;
+  // Which button is actually in flight — without this, both Register and
+  // Login disable together (correct), but the spinner used to be hardcoded
+  // to the Login button regardless of which one the user actually pressed.
+  bool _registering = false;
+  String? _errorKey;
+
+  bool? _isLoggedIn;
+  DateTime? _lastSyncedAt;
+  String? _loggedInEmail;
+  bool _emailVerified = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshState();
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _refreshState() async {
+    final authService = ref.read(authServiceProvider);
+    final loggedIn = await authService.isLoggedIn;
+    final loggedInEmail = await authService.email;
+    final emailVerified = await authService.emailVerified;
+    final lastSync = await ref.read(syncServiceProvider).lastSyncedAt;
+    if (!mounted) return;
+    setState(() {
+      _isLoggedIn = loggedIn;
+      _loggedInEmail = loggedInEmail;
+      _emailVerified = emailVerified;
+      _lastSyncedAt = lastSync;
+    });
+  }
+
+  String _errorKeyFor(AuthErrorCode code) => switch (code) {
+        AuthErrorCode.invalidInput => 'account_error_invalid_input',
+        AuthErrorCode.emailTaken => 'account_error_email_taken',
+        AuthErrorCode.invalidCredentials => 'account_error_invalid_credentials',
+        AuthErrorCode.tooManyAttempts => 'account_error_too_many_attempts',
+        AuthErrorCode.invalidOrExpiredToken => 'account_error_invalid_or_expired_token',
+        AuthErrorCode.network => 'account_error_network',
+        AuthErrorCode.unknown => 'account_error_unknown',
+      };
+
+  /// Checked before ever making a request — a malformed email or a password
+  /// under the server's own minimum used to only get caught after a round
+  /// trip, with the "min. 8 characters" hint being just a claim rather than
+  /// something actually enforced client-side.
+  String? _validationErrorKey() {
+    final email = _emailController.text.trim();
+    if (!_emailPattern.hasMatch(email)) return 'account_error_invalid_email_format';
+    if (_passwordController.text.length < _minPasswordLength) return 'account_error_password_too_short';
+    return null;
+  }
+
+  Future<void> _submit({required bool isRegister}) async {
+    final validationError = _validationErrorKey();
+    if (validationError != null) {
+      setState(() => _errorKey = validationError);
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _registering = isRegister;
+      _errorKey = null;
+    });
+    final auth = ref.read(authServiceProvider);
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    final result = isRegister
+        ? await auth.register(email: email, password: password)
+        : await auth.login(email: email, password: password);
+    if (!mounted) return;
+
+    if (!result.success) {
+      setState(() {
+        _loading = false;
+        _errorKey = _errorKeyFor(result.errorCode!);
+      });
+      return;
+    }
+
+    _passwordController.clear();
+    // Best-effort, doesn't block the login flow either way.
+    unawaited(registerPushToken(ref.read(syncApiClientProvider)));
+    await _sync();
+  }
+
+  Future<void> _sync() async {
+    setState(() {
+      _loading = true;
+      _errorKey = null;
+    });
+    final result = await ref.read(syncServiceProvider).syncNow();
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final message = L10n.get(context, switch (result.outcome) {
+      SyncOutcome.success => 'account_sync_success',
+      SyncOutcome.authExpired => 'account_sync_auth_expired',
+      _ => 'account_sync_failed',
+    });
+
+    await _refreshState();
+    if (!mounted) return;
+    setState(() => _loading = false);
+    messenger.showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _logout() async {
+    // Best-effort: stop push targeting this device before the token that
+    // authorizes the unregister call itself is gone.
+    try {
+      final fcmToken = await FirebaseMessaging.instance.getToken();
+      if (fcmToken != null) {
+        await ref.read(syncApiClientProvider).unregisterDevice(fcmToken);
+      }
+    } catch (_) {
+      // Not fatal — logging out locally still happens either way.
+    }
+    await ref.read(authServiceProvider).logout();
+    await _refreshState();
+  }
+
+  Future<void> _resendVerification(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    String resultKey;
+    try {
+      await ref.read(syncApiClientProvider).resendVerificationEmail();
+      resultKey = 'account_verification_sent';
+    } catch (_) {
+      resultKey = 'account_error_network';
+    }
+    if (!context.mounted) return;
+    messenger.showSnackBar(SnackBar(content: Text(L10n.get(context, resultKey))));
+  }
+
+  Future<void> _showForgotPasswordDialog(BuildContext context) async {
+    final controller = TextEditingController(text: _emailController.text.trim());
+    final email = await showGlassDialog<String>(
+      context,
+      builder: (dialogContext) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(L10n.get(context, 'account_forgot_password_title'),
+              style: const TextStyle(
+                  color: AppTheme.textLight, fontSize: 16, fontWeight: FontWeight.w600)),
+          const SizedBox(height: AppSpacing.sm),
+          Text(L10n.get(context, 'account_forgot_password_body'),
+              style: const TextStyle(color: AppTheme.textDim, fontSize: 12, height: 1.4)),
+          const SizedBox(height: AppSpacing.lg),
+          TextField(
+            controller: controller,
+            autofocus: true,
+            keyboardType: TextInputType.emailAddress,
+            style: const TextStyle(color: AppTheme.textLight),
+            cursorColor: AppTheme.primary,
+            decoration: InputDecoration(
+              hintText: L10n.get(context, 'account_email_hint'),
+              hintStyle: const TextStyle(color: AppTheme.textDim),
+              enabledBorder:
+                  const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+              focusedBorder:
+                  const UnderlineInputBorder(borderSide: BorderSide(color: AppTheme.primary)),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Row(
+            children: [
+              Expanded(
+                child: TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: Text(L10n.get(context, 'common_cancel'),
+                      style: const TextStyle(color: Colors.white70)),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(controller.text.trim()),
+                  child: Text(L10n.get(context, 'account_forgot_password_submit')),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (email == null || email.isEmpty || !context.mounted) return;
+    await ref.read(authServiceProvider).forgotPassword(email);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(L10n.get(context, 'account_forgot_password_sent'))));
+  }
+
+  Future<void> _showChangePasswordDialog(BuildContext context) async {
+    final currentController = TextEditingController();
+    final newController = TextEditingController();
+    String? errorKey;
+    final changed = await showGlassDialog<bool>(
+      context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(L10n.get(context, 'account_change_password_title'),
+                style: const TextStyle(
+                    color: AppTheme.textLight, fontSize: 16, fontWeight: FontWeight.w600)),
+            const SizedBox(height: AppSpacing.lg),
+            TextField(
+              controller: currentController,
+              autofocus: true,
+              obscureText: true,
+              style: const TextStyle(color: AppTheme.textLight),
+              cursorColor: AppTheme.primary,
+              decoration: InputDecoration(
+                hintText: L10n.get(context, 'account_current_password_hint'),
+                hintStyle: const TextStyle(color: AppTheme.textDim),
+                enabledBorder:
+                    const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                focusedBorder:
+                    const UnderlineInputBorder(borderSide: BorderSide(color: AppTheme.primary)),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: newController,
+              obscureText: true,
+              style: const TextStyle(color: AppTheme.textLight),
+              cursorColor: AppTheme.primary,
+              decoration: InputDecoration(
+                hintText: L10n.get(context, 'account_new_password_hint'),
+                hintStyle: const TextStyle(color: AppTheme.textDim),
+                enabledBorder:
+                    const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                focusedBorder:
+                    const UnderlineInputBorder(borderSide: BorderSide(color: AppTheme.primary)),
+              ),
+            ),
+            if (errorKey != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(L10n.get(context, errorKey!),
+                  style: const TextStyle(color: AppTheme.danger, fontSize: 12)),
+            ],
+            const SizedBox(height: AppSpacing.lg),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(false),
+                    child: Text(L10n.get(context, 'common_cancel'),
+                        style: const TextStyle(color: Colors.white70)),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      if (newController.text.length < _minPasswordLength) {
+                        setDialogState(() => errorKey = 'account_error_password_too_short');
+                        return;
+                      }
+                      try {
+                        await ref.read(syncApiClientProvider).changePassword(
+                              currentPassword: currentController.text,
+                              newPassword: newController.text,
+                              authService: ref.read(authServiceProvider),
+                            );
+                        if (dialogContext.mounted) Navigator.of(dialogContext).pop(true);
+                      } on SyncApiException catch (e) {
+                        setDialogState(() => errorKey = e.statusCode == 401
+                            ? 'account_error_invalid_credentials'
+                            : 'account_error_unknown');
+                      } catch (_) {
+                        setDialogState(() => errorKey = 'account_error_network');
+                      }
+                    },
+                    child: Text(L10n.get(context, 'account_change_password_submit')),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+    currentController.dispose();
+    newController.dispose();
+    if (changed == true && context.mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(L10n.get(context, 'account_change_password_success'))));
+    }
+  }
+
+  Future<void> _logoutAllDevices(BuildContext context) async {
+    final confirmed = await showGlassConfirm(
+      context,
+      title: L10n.get(context, 'account_logout_all_confirm_title'),
+      confirmLabel: L10n.get(context, 'account_logout_all_confirm_yes'),
+      cancelLabel: L10n.get(context, 'common_cancel'),
+      icon: Icons.phonelink_erase_rounded,
+    );
+    if (!confirmed || !context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(syncApiClientProvider).logoutAllDevices();
+    } catch (_) {
+      // Even if the server call fails (e.g. offline), clearing the local
+      // token below still logs this device out — the "all devices" part
+      // just won't have taken effect remotely.
+    }
+    await ref.read(authServiceProvider).logout();
+    await _refreshState();
+    if (!context.mounted) return;
+    messenger.showSnackBar(SnackBar(content: Text(L10n.get(context, 'account_logout_all_done'))));
+  }
+
+  Future<void> _deleteAccount(BuildContext context) async {
+    final confirmed = await showGlassDialog<bool>(
+      context,
+      builder: (dialogContext) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.warning_amber_rounded, color: AppTheme.danger, size: 34),
+          const SizedBox(height: AppSpacing.lg),
+          Text(L10n.get(context, 'account_delete_confirm_title'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  color: Colors.white, fontSize: 20, fontWeight: FontWeight.w300, letterSpacing: 2.0)),
+          const SizedBox(height: AppSpacing.sm),
+          Text(L10n.get(context, 'account_delete_confirm_body'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white54, fontSize: 13, height: 1.4)),
+          const SizedBox(height: AppSpacing.xl),
+          Row(
+            children: [
+              Expanded(
+                child: TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: Text(L10n.get(context, 'common_cancel'),
+                      style: const TextStyle(color: Colors.white70)),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: Text(L10n.get(context, 'account_delete_confirm_yes'),
+                      style: const TextStyle(color: Colors.white)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(syncApiClientProvider).deleteAccount();
+    } catch (_) {
+      if (context.mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(L10n.get(context, 'account_error_network'))));
+      }
+      return;
+    }
+    await ref.read(authServiceProvider).logout();
+    await _refreshState();
+    if (!context.mounted) return;
+    messenger.showSnackBar(SnackBar(content: Text(L10n.get(context, 'account_delete_done'))));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoggedIn == null) return const SizedBox.shrink();
+
+    if (!_isLoggedIn!) {
+      return GlassCard(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              L10n.get(context, 'account_intro'),
+              style: const TextStyle(color: AppTheme.textDim, fontSize: 12, height: 1.4),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: _emailController,
+              keyboardType: TextInputType.emailAddress,
+              style: const TextStyle(color: AppTheme.textLight),
+              cursorColor: AppTheme.primary,
+              decoration: InputDecoration(
+                hintText: L10n.get(context, 'account_email_hint'),
+                hintStyle: const TextStyle(color: AppTheme.textDim),
+                enabledBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.white24)),
+                focusedBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: AppTheme.primary)),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: _passwordController,
+              obscureText: true,
+              style: const TextStyle(color: AppTheme.textLight),
+              cursorColor: AppTheme.primary,
+              decoration: InputDecoration(
+                hintText: L10n.get(context, 'account_password_hint'),
+                hintStyle: const TextStyle(color: AppTheme.textDim),
+                enabledBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.white24)),
+                focusedBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: AppTheme.primary)),
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: _loading ? null : () => _showForgotPasswordDialog(context),
+                style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
+                child: Text(L10n.get(context, 'account_forgot_password'),
+                    style: const TextStyle(color: AppTheme.textDim, fontSize: 12)),
+              ),
+            ),
+            if (_errorKey != null) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                L10n.get(context, _errorKey!),
+                style: const TextStyle(color: AppTheme.danger, fontSize: 12),
+              ),
+            ],
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: _loading ? null : () => _submit(isRegister: true),
+                    child: _loading && _registering
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70),
+                          )
+                        : Text(L10n.get(context, 'account_register'),
+                            style: const TextStyle(color: Colors.white70)),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _loading ? null : () => _submit(isRegister: false),
+                    child: _loading && !_registering
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                          )
+                        : Text(L10n.get(context, 'account_login')),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              L10n.get(context, 'account_sync_disclosure'),
+              style: TextStyle(color: AppTheme.textDim.withAlpha(160), fontSize: 11, height: 1.3),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final locale = Localizations.localeOf(context).toString();
+    final lastSyncedLabel = _lastSyncedAt == null
+        ? L10n.get(context, 'account_never_synced')
+        : '${L10n.get(context, 'account_last_synced')} '
+            '${DateFormat('dd.MM.yyyy HH:mm', locale).format(_lastSyncedAt!)}';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_loggedInEmail != null)
+          Padding(
+            padding: const EdgeInsets.only(left: AppSpacing.sm, bottom: AppSpacing.sm),
+            child: Row(
+              children: [
+                const Icon(Icons.account_circle_outlined, color: AppTheme.textDim, size: 16),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    _loggedInEmail!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: AppTheme.textLight, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if (!_emailVerified)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: GlassCard(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+              child: Row(
+                children: [
+                  const Icon(Icons.mark_email_unread_outlined, color: AppTheme.lure, size: 16),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(L10n.get(context, 'account_email_not_verified'),
+                        style: const TextStyle(color: AppTheme.textLight, fontSize: 12)),
+                  ),
+                  TextButton(
+                    onPressed: () => _resendVerification(context),
+                    style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
+                    child: Text(L10n.get(context, 'account_resend_verification'),
+                        style: const TextStyle(color: AppTheme.lure, fontSize: 12)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        _Group(children: [
+          _Tile(
+            icon: Icons.sync_rounded,
+            title: L10n.get(context, _loading ? 'account_syncing' : 'account_sync_now'),
+            onTap: _loading ? null : _sync,
+          ),
+          _Tile(
+            icon: Icons.password_rounded,
+            title: L10n.get(context, 'account_change_password'),
+            onTap: _loading ? null : () => _showChangePasswordDialog(context),
+          ),
+          _Tile(
+            icon: Icons.logout_rounded,
+            title: L10n.get(context, 'account_logout'),
+            onTap: _loading ? null : _logout,
+          ),
+          _Tile(
+            icon: Icons.phonelink_erase_rounded,
+            title: L10n.get(context, 'account_logout_all'),
+            onTap: _loading ? null : () => _logoutAllDevices(context),
+          ),
+        ]),
+        const SizedBox(height: AppSpacing.xs),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+          child: Text(
+            lastSyncedLabel,
+            style: TextStyle(color: AppTheme.textDim.withAlpha(180), fontSize: 11),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        _Group(children: [
+          _Tile(
+            icon: Icons.person_remove_outlined,
+            title: L10n.get(context, 'account_delete'),
+            color: AppTheme.danger,
+            trailing: Icon(Icons.chevron_right_rounded, color: AppTheme.danger.withAlpha(160)),
+            onTap: _loading ? null : () => _deleteAccount(context),
+          ),
+        ]),
       ],
     );
   }
@@ -443,12 +1133,18 @@ class _Tile extends StatelessWidget {
     required this.title,
     this.trailing,
     this.onTap,
+    this.color,
   });
 
   final IconData icon;
   final String title;
   final Widget? trailing;
   final VoidCallback? onTap;
+
+  /// Overrides the icon/title color — used for destructive actions (e.g.
+  /// "Reset progress"), which otherwise render identically to any neutral
+  /// setting despite being irreversible.
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
@@ -459,12 +1155,12 @@ class _Tile extends StatelessWidget {
             horizontal: AppSpacing.lg, vertical: AppSpacing.md + 2),
         child: Row(
           children: [
-            Icon(icon, color: AppTheme.textDim, size: 20),
+            Icon(icon, color: color ?? AppTheme.textDim, size: 20),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Text(title,
-                  style: const TextStyle(
-                      color: AppTheme.textLight, fontSize: 14)),
+                  style: TextStyle(
+                      color: color ?? AppTheme.textLight, fontSize: 14)),
             ),
             if (trailing != null) trailing!,
           ],

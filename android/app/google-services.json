@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "264548388160",
+    "project_id": "xaid-2d2fb",
+    "storage_bucket": "xaid-2d2fb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:264548388160:android:5d087086a318b754b97ea5",
+        "android_client_info": {
+          "package_name": "com.okrutnik.okrutnik_breath"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDPLPsa4GdlZ516T8-XrMZP8zOI27l5Pu8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:264548388160:android:33c3ab6a1f3a5ca9b97ea5",
+        "android_client_info": {
+          "package_name": "com.xaid.xaid"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDPLPsa4GdlZ516T8-XrMZP8zOI27l5Pu8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
