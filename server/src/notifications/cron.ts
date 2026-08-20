@@ -10,26 +10,33 @@ async function runDailyNotifications(): Promise<void> {
     return;
   }
 
+  // One user can have several registered devices (Device, not a single
+  // fcmToken column on User) — the same daily pick is sent to every one of
+  // them rather than just whichever device registered most recently.
   const users = await prisma.user.findMany({
-    where: { fcmToken: { not: null } },
-    select: { id: true, fcmToken: true },
+    where: { devices: { some: {} } },
+    select: { id: true, devices: { select: { id: true, fcmToken: true } } },
   });
 
   let sent = 0;
+  let deviceCount = 0;
   for (const user of users) {
     const candidate = await pickNotificationForUser(user.id);
     if (!candidate) continue;
 
-    const result = await sendPushNotification(user.fcmToken!, candidate.title, candidate.body);
-    if (result.ok) {
-      sent += 1;
-    } else if (result.invalidToken) {
-      await prisma.user.update({ where: { id: user.id }, data: { fcmToken: null } });
-    } else {
-      console.error(`[notifications] send failed for user ${user.id}:`, result.error);
+    for (const device of user.devices) {
+      deviceCount += 1;
+      const result = await sendPushNotification(device.fcmToken, candidate.title, candidate.body);
+      if (result.ok) {
+        sent += 1;
+      } else if (result.invalidToken) {
+        await prisma.device.delete({ where: { id: device.id } }).catch(() => {});
+      } else {
+        console.error(`[notifications] send failed for user ${user.id}, device ${device.id}:`, result.error);
+      }
     }
   }
-  console.log(`[notifications] daily run complete — sent ${sent}/${users.length}`);
+  console.log(`[notifications] daily run complete — sent ${sent}/${deviceCount} device(s) across ${users.length} user(s)`);
 }
 
 export function scheduleNotificationsCron(): void {

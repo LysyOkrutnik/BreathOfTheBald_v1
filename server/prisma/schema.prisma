@@ -11,8 +11,23 @@ model User {
   email        String   @unique
   passwordHash String
   profileName  String?
-  fcmToken     String?
   createdAt    DateTime @default(now())
+
+  /// Not required to use the API (auth works immediately on register), but
+  /// surfaced to the user — an unverified account means the email address
+  /// wasn't confirmed to actually belong to whoever registered it.
+  emailVerified              Boolean   @default(false)
+  emailVerificationToken     String?   @unique
+  emailVerificationExpiresAt DateTime?
+
+  passwordResetToken     String?   @unique
+  passwordResetExpiresAt DateTime?
+
+  /// Bumped on "log out everywhere" and on a password change — included in
+  /// every issued JWT and checked on every request, so incrementing this
+  /// instantly invalidates every previously-issued token for this user
+  /// (JWTs are otherwise stateless and can't be revoked individually).
+  tokenVersion Int @default(0)
 
   sessions                Session[]
   freedivingLogs          FreedivingLog[]
@@ -20,6 +35,18 @@ model User {
   customFreedivingPresets CustomFreedivingPreset[]
   profileState            ProfileState?
   challengeParticipants   ChallengeParticipant[]
+  devices                 Device[]
+}
+
+/// One row per registered push-notification target. Replaces a single
+/// `fcmToken` column on [User] — a user with two phones logging in on the
+/// second no longer silently kills push on the first.
+model Device {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fcmToken  String   @unique
+  createdAt DateTime @default(now())
 }
 
 /// Mirrors the local `Sessions` Drift table. Immutable once created except
@@ -56,7 +83,12 @@ model FreedivingLog {
   durationSec     Int
   timestamp       DateTime
   rpeScore        Int?
-  updatedAt       DateTime @updatedAt
+
+  /// Post-session symptom check-in ('tingling'/'dizziness'/'ok') — mirrors
+  /// the local Drift column of the same name, added here belatedly (it
+  /// existed on-device but was never wired through sync until now).
+  symptomTag String?
+  updatedAt  DateTime @updatedAt
 
   @@index([userId, timestamp])
 }

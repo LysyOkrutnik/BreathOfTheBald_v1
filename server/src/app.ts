@@ -1,16 +1,27 @@
-import cors from 'cors';
 import express from 'express';
 import authRouter from './routes/auth';
 import challengesRouter from './routes/challenges';
 import devicesRouter from './routes/devices';
 import syncRouter from './routes/sync';
+import { prisma } from './prismaClient';
 
 export const app = express();
 
-app.use(cors());
+// No CORS middleware at all, deliberately — this API has no browser-based
+// client (only the Flutter app's plain HTTP requests, which aren't subject
+// to CORS in the first place). Enabling `cors()` here would only ever have
+// widened the attack surface for no benefit.
 app.use(express.json());
 
-app.get('/health', (_req, res) => res.json({ ok: true }));
+app.get('/health', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ ok: true, db: true });
+  } catch (err) {
+    console.error('[health] database check failed:', err);
+    res.status(503).json({ ok: false, db: false });
+  }
+});
 
 app.use('/auth', authRouter);
 app.use('/sync', syncRouter);

@@ -32,6 +32,10 @@ router.post('/:id/join', async (req: AuthedRequest, res) => {
     res.status(404).json({ error: 'not_found' });
     return;
   }
+  if (challenge.endsAt <= new Date()) {
+    res.status(400).json({ error: 'challenge_ended' });
+    return;
+  }
   await prisma.challengeParticipant.upsert({
     where: { challengeId_userId: { challengeId: challenge.id, userId: req.userId! } },
     create: { challengeId: challenge.id, userId: req.userId! },
@@ -53,7 +57,7 @@ router.delete('/:id/join', async (req: AuthedRequest, res) => {
 router.get('/:id/leaderboard', async (req: AuthedRequest, res) => {
   const challenge = await prisma.challenge.findUnique({
     where: { id: req.params.id as string },
-    include: { participants: { include: { user: { select: { id: true, profileName: true, email: true } } } } },
+    include: { participants: { include: { user: { select: { id: true, profileName: true } } } } },
   });
   if (!challenge) {
     res.status(404).json({ error: 'not_found' });
@@ -66,7 +70,10 @@ router.get('/:id/leaderboard', async (req: AuthedRequest, res) => {
       const value = await computeMetricValue(p.userId, challenge.metric, window);
       return {
         userId: p.userId,
-        displayName: p.user.profileName ?? p.user.email.split('@')[0],
+        // Never derived from email — a participant who hasn't set a
+        // profile name gets a stable anonymous label instead of leaking
+        // part of their address to every other participant.
+        displayName: p.user.profileName?.trim() || `Uczestnik ${p.userId.slice(0, 4)}`,
         value,
       };
     }),

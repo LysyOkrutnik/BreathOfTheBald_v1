@@ -6,6 +6,12 @@ import { AuthedRequest, requireAuth } from '../middleware/auth';
 const router = Router();
 router.use(requireAuth);
 
+// A user with an unbounded history would otherwise get every row back in
+// one response (no `take`); this caps each pull, and the client keeps
+// pulling with an updated `since` (the last row's own updatedAt) until a
+// page comes back under the limit.
+const PAGE_SIZE = 500;
+
 const sessionSchema = z.object({
   id: z.string().min(1),
   levelKey: z.string(),
@@ -26,6 +32,7 @@ const freedivingLogSchema = z.object({
   durationSec: z.number().int(),
   timestamp: z.string().datetime(),
   rpeScore: z.number().int().nullable().optional(),
+  symptomTag: z.string().nullable().optional(),
 });
 
 const customPresetSchema = z.object({
@@ -75,26 +82,87 @@ const pushSchema = z.object({
   profileState: profileStateSchema.nullable().optional(),
 });
 
-/// Append-only rows (Session, FreedivingLog) are owned by whoever created
-/// them and never move between users. A client-generated [id] could in
-/// theory collide with another user's row; `updateMany` scoped to
-/// `{ id, userId }` only ever touches the caller's own data, and a create
-/// that hits a foreign id throws a unique-constraint error we simply skip
-/// rather than surface, since it's not something the client can act on.
-async function upsertOwnedById<T extends { id: string }>(
+/// For append-only rows (Session, FreedivingLog): creates the row on first
+/// sight, but an update only ever writes [mutableData] — the couple of
+/// fields that can legitimately change after creation (rpeScore,
+/// symptomTag) — never the whole row. A full-row overwrite here would let a
+/// device pushing a stale local copy silently clobber a field another
+/// device already set (e.g. an RPE rating attached after this row last
+/// synced elsewhere).
+async function upsertAppendOnly<T extends { id: string }>(
   model: { updateMany: Function; create: Function },
   userId: string,
   row: T,
-  toData: (row: T) => Record<string, unknown>,
+  fullData: (row: T) => Record<string, unknown>,
+  mutableData: (row: T) => Record<string, unknown>,
 ): Promise<'updated' | 'created' | 'skipped'> {
-  const data = toData(row);
-  const updated = await model.updateMany({ where: { id: row.id, userId }, data });
+  const updated = await model.updateMany({ where: { id: row.id, userId }, data: mutableData(row) });
   if (updated.count > 0) return 'updated';
   try {
-    await model.create({ data: { ...data, id: row.id, userId } });
+    await model.create({ data: { ...fullData(row), id: row.id, userId } });
     return 'created';
   } catch {
     return 'skipped';
+  }
+}
+
+/// For presets: real CRUD, but with no "edit" flow on the client at all —
+/// the only two things that can happen to an existing row are (a) nothing,
+/// it's immutable once created, or (b) a soft-delete. So an update here
+/// only ever touches [deletedAt], and only to set it (never to clear it —
+/// a stale push from a device that doesn't yet know about a deletion must
+/// never resurrect a preset another device already deleted).
+async function upsertPreset<T extends { id: string; deletedAt?: string | null }>(
+  model: { updateMany: Function; create: Function },
+  userId: string,
+  row: T,
+  fullData: (row: T) => Record<string, unknown>,
+): Promise<'updated' | 'created' | 'skipped'> {
+  if (row.deletedAt) {
+    const updated = await model.updateMany({
+      where: { id: row.id, userId },
+      data: { deletedAt: new Date(row.deletedAt) },
+    });
+    if (updated.count > 0) return 'updated';
+  }
+  try {
+    await model.create({ data: { ...fullData(row), id: row.id, userId } });
+    return 'created';
+  } catch {
+    return 'skipped';
+  }
+}
+
+/// Atomically applies [data] to the user's ProfileState only if
+/// [incomingClientUpdatedAt] is newer than whatever's already stored — the
+/// `WHERE clientUpdatedAt < incoming` guard is a single atomic SQL UPDATE,
+/// so two concurrent pushes from different devices can never both believe
+/// they "won" a stale check-then-act read.
+async function upsertProfileStateIfNewer(
+  userId: string,
+  data: Record<string, unknown>,
+  incomingClientUpdatedAt: Date,
+): Promise<void> {
+  const updated = await prisma.profileState.updateMany({
+    where: { userId, clientUpdatedAt: { lt: incomingClientUpdatedAt } },
+    data: { ...data, clientUpdatedAt: incomingClientUpdatedAt },
+  });
+  if (updated.count > 0) return;
+
+  const existing = await prisma.profileState.findUnique({ where: { userId } });
+  if (existing) return; // Existing row is already >= incoming — it wins, nothing to do.
+
+  try {
+    await prisma.profileState.create({
+      data: { userId, ...data, clientUpdatedAt: incomingClientUpdatedAt },
+    });
+  } catch {
+    // Lost a create race to a concurrent first push — a row exists now,
+    // so the conditional update path applies.
+    await prisma.profileState.updateMany({
+      where: { userId, clientUpdatedAt: { lt: incomingClientUpdatedAt } },
+      data: { ...data, clientUpdatedAt: incomingClientUpdatedAt },
+    });
   }
 }
 
@@ -109,35 +177,48 @@ router.post('/', async (req: AuthedRequest, res) => {
 
   const sessionResults = await Promise.all(
     body.sessions.map((row) =>
-      upsertOwnedById(prisma.session, userId, row, (r) => ({
-        levelKey: r.levelKey,
-        timestamp: new Date(r.timestamp),
-        durationSec: r.durationSec,
-        rounds: r.rounds,
-        retentionSec: r.retentionSec,
-        rpeScore: r.rpeScore ?? null,
-        xpEarned: r.xpEarned,
-      })),
+      upsertAppendOnly(
+        prisma.session,
+        userId,
+        row,
+        (r) => ({
+          levelKey: r.levelKey,
+          timestamp: new Date(r.timestamp),
+          durationSec: r.durationSec,
+          rounds: r.rounds,
+          retentionSec: r.retentionSec,
+          rpeScore: r.rpeScore ?? null,
+          xpEarned: r.xpEarned,
+        }),
+        (r) => ({ rpeScore: r.rpeScore ?? null }),
+      ),
     ),
   );
 
   const freedivingResults = await Promise.all(
     body.freedivingLogs.map((row) =>
-      upsertOwnedById(prisma.freedivingLog, userId, row, (r) => ({
-        tableType: r.tableType,
-        pbUsedSec: r.pbUsedSec,
-        roundsJson: r.roundsJson,
-        roundsCompleted: r.roundsCompleted,
-        durationSec: r.durationSec,
-        timestamp: new Date(r.timestamp),
-        rpeScore: r.rpeScore ?? null,
-      })),
+      upsertAppendOnly(
+        prisma.freedivingLog,
+        userId,
+        row,
+        (r) => ({
+          tableType: r.tableType,
+          pbUsedSec: r.pbUsedSec,
+          roundsJson: r.roundsJson,
+          roundsCompleted: r.roundsCompleted,
+          durationSec: r.durationSec,
+          timestamp: new Date(r.timestamp),
+          rpeScore: r.rpeScore ?? null,
+          symptomTag: r.symptomTag ?? null,
+        }),
+        (r) => ({ rpeScore: r.rpeScore ?? null, symptomTag: r.symptomTag ?? null }),
+      ),
     ),
   );
 
   const customPresetResults = await Promise.all(
     body.customPresets.map((row) =>
-      upsertOwnedById(prisma.customPreset, userId, row, (r) => ({
+      upsertPreset(prisma.customPreset, userId, row, (r) => ({
         name: r.name,
         inhaleSec: r.inhaleSec,
         holdInSec: r.holdInSec,
@@ -153,7 +234,7 @@ router.post('/', async (req: AuthedRequest, res) => {
 
   const customFreedivingPresetResults = await Promise.all(
     body.customFreedivingPresets.map((row) =>
-      upsertOwnedById(prisma.customFreedivingPreset, userId, row, (r) => ({
+      upsertPreset(prisma.customFreedivingPreset, userId, row, (r) => ({
         name: r.name,
         startApneaSec: r.startApneaSec,
         endApneaSec: r.endApneaSec,
@@ -166,34 +247,26 @@ router.post('/', async (req: AuthedRequest, res) => {
     ),
   );
 
-  let profileState = await prisma.profileState.findUnique({ where: { userId } });
   if (body.profileState) {
-    const incomingClientUpdatedAt = new Date(body.profileState.clientUpdatedAt);
-    const isNewer = !profileState || incomingClientUpdatedAt > profileState.clientUpdatedAt;
-    if (isNewer) {
-      const { clientUpdatedAt, ...rest } = body.profileState;
-      profileState = await prisma.profileState.upsert({
-        where: { userId },
-        create: {
-          userId,
-          ...rest,
-          verifiedPbAt: rest.verifiedPbAt ? new Date(rest.verifiedPbAt) : null,
-          safetyAcknowledgedAt: rest.safetyAcknowledgedAt ? new Date(rest.safetyAcknowledgedAt) : null,
-          wimHofCurrentLevelSetAt: rest.wimHofCurrentLevelSetAt ? new Date(rest.wimHofCurrentLevelSetAt) : null,
-          clientUpdatedAt: incomingClientUpdatedAt,
-        },
-        update: {
-          ...rest,
-          verifiedPbAt: rest.verifiedPbAt ? new Date(rest.verifiedPbAt) : null,
-          safetyAcknowledgedAt: rest.safetyAcknowledgedAt ? new Date(rest.safetyAcknowledgedAt) : null,
-          wimHofCurrentLevelSetAt: rest.wimHofCurrentLevelSetAt ? new Date(rest.wimHofCurrentLevelSetAt) : null,
-          clientUpdatedAt: incomingClientUpdatedAt,
-        },
-      });
-    }
-    // If not newer, `profileState` already holds the authoritative (newer)
-    // server row — returned as-is so the client can adopt it instead.
+    const { clientUpdatedAt, ...rest } = body.profileState;
+    const incomingClientUpdatedAt = new Date(clientUpdatedAt);
+    await upsertProfileStateIfNewer(
+      userId,
+      {
+        ...rest,
+        verifiedPbAt: rest.verifiedPbAt ? new Date(rest.verifiedPbAt) : null,
+        safetyAcknowledgedAt: rest.safetyAcknowledgedAt ? new Date(rest.safetyAcknowledgedAt) : null,
+        wimHofCurrentLevelSetAt: rest.wimHofCurrentLevelSetAt
+          ? new Date(rest.wimHofCurrentLevelSetAt)
+          : null,
+      },
+      incomingClientUpdatedAt,
+    );
   }
+  // Always return the current authoritative row — whichever push actually
+  // won (this one, an earlier one, or a concurrent one), the client should
+  // adopt it.
+  const profileState = await prisma.profileState.findUnique({ where: { userId } });
 
   res.json({
     sessions: summarize(sessionResults),
@@ -217,14 +290,41 @@ router.get('/', async (req: AuthedRequest, res) => {
   const userId = req.userId!;
   const sinceRaw = typeof req.query.since === 'string' ? req.query.since : undefined;
   const since = sinceRaw && !Number.isNaN(Date.parse(sinceRaw)) ? new Date(sinceRaw) : undefined;
+  const whereSince = since ? { updatedAt: { gt: since } } : {};
 
   const [sessions, freedivingLogs, customPresets, customFreedivingPresets, profileState] = await Promise.all([
-    prisma.session.findMany({ where: { userId, ...(since && { updatedAt: { gt: since } }) } }),
-    prisma.freedivingLog.findMany({ where: { userId, ...(since && { updatedAt: { gt: since } }) } }),
-    prisma.customPreset.findMany({ where: { userId, ...(since && { updatedAt: { gt: since } }) } }),
-    prisma.customFreedivingPreset.findMany({ where: { userId, ...(since && { updatedAt: { gt: since } }) } }),
+    prisma.session.findMany({
+      where: { userId, ...whereSince },
+      orderBy: { updatedAt: 'asc' },
+      take: PAGE_SIZE,
+    }),
+    prisma.freedivingLog.findMany({
+      where: { userId, ...whereSince },
+      orderBy: { updatedAt: 'asc' },
+      take: PAGE_SIZE,
+    }),
+    prisma.customPreset.findMany({
+      where: { userId, ...whereSince },
+      orderBy: { updatedAt: 'asc' },
+      take: PAGE_SIZE,
+    }),
+    prisma.customFreedivingPreset.findMany({
+      where: { userId, ...whereSince },
+      orderBy: { updatedAt: 'asc' },
+      take: PAGE_SIZE,
+    }),
     prisma.profileState.findUnique({ where: { userId } }),
   ]);
+
+  // True if any table hit the page cap — the client should pull again with
+  // `since` set to this response's own `serverTime` (well, more precisely:
+  // to the max updatedAt actually seen) rather than assuming this was the
+  // last page.
+  const hasMore =
+    sessions.length === PAGE_SIZE ||
+    freedivingLogs.length === PAGE_SIZE ||
+    customPresets.length === PAGE_SIZE ||
+    customFreedivingPresets.length === PAGE_SIZE;
 
   res.json({
     sessions,
@@ -234,6 +334,7 @@ router.get('/', async (req: AuthedRequest, res) => {
     // Omit if it hasn't changed since `since` — an unconditional include
     // would make every incremental pull look like a settings change.
     profileState: !since || (profileState && profileState.updatedAt > since) ? profileState : null,
+    hasMore,
     serverTime: new Date().toISOString(),
   });
 });
