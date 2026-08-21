@@ -5,6 +5,7 @@ COPY prisma ./prisma
 COPY prisma.config.ts ./
 RUN npm ci
 COPY tsconfig.json ./
+COPY tsconfig.build.json ./
 COPY src ./src
 # `prisma generate` never connects to a database — it only needs the schema
 # shape — but prisma.config.ts still requires DATABASE_URL to *resolve* at
