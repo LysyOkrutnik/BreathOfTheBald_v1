@@ -141,7 +141,7 @@ class SyncService {
             {
               'id': s.syncId,
               'levelKey': s.levelKey,
-              'timestamp': s.timestamp.toIso8601String(),
+              'timestamp': s.timestamp.toUtc().toIso8601String(),
               'durationSec': s.durationSec,
               'rounds': s.rounds,
               'retentionSec': s.retentionSec,
@@ -159,7 +159,7 @@ class SyncService {
               'roundsJson': l.roundsJson,
               'roundsCompleted': l.roundsCompleted,
               'durationSec': l.durationSec,
-              'timestamp': l.timestamp.toIso8601String(),
+              'timestamp': l.timestamp.toUtc().toIso8601String(),
               'rpeScore': l.rpeScore,
               'symptomTag': l.symptomTag,
             },
@@ -176,8 +176,8 @@ class SyncService {
               'holdOutSec': p.holdOutSec,
               'cycles': p.cycles,
               'rounds': p.rounds,
-              'createdAt': p.createdAt.toIso8601String(),
-              'deletedAt': p.deletedAt?.toIso8601String(),
+              'createdAt': p.createdAt.toUtc().toIso8601String(),
+              'deletedAt': p.deletedAt?.toUtc().toIso8601String(),
             },
       ],
       'customFreedivingPresets': [
@@ -191,24 +191,29 @@ class SyncService {
               'startRestSec': p.startRestSec,
               'endRestSec': p.endRestSec,
               'rounds': p.rounds,
-              'createdAt': p.createdAt.toIso8601String(),
-              'deletedAt': p.deletedAt?.toIso8601String(),
+              'createdAt': p.createdAt.toUtc().toIso8601String(),
+              'deletedAt': p.deletedAt?.toUtc().toIso8601String(),
             },
       ],
       'profileState': {
         'verifiedPbSec': freedivingProfile.verifiedPbSec,
-        'verifiedPbAt': freedivingProfile.verifiedPbAt?.toIso8601String(),
+        'verifiedPbAt': freedivingProfile.verifiedPbAt?.toUtc().toIso8601String(),
         'verifiedPbCo2Sec': freedivingProfile.verifiedPbCo2Sec,
-        'verifiedPbCo2At': freedivingProfile.verifiedPbCo2At?.toIso8601String(),
-        'safetyAcknowledgedAt': freedivingProfile.safetyAcknowledgedAt?.toIso8601String(),
+        'verifiedPbCo2At': freedivingProfile.verifiedPbCo2At?.toUtc().toIso8601String(),
+        'safetyAcknowledgedAt': freedivingProfile.safetyAcknowledgedAt?.toUtc().toIso8601String(),
         'wimHofCurrentLevelKey': wimHofProgress.currentLevelKey,
-        'wimHofCurrentLevelSetAt': wimHofProgress.currentLevelSetAt?.toIso8601String(),
+        'wimHofCurrentLevelSetAt': wimHofProgress.currentLevelSetAt?.toUtc().toIso8601String(),
         'availableWeekdaysMask': SettingsNotifier.maskFromWeekdays(settings.availableWeekdays),
         'availableHourStart': settings.availableHourStart,
         'availableHourEnd': settings.availableHourEnd,
         'allowMultiplePerDay': settings.allowMultipleSessionsPerDay,
         'dailyReminderEnabled': settings.dailyReminderEnabled,
-        'clientUpdatedAt': profileClientUpdatedAt.toIso8601String(),
+        // `Invalid ISO datetime` from the server — Zod's z.string().datetime()
+        // requires a UTC "Z"/offset suffix, which Dart's toIso8601String()
+        // omits for a local-time DateTime (the norm here, since these all
+        // come from plain DateTime.now() calls). Every push of real data
+        // failed this validation until `.toUtc()` was added here and above.
+        'clientUpdatedAt': profileClientUpdatedAt.toUtc().toIso8601String(),
       },
     };
 

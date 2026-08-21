@@ -545,10 +545,6 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
     try {
       final result = await ref.read(syncServiceProvider).syncNow();
       if (result.message != null) {
-        // Not shown to the user (a raw status code + response body isn't
-        // helpful copy), but without this the actual cause of a sync
-        // failure — a 500, a timeout, a malformed response — was never
-        // recorded anywhere, indistinguishable from any other failure.
         developer.log('Sync failed: ${result.message}', name: 'SettingsScreen');
       }
       if (!mounted) return;
@@ -558,15 +554,27 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
         SyncOutcome.authExpired => 'account_sync_auth_expired',
         _ => 'account_sync_failed',
       });
+      // Appending the raw detail on failure — a status code, a timeout, a
+      // response body snippet — turns "sync failed" from a dead end into
+      // something actually diagnosable, for the one person this app has as
+      // a user right now.
+      final detail = result.outcome == SyncOutcome.success ? null : result.message;
 
       await _refreshState();
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(message)));
+      messenger.showSnackBar(SnackBar(
+        content: Text(detail == null ? message : '$message\n$detail'),
+        duration: detail == null
+            ? const Duration(milliseconds: 4000)
+            : const Duration(seconds: 12),
+      ));
     } catch (e, st) {
       developer.log('Unexpected error during sync', name: 'SettingsScreen', error: e, stackTrace: st);
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(L10n.get(context, 'account_sync_failed'))));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('${L10n.get(context, 'account_sync_failed')}\n$e'),
+          duration: const Duration(seconds: 12),
+        ));
       }
     } finally {
       // Guaranteed regardless of how the above exits — previously an

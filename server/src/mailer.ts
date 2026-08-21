@@ -30,17 +30,20 @@ export async function sendMail(to: string, subject: string, text: string): Promi
 }
 
 export function verificationEmailBody(token: string): { subject: string; text: string } {
-  const link = `${env.appPublicUrl}/verify-email?token=${token}`;
+  // /auth/* — authRouter is mounted at that prefix in app.ts. A link to the
+  // bare path (no /auth) 404s at the very first hop, before the GET-vs-POST
+  // mismatch that used to 404 it even with the prefix fixed.
+  const link = `${env.appPublicUrl}/auth/verify-email?token=${token}`;
   return {
     subject: 'Potwierdź adres e-mail — Breath of the Bald',
-    text: `Potwierdź swój adres e-mail, otwierając ten link w aplikacji:\n${link}\n\nLink wygasa po 24 godzinach.`,
+    text: `Potwierdź swój adres e-mail, otwierając ten link:\n${link}\n\nLink wygasa po 24 godzinach.`,
   };
 }
 
 export function passwordResetEmailBody(token: string): { subject: string; text: string } {
-  const link = `${env.appPublicUrl}/reset-password?token=${token}`;
+  const link = `${env.appPublicUrl}/auth/reset-password?token=${token}`;
   return {
     subject: 'Reset hasła — Breath of the Bald',
-    text: `Zresetuj hasło, otwierając ten link w aplikacji:\n${link}\n\nLink wygasa po 1 godzinie. Jeśli to nie Ty, zignoruj tę wiadomość.`,
+    text: `Zresetuj hasło, otwierając ten link:\n${link}\n\nLink wygasa po 1 godzinie. Jeśli to nie Ty, zignoruj tę wiadomość.`,
   };
 }

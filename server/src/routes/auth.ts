@@ -93,10 +93,51 @@ router.post('/login', authRateLimiter, async (req, res) => {
   });
 });
 
-/// The verification link (mailer.ts's `verificationEmailBody`) points at an
-/// app deep link, not a browser page — the Flutter app intercepts it and
-/// POSTs the token here itself, so this only ever needs a JSON API, not an
-/// HTML confirmation page.
+/// Minimal, self-contained HTML page — no template engine in this project,
+/// and one isn't worth adding for two small pages.
+function htmlPage(title: string, bodyHtml: string): string {
+  return `<!doctype html><html lang="pl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${title}</title>
+<style>
+body{background:#040D14;color:#F5F5F5;font-family:system-ui,-apple-system,sans-serif;
+display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:24px;box-sizing:border-box}
+.card{max-width:400px;text-align:center}
+h1{font-size:20px;font-weight:600;margin-bottom:12px}
+p{color:#B0BEC5;font-size:14px;line-height:1.5}
+input{width:100%;padding:12px;margin:8px 0;border-radius:8px;border:1px solid #444;
+background:#111;color:#F5F5F5;box-sizing:border-box;font-size:14px}
+button{width:100%;padding:12px;margin-top:8px;border-radius:8px;border:none;
+background:#81C784;color:#000;font-weight:700;font-size:14px;cursor:pointer}
+.err{color:#E57373}
+</style></head><body><div class="card">${bodyHtml}</div></body></html>`;
+}
+
+/// The email link is a plain hyperlink, so email clients/browsers always
+/// open it as a GET — the token is verified immediately and a plain
+/// confirmation page is shown, with no app installation or deep-link
+/// handling required.
+router.get('/verify-email', async (req, res) => {
+  const token = typeof req.query.token === 'string' ? req.query.token : '';
+  const user = token
+    ? await prisma.user.findUnique({ where: { emailVerificationToken: token } })
+    : null;
+  if (!user || !user.emailVerificationExpiresAt || user.emailVerificationExpiresAt < new Date()) {
+    res.status(400).type('html').send(htmlPage('Link nieprawidłowy',
+      '<h1>Link jest nieprawidłowy lub wygasł</h1><p>Wróć do aplikacji i wyślij weryfikację ponownie.</p>'));
+    return;
+  }
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { emailVerified: true, emailVerificationToken: null, emailVerificationExpiresAt: null },
+  });
+  res.type('html').send(htmlPage('E-mail potwierdzony',
+    '<h1>E-mail potwierdzony ✓</h1><p>Możesz zamknąć tę stronę i wrócić do aplikacji.</p>'));
+});
+
+/// JSON equivalent of the GET route above — same verification logic,
+/// for a client that already has the token in hand (e.g. a future in-app
+/// "enter the code from your email" flow) rather than following a link.
 router.post('/verify-email', async (req, res) => {
   const parsed = z.object({ token: z.string().min(1) }).safeParse(req.body);
   if (!parsed.success) {
@@ -164,6 +205,53 @@ router.post('/forgot-password', authRateLimiter, async (req, res) => {
       console.error('[auth] password reset email failed:', err));
   }
   res.status(204).end();
+});
+
+/// Same reasoning as GET /verify-email — the emailed link is a plain
+/// hyperlink, so it needs a browser-renderable page. Unlike verification
+/// this needs the user's input (a new password), so it renders a small
+/// form whose submit handler calls the existing POST /reset-password JSON
+/// endpoint via fetch — no new server-side submission logic, no HTML
+/// form-encoding middleware to add.
+router.get('/reset-password', (req, res) => {
+  const token = typeof req.query.token === 'string' ? req.query.token : '';
+  if (!token) {
+    res.status(400).type('html').send(htmlPage('Link nieprawidłowy',
+      '<h1>Link jest nieprawidłowy</h1><p>Wróć do aplikacji i wyślij prośbę o reset ponownie.</p>'));
+    return;
+  }
+  res.type('html').send(htmlPage('Reset hasła', `
+    <h1>Ustaw nowe hasło</h1>
+    <form id="f">
+      <input type="password" id="pw" placeholder="Nowe hasło (min. 8 znaków)" minlength="8" required>
+      <button type="submit">ZAPISZ</button>
+    </form>
+    <p id="msg"></p>
+    <script>
+      document.getElementById('f').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msg = document.getElementById('msg');
+        msg.textContent = '...';
+        msg.className = '';
+        try {
+          const res = await fetch('/auth/reset-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: ${JSON.stringify(token)}, newPassword: document.getElementById('pw').value }),
+          });
+          if (res.ok) {
+            msg.textContent = 'Hasło zmienione. Możesz zamknąć tę stronę i zalogować się w aplikacji.';
+          } else {
+            msg.textContent = 'Link jest nieprawidłowy lub wygasł. Wróć do aplikacji i wyślij prośbę ponownie.';
+            msg.className = 'err';
+          }
+        } catch {
+          msg.textContent = 'Nie udało się połączyć z serwerem. Spróbuj ponownie.';
+          msg.className = 'err';
+        }
+      });
+    </script>
+  `));
 });
 
 router.post('/reset-password', authRateLimiter, async (req, res) => {

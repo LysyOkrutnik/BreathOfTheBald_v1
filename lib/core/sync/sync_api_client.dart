@@ -46,7 +46,14 @@ class SyncApiClient {
 
   Future<Map<String, dynamic>> pullSync({DateTime? since}) async {
     final uri = Uri.parse('$syncApiBaseUrl/sync').replace(
-      queryParameters: since != null ? {'since': since.toIso8601String()} : null,
+      // `.toUtc()` — a local-time DateTime's toIso8601String() has no
+      // "Z"/offset suffix, which the server's `since` parsing (a plain
+      // `Date.parse`) then reads back as if it already were UTC. Harmless
+      // for a coarse cursor filter on this server (its container clock is
+      // UTC anyway), but sending real UTC is the actually-correct fix
+      // rather than relying on server-local time happening to match.
+      queryParameters:
+          since != null ? {'since': since.toUtc().toIso8601String()} : null,
     );
     final response = await http.get(uri, headers: await _headers()).timeout(syncRequestTimeout);
     return _decodeObject(response);
