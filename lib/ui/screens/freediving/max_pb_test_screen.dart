@@ -12,6 +12,7 @@ import 'package:okrutnik_breath/data/db/database.dart';
 import 'package:okrutnik_breath/logic/freediving/co2_o2_table_generator.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
+import 'package:okrutnik_breath/ui/widgets/confirm_dialog.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/glow_halo.dart';
 import 'package:okrutnik_breath/ui/widgets/primary_button.dart';
@@ -175,10 +176,14 @@ class _MaxPbTestScreenState extends ConsumerState<MaxPbTestScreen> {
       // streak, history and XP like any other completed practice.
       final gamification = ref.read(gamificationServiceProvider);
       final totalHoldSec = exhale + inhale;
+      // breathCount is always 0 for a breath-hold test — retention alone
+      // drives XP here. `multiplier` has no effect against a 0 breathCount;
+      // passing a literal 0 makes that explicit instead of a misleading 0.5
+      // that reads like it's doing something.
       final xpResult = await gamification.updateXpAndLevel(
         breathCount: 0,
         retentionSeconds: (totalHoldSec * 0.3).round(),
-        multiplier: 0.5,
+        multiplier: 0,
       );
       await gamification.updateStreak();
       await ref.read(sessionRepositoryProvider).addSession(
@@ -260,9 +265,38 @@ class _MaxPbTestScreenState extends ConsumerState<MaxPbTestScreen> {
   String _fmtSec(int seconds) =>
       "${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}";
 
+  /// True while a hold/relax/recovery is actually in progress — leaving the
+  /// screen here silently discards a just-run or in-progress result, unlike
+  /// the intro/results phases where there's nothing to lose.
+  bool get _midTest =>
+      _phase == _Phase.relax ||
+      _phase == _Phase.holding ||
+      _phase == _Phase.recovery;
+
+  Future<void> _handleBack() async {
+    if (!_midTest) {
+      Navigator.of(context).maybePop();
+      return;
+    }
+    final confirmed = await showGlassConfirm(
+      context,
+      title: L10n.get(context, 'freediving_pb_test_exit_confirm_title'),
+      body: L10n.get(context, 'freediving_pb_test_exit_confirm_body'),
+      confirmLabel: L10n.get(context, 'freediving_pb_test_exit_confirm_yes'),
+      cancelLabel: L10n.get(context, 'common_cancel'),
+      icon: Icons.warning_amber_rounded,
+    );
+    if (confirmed && mounted) Navigator.of(context).maybePop();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _handleBack();
+      },
+      child: Scaffold(
       body: Stack(
         children: [
           const Positioned.fill(child: AppBackground(sectionAccent: AppTheme.primary)),
@@ -272,7 +306,10 @@ class _MaxPbTestScreenState extends ConsumerState<MaxPbTestScreen> {
                 constraints: BoxConstraints(maxWidth: context.isTablet ? 560 : 480),
                 child: Column(
                   children: [
-                    ScreenHeader(title: L10n.get(context, 'freediving_pb_test_title')),
+                    ScreenHeader(
+                      title: L10n.get(context, 'freediving_pb_test_title'),
+                      onBack: _handleBack,
+                    ),
                     Expanded(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
@@ -299,6 +336,7 @@ class _MaxPbTestScreenState extends ConsumerState<MaxPbTestScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }
@@ -354,6 +392,24 @@ class _IntroView extends StatelessWidget {
           L10n.get(context, 'freediving_pb_test_full_intro'),
           textAlign: TextAlign.center,
           style: const TextStyle(color: AppTheme.textDim, fontSize: 14, height: 1.5),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        GlassCard(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          radius: AppRadius.md,
+          child: Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded,
+                  color: AppTheme.danger, size: 18),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  L10n.get(context, 'freediving_safety_rule1'),
+                  style: const TextStyle(color: AppTheme.danger, fontSize: 12),
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: AppSpacing.xxl),
         PrimaryButton(

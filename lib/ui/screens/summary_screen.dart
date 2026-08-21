@@ -99,6 +99,31 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
   String _fmt(Duration d) =>
       "${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}";
 
+  /// A guided-routine hold of fixed duration (e.g. Uddiyana's 7s vacuum,
+  /// repeated identically every round by construction) logs the exact same
+  /// value N times — showing N identical "Round X: 7s" chips reads as
+  /// meaningless noise, or worse, like progress isn't registering. Collapse
+  /// that case into a single "6 × 7s" chip; a real Wim Hof/freediving
+  /// session (genuinely variable effort-driven hold times) keeps the
+  /// existing per-round breakdown untouched.
+  List<Widget> _retentionChips(BuildContext context, List<Duration> logs) {
+    if (logs.length > 1 && logs.toSet().length == 1) {
+      return [
+        _RetentionChip(
+          label:
+              "${logs.length} ${L10n.get(context, 'summary_retention_fixed_count_suffix')} ${_fmt(logs.first)}",
+        ),
+      ];
+    }
+    return [
+      for (final e in logs.asMap().entries)
+        _RetentionChip(
+          label:
+              "${L10n.get(context, 'summary_retention_round')} ${e.key + 1}: ${_fmt(e.value)}",
+        ),
+    ];
+  }
+
   ExerciseType? get _lastType =>
       ref.read(sessionProvider.notifier).lastFinishedExerciseType;
 
@@ -106,6 +131,25 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
     final type = _lastType;
     if (type == ExerciseType.co2Table) return FreedivingTableType.co2;
     if (type == ExerciseType.o2Table) return FreedivingTableType.o2;
+    return null;
+  }
+
+  /// Broader than [_freedivingTableType]: also covers custom freediving
+  /// tables and packing, which carry the same real breath-hold risks as the
+  /// generated CO2/O2 tables but don't participate in RPE-driven PB
+  /// adjustment (no PB to adjust) — used only to gate the symptom check-in,
+  /// a pure safety signal that applies regardless.
+  FreedivingTableType? get _symptomCheckInTableType {
+    final direct = _freedivingTableType;
+    if (direct != null) return direct;
+    if (_lastType == ExerciseType.customFreedivingTable) {
+      return FreedivingTableType.custom;
+    }
+    if (_lastType == ExerciseType.guidedRoutine &&
+        ref.read(sessionProvider.notifier).lastFinishedLevelKey ==
+            'freediving_packing') {
+      return FreedivingTableType.packing;
+    }
     return null;
   }
 
@@ -117,7 +161,13 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
 
   bool get _ratesToGenericSession =>
       _lastType == ExerciseType.wimHof ||
-      _lastType == ExerciseType.customFreedivingTable;
+      _lastType == ExerciseType.customFreedivingTable ||
+      // Packing is structurally a single near-maximal breath hold — the
+      // same category as the freediving tables it sits next to, which
+      // already get an RPE prompt.
+      (_lastType == ExerciseType.guidedRoutine &&
+          ref.read(sessionProvider.notifier).lastFinishedLevelKey ==
+              'freediving_packing');
 
   bool get _showRpePrompt => _freedivingTableType != null || _ratesToGenericSession;
 
@@ -156,7 +206,7 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
   /// wouldn't surface. Kept to a single tap: no follow-up questions, no
   /// requirement to answer.
   Future<void> _submitSymptom(String tag) async {
-    final tableType = _freedivingTableType;
+    final tableType = _symptomCheckInTableType;
     if (tableType == null) return;
     await ref
         .read(freedivingRepositoryProvider)
@@ -248,7 +298,7 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                             .animate()
                             .fadeIn(delay: 280.ms),
                       ],
-                      if (_freedivingTableType != null && !_saveFailed) ...[
+                      if (_symptomCheckInTableType != null && !_saveFailed) ...[
                         const SizedBox(height: AppSpacing.xl),
                         _SymptomCard(
                           submitted: _symptomSubmitted,
@@ -293,13 +343,7 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                           alignment: WrapAlignment.center,
                           spacing: AppSpacing.sm,
                           runSpacing: AppSpacing.sm,
-                          children: [
-                            for (final e in state.retentionLogs.asMap().entries)
-                              _RetentionChip(
-                                round: e.key + 1,
-                                time: _fmt(e.value),
-                              ),
-                          ],
+                          children: _retentionChips(context, state.retentionLogs),
                         ).animate().fadeIn(delay: 450.ms),
                       ],
                       const SizedBox(height: AppSpacing.xxl),
@@ -508,6 +552,14 @@ class _SymptomCard extends StatelessWidget {
               _SymptomChip(
                 label: L10n.get(context, 'freediving_symptom_dizziness'),
                 onTap: () => onSelect('dizziness'),
+              ),
+              _SymptomChip(
+                label: L10n.get(context, 'freediving_symptom_euphoria'),
+                onTap: () => onSelect('euphoria'),
+              ),
+              _SymptomChip(
+                label: L10n.get(context, 'freediving_symptom_lmc'),
+                onTap: () => onSelect('lmc'),
               ),
               _SymptomChip(
                 label: L10n.get(context, 'freediving_symptom_ok'),
@@ -829,9 +881,8 @@ class _StatRow extends StatelessWidget {
 }
 
 class _RetentionChip extends StatelessWidget {
-  const _RetentionChip({required this.round, required this.time});
-  final int round;
-  final String time;
+  const _RetentionChip({required this.label});
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -844,7 +895,7 @@ class _RetentionChip extends StatelessWidget {
         border: Border.all(color: Colors.white.withAlpha(24)),
       ),
       child: Text(
-        "${L10n.get(context, 'summary_retention_round')} $round: $time",
+        label,
         style: const TextStyle(color: Colors.white70, fontSize: 13),
       ),
     );

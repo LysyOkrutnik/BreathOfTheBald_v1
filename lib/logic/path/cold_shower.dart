@@ -7,11 +7,17 @@ import 'package:okrutnik_breath/logic/services/derived_gamification.dart';
 /// The [Session.levelKey] used for a logged cold-shower exposure.
 const String coldShowerLevelKey = 'cold_shower';
 
-/// Flat XP reward for a logged cold shower — there's no duration or breath
-/// count to derive XP from (the user picked a plain "mark done" flow over a
-/// stopwatch), so this stands in for [GamificationService.updateXpAndLevel]'s
-/// usual breathCount/retentionSeconds formula.
+/// Minimum XP reward for a logged cold shower — the floor for entry points
+/// with no duration UI of their own (the scheduler quick-start, the
+/// home-screen widget), which log a plain 0 duration.
 const int coldShowerXpReward = 15;
+
+/// Same flat-XP-scaled-by-duration approach guided routines use (there's no
+/// breath count to derive XP from here either) — a 15s log and a 10-minute
+/// one used to earn the identical flat reward, which didn't reward actually
+/// staying in longer. The floor keeps the no-duration entry points unchanged.
+int coldShowerXpFor(int durationSec) =>
+    (durationSec * 0.5).round().clamp(coldShowerXpReward, 1000);
 
 /// What it takes to undo a logged cold shower — just the inserted session's
 /// id. Undo no longer restores a pre-log profile snapshot (see
@@ -32,7 +38,7 @@ class ColdShowerLogResult {
 /// behavior.
 Future<ColdShowerLogResult> logColdShowerSession(WidgetRef ref, {int durationSec = 0}) async {
   final gamification = ref.read(gamificationServiceProvider);
-  final xpResult = await gamification.awardFlatXp(coldShowerXpReward);
+  final xpResult = await gamification.awardFlatXp(coldShowerXpFor(durationSec));
   await gamification.updateStreak();
   final sessionId = await ref.read(sessionRepositoryProvider).addSession(
         levelKey: coldShowerLevelKey,

@@ -7,6 +7,7 @@ import 'package:okrutnik_breath/config/levels.dart';
 import 'package:okrutnik_breath/config/responsive.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
+import 'package:okrutnik_breath/data/db/database.dart';
 import 'package:okrutnik_breath/logic/notifiers/session_notifier.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/ui/screens/session_screen.dart';
@@ -15,20 +16,28 @@ import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
 
 class CustomBuilderScreen extends ConsumerStatefulWidget {
-  const CustomBuilderScreen({super.key});
+  const CustomBuilderScreen({super.key, this.existingPreset});
+
+  /// Non-null when opened to edit an already-saved preset instead of
+  /// creating a new one — pre-fills every field and Save overwrites it in
+  /// place instead of inserting a second, separate preset.
+  final CustomPreset? existingPreset;
 
   @override
   ConsumerState<CustomBuilderScreen> createState() => _CustomBuilderScreenState();
 }
 
 class _CustomBuilderScreenState extends ConsumerState<CustomBuilderScreen> {
-  final _nameController = TextEditingController();
-  int _inhale = 4;
-  int _holdIn = 4;
-  int _exhale = 4;
-  int _holdOut = 4;
-  int _cycles = 8;
-  int _rounds = 1;
+  late final _nameController =
+      TextEditingController(text: widget.existingPreset?.name ?? '');
+  late int _inhale = widget.existingPreset?.inhaleSec ?? 4;
+  late int _holdIn = widget.existingPreset?.holdInSec ?? 4;
+  late int _exhale = widget.existingPreset?.exhaleSec ?? 4;
+  late int _holdOut = widget.existingPreset?.holdOutSec ?? 4;
+  late int _cycles = widget.existingPreset?.cycles ?? 8;
+  late int _rounds = widget.existingPreset?.rounds ?? 1;
+
+  bool get _isEditing => widget.existingPreset != null;
 
   @override
   void dispose() {
@@ -72,19 +81,35 @@ class _CustomBuilderScreenState extends ConsumerState<CustomBuilderScreen> {
       return;
     }
     try {
-      await ref.read(customPresetRepositoryProvider).addPreset(
-            name: name,
-            inhaleSec: _inhale,
-            holdInSec: _holdIn,
-            exhaleSec: _exhale,
-            holdOutSec: _holdOut,
-            cycles: _cycles,
-            rounds: _rounds,
-            createdAt: DateTime.now(),
-          );
+      final repo = ref.read(customPresetRepositoryProvider);
+      final existing = widget.existingPreset;
+      if (existing != null) {
+        await repo.updatePreset(
+          id: existing.id,
+          name: name,
+          inhaleSec: _inhale,
+          holdInSec: _holdIn,
+          exhaleSec: _exhale,
+          holdOutSec: _holdOut,
+          cycles: _cycles,
+          rounds: _rounds,
+        );
+      } else {
+        await repo.addPreset(
+          name: name,
+          inhaleSec: _inhale,
+          holdInSec: _holdIn,
+          exhaleSec: _exhale,
+          holdOutSec: _holdOut,
+          cycles: _cycles,
+          rounds: _rounds,
+          createdAt: DateTime.now(),
+        );
+      }
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(savedMsg)));
+        if (existing != null) Navigator.of(context).pop();
       }
     } catch (e, st) {
       developer.log('Error saving preset',
@@ -105,7 +130,9 @@ class _CustomBuilderScreenState extends ConsumerState<CustomBuilderScreen> {
                 constraints: BoxConstraints(maxWidth: context.isTablet ? 640 : 520),
                 child: Column(
                   children: [
-                    ScreenHeader(title: L10n.get(context, 'custom_title')),
+                    ScreenHeader(
+                        title: L10n.get(
+                            context, _isEditing ? 'custom_edit_title' : 'custom_title')),
                     Expanded(
                       child: ListView(
                         physics: const BouncingScrollPhysics(),

@@ -10,6 +10,7 @@ import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
 import 'package:okrutnik_breath/core/notifications/notification_service.dart';
 import 'package:okrutnik_breath/data/db/database.dart';
+import 'package:okrutnik_breath/data/repositories/freediving_repository.dart';
 import 'package:okrutnik_breath/logic/freediving/co2_o2_table_generator.dart';
 import 'package:okrutnik_breath/logic/path/cold_shower.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
@@ -237,11 +238,9 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen> {
       final tableType = level.type == ExerciseType.co2Table
           ? FreedivingTableType.co2
           : FreedivingTableType.o2;
-      final pb = (tableType == FreedivingTableType.co2
-              ? profile.virtualPbCo2Sec
-              : profile.virtualPbO2Sec) ??
-          profile.verifiedPbSec;
-      if (pb == null) {
+      final pb = FreedivingRepository.effectivePb(
+          tableType: tableType, profile: profile);
+      if (pb <= 0) {
         // Was a silent no-op — tapping a planned CO2/O2 table with no PB yet
         // did nothing at all, with no indication why.
         if (mounted) {

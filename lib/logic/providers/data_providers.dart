@@ -123,6 +123,7 @@ final wimHofNextUpProvider = StreamProvider<WimHofNextUp>((ref) async* {
     detrainingDaysOverride: settings.detrainingDaysOverride,
     pbCautionRatioOverride: settings.pbCautionRatioOverride,
     maxAvgRpeToAdvanceOverride: settings.maxAvgRpeToAdvanceOverride,
+    maxAvgRpeToConfirmTrialOverride: settings.maxAvgRpeToConfirmTrialOverride,
   );
 });
 
@@ -221,4 +222,16 @@ final lastColdShowerDurationSecProvider = Provider<int?>((ref) {
     if (s.levelKey == coldShowerLevelKey && s.durationSec > 0) return s.durationSec;
   }
   return null;
+});
+
+/// Cold shower had no progress surface at all beyond defaulting the
+/// duration stepper to last time's value — a simple rolling count is enough
+/// to show the habit is actually building, without a whole dedicated
+/// trend screen like freediving's.
+final coldShowerMonthCountProvider = Provider<int>((ref) {
+  final sessions = ref.watch(sessionHistoryProvider).value ?? const <Session>[];
+  final cutoff = DateTime.now().subtract(const Duration(days: 30));
+  return sessions
+      .where((s) => s.levelKey == coldShowerLevelKey && s.timestamp.isAfter(cutoff))
+      .length;
 });

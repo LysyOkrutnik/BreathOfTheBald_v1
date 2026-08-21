@@ -8,6 +8,7 @@ import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
 import 'package:okrutnik_breath/core/notifications/notification_service.dart';
 import 'package:okrutnik_breath/data/db/database.dart';
+import 'package:okrutnik_breath/data/repositories/freediving_repository.dart';
 import 'package:okrutnik_breath/logic/freediving/co2_o2_table_generator.dart';
 import 'package:okrutnik_breath/logic/path/cold_shower.dart';
 import 'package:okrutnik_breath/logic/path/training_path.dart';
@@ -51,10 +52,14 @@ class TodayScreen extends ConsumerWidget {
       case PathAction.co2Table:
       case PathAction.o2Table:
         final profile = ref.read(freedivingProfileProvider).value;
-        final pb = action.type == PathAction.co2Table
-            ? (profile?.virtualPbCo2Sec ?? profile?.verifiedPbSec)
-            : (profile?.virtualPbO2Sec ?? profile?.verifiedPbSec);
-        if (pb == null) return;
+        if (profile == null) return;
+        final pb = FreedivingRepository.effectivePb(
+          tableType: action.type == PathAction.co2Table
+              ? FreedivingTableType.co2
+              : FreedivingTableType.o2,
+          profile: profile,
+        );
+        if (pb <= 0) return;
         Navigator.of(context).push(fadeThroughRoute(FreedivingTableIntroScreen(
           tableType: action.type == PathAction.co2Table
               ? FreedivingTableType.co2

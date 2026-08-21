@@ -902,7 +902,15 @@ mixin _$SessionState {
       throw _privateConstructorUsedError; // Live count of "first contraction" taps marked during the *current*
 // freediving hold — reset to 0 at the start of every round's hold. Only
 // meaningful while `phase` is `retention` during a freediving table.
-  int get contractionMarkCount => throw _privateConstructorUsedError;
+  int get contractionMarkCount =>
+      throw _privateConstructorUsedError; // The live cycle-diagram definition and current node, copied from
+// `LevelData.cycleSteps` once at session start — null for exercise
+// types with no diagram (see that field's doc for why). Kept on
+// `SessionState` rather than read from `LevelData` directly so
+// `session_screen.dart` stays driven purely by session state, same as
+// every other display field here.
+  List<CycleStep>? get cycleSteps => throw _privateConstructorUsedError;
+  int? get cycleStepIndex => throw _privateConstructorUsedError;
 
   /// Create a copy of SessionState
   /// with the given fields replaced by the non-null parameter values.
@@ -931,7 +939,9 @@ abstract class $SessionStateCopyWith<$Res> {
       String? customDescription,
       bool? customIsBig,
       bool awaitingRoundDecision,
-      int contractionMarkCount});
+      int contractionMarkCount,
+      List<CycleStep>? cycleSteps,
+      int? cycleStepIndex});
 
   $SessionPhaseCopyWith<$Res> get phase;
 }
@@ -965,6 +975,8 @@ class _$SessionStateCopyWithImpl<$Res, $Val extends SessionState>
     Object? customIsBig = freezed,
     Object? awaitingRoundDecision = null,
     Object? contractionMarkCount = null,
+    Object? cycleSteps = freezed,
+    Object? cycleStepIndex = freezed,
   }) {
     return _then(_value.copyWith(
       phase: null == phase
@@ -1023,6 +1035,14 @@ class _$SessionStateCopyWithImpl<$Res, $Val extends SessionState>
           ? _value.contractionMarkCount
           : contractionMarkCount // ignore: cast_nullable_to_non_nullable
               as int,
+      cycleSteps: freezed == cycleSteps
+          ? _value.cycleSteps
+          : cycleSteps // ignore: cast_nullable_to_non_nullable
+              as List<CycleStep>?,
+      cycleStepIndex: freezed == cycleStepIndex
+          ? _value.cycleStepIndex
+          : cycleStepIndex // ignore: cast_nullable_to_non_nullable
+              as int?,
     ) as $Val);
   }
 
@@ -1059,7 +1079,9 @@ abstract class _$$SessionStateImplCopyWith<$Res>
       String? customDescription,
       bool? customIsBig,
       bool awaitingRoundDecision,
-      int contractionMarkCount});
+      int contractionMarkCount,
+      List<CycleStep>? cycleSteps,
+      int? cycleStepIndex});
 
   @override
   $SessionPhaseCopyWith<$Res> get phase;
@@ -1092,6 +1114,8 @@ class __$$SessionStateImplCopyWithImpl<$Res>
     Object? customIsBig = freezed,
     Object? awaitingRoundDecision = null,
     Object? contractionMarkCount = null,
+    Object? cycleSteps = freezed,
+    Object? cycleStepIndex = freezed,
   }) {
     return _then(_$SessionStateImpl(
       phase: null == phase
@@ -1150,6 +1174,14 @@ class __$$SessionStateImplCopyWithImpl<$Res>
           ? _value.contractionMarkCount
           : contractionMarkCount // ignore: cast_nullable_to_non_nullable
               as int,
+      cycleSteps: freezed == cycleSteps
+          ? _value._cycleSteps
+          : cycleSteps // ignore: cast_nullable_to_non_nullable
+              as List<CycleStep>?,
+      cycleStepIndex: freezed == cycleStepIndex
+          ? _value.cycleStepIndex
+          : cycleStepIndex // ignore: cast_nullable_to_non_nullable
+              as int?,
     ));
   }
 }
@@ -1171,8 +1203,11 @@ class _$SessionStateImpl implements _SessionState {
       this.customDescription,
       this.customIsBig,
       this.awaitingRoundDecision = false,
-      this.contractionMarkCount = 0})
-      : _retentionLogs = retentionLogs;
+      this.contractionMarkCount = 0,
+      final List<CycleStep>? cycleSteps,
+      this.cycleStepIndex})
+      : _retentionLogs = retentionLogs,
+        _cycleSteps = cycleSteps;
 
   @override
   final SessionPhase phase;
@@ -1218,10 +1253,34 @@ class _$SessionStateImpl implements _SessionState {
   @override
   @JsonKey()
   final int contractionMarkCount;
+// The live cycle-diagram definition and current node, copied from
+// `LevelData.cycleSteps` once at session start — null for exercise
+// types with no diagram (see that field's doc for why). Kept on
+// `SessionState` rather than read from `LevelData` directly so
+// `session_screen.dart` stays driven purely by session state, same as
+// every other display field here.
+  final List<CycleStep>? _cycleSteps;
+// The live cycle-diagram definition and current node, copied from
+// `LevelData.cycleSteps` once at session start — null for exercise
+// types with no diagram (see that field's doc for why). Kept on
+// `SessionState` rather than read from `LevelData` directly so
+// `session_screen.dart` stays driven purely by session state, same as
+// every other display field here.
+  @override
+  List<CycleStep>? get cycleSteps {
+    final value = _cycleSteps;
+    if (value == null) return null;
+    if (_cycleSteps is EqualUnmodifiableListView) return _cycleSteps;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(value);
+  }
+
+  @override
+  final int? cycleStepIndex;
 
   @override
   String toString() {
-    return 'SessionState(phase: $phase, currentRound: $currentRound, totalRounds: $totalRounds, totalBreathsInRound: $totalBreathsInRound, isGhostMode: $isGhostMode, isPanicMode: $isPanicMode, retentionLogs: $retentionLogs, startTime: $startTime, sessionDuration: $sessionDuration, customLabel: $customLabel, customDescription: $customDescription, customIsBig: $customIsBig, awaitingRoundDecision: $awaitingRoundDecision, contractionMarkCount: $contractionMarkCount)';
+    return 'SessionState(phase: $phase, currentRound: $currentRound, totalRounds: $totalRounds, totalBreathsInRound: $totalBreathsInRound, isGhostMode: $isGhostMode, isPanicMode: $isPanicMode, retentionLogs: $retentionLogs, startTime: $startTime, sessionDuration: $sessionDuration, customLabel: $customLabel, customDescription: $customDescription, customIsBig: $customIsBig, awaitingRoundDecision: $awaitingRoundDecision, contractionMarkCount: $contractionMarkCount, cycleSteps: $cycleSteps, cycleStepIndex: $cycleStepIndex)';
   }
 
   @override
@@ -1255,7 +1314,11 @@ class _$SessionStateImpl implements _SessionState {
             (identical(other.awaitingRoundDecision, awaitingRoundDecision) ||
                 other.awaitingRoundDecision == awaitingRoundDecision) &&
             (identical(other.contractionMarkCount, contractionMarkCount) ||
-                other.contractionMarkCount == contractionMarkCount));
+                other.contractionMarkCount == contractionMarkCount) &&
+            const DeepCollectionEquality()
+                .equals(other._cycleSteps, _cycleSteps) &&
+            (identical(other.cycleStepIndex, cycleStepIndex) ||
+                other.cycleStepIndex == cycleStepIndex));
   }
 
   @override
@@ -1274,7 +1337,9 @@ class _$SessionStateImpl implements _SessionState {
       customDescription,
       customIsBig,
       awaitingRoundDecision,
-      contractionMarkCount);
+      contractionMarkCount,
+      const DeepCollectionEquality().hash(_cycleSteps),
+      cycleStepIndex);
 
   /// Create a copy of SessionState
   /// with the given fields replaced by the non-null parameter values.
@@ -1300,7 +1365,9 @@ abstract class _SessionState implements SessionState {
       final String? customDescription,
       final bool? customIsBig,
       final bool awaitingRoundDecision,
-      final int contractionMarkCount}) = _$SessionStateImpl;
+      final int contractionMarkCount,
+      final List<CycleStep>? cycleSteps,
+      final int? cycleStepIndex}) = _$SessionStateImpl;
 
   @override
   SessionPhase get phase;
@@ -1337,7 +1404,16 @@ abstract class _SessionState implements SessionState {
 // freediving hold — reset to 0 at the start of every round's hold. Only
 // meaningful while `phase` is `retention` during a freediving table.
   @override
-  int get contractionMarkCount;
+  int get contractionMarkCount; // The live cycle-diagram definition and current node, copied from
+// `LevelData.cycleSteps` once at session start — null for exercise
+// types with no diagram (see that field's doc for why). Kept on
+// `SessionState` rather than read from `LevelData` directly so
+// `session_screen.dart` stays driven purely by session state, same as
+// every other display field here.
+  @override
+  List<CycleStep>? get cycleSteps;
+  @override
+  int? get cycleStepIndex;
 
   /// Create a copy of SessionState
   /// with the given fields replaced by the non-null parameter values.

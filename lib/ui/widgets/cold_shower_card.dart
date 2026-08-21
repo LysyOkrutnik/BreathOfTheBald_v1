@@ -5,6 +5,7 @@ import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/logic/path/cold_shower.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
+import 'package:okrutnik_breath/ui/widgets/confirm_dialog.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 
 /// A one-tap log for the cold-exposure pillar of the Wim Hof method — no
@@ -37,6 +38,85 @@ class _ColdShowerCardState extends ConsumerState<ColdShowerCard> {
 
   void _adjust(int delta) {
     setState(() => _durationSec = (_durationFor(ref) + delta).clamp(_minSec, _maxSec));
+  }
+
+  void _showInfo(BuildContext context, WidgetRef ref) {
+    const color = Color(0xFF80D8FF);
+    final monthCount = ref.read(coldShowerMonthCountProvider);
+    showGlassDialog<void>(
+      context,
+      builder: (dialogContext) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(L10n.get(context, 'coldshower_title'),
+              style: const TextStyle(
+                  color: AppTheme.textLight, fontSize: 16, fontWeight: FontWeight.w600)),
+          const SizedBox(height: AppSpacing.sm),
+          Text(L10n.get(context, 'coldshower_info_desc'),
+              style: const TextStyle(color: AppTheme.textDim, fontSize: 13, height: 1.4)),
+          const SizedBox(height: AppSpacing.lg),
+          for (final key in const [
+            'coldshower_benefit1',
+            'coldshower_benefit2',
+            'coldshower_benefit3',
+          ])
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.check_circle_outline, color: color, size: 16),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(L10n.get(context, key),
+                        style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: AppSpacing.md),
+          for (final key in const [
+            'coldshower_warning1',
+            'coldshower_warning2',
+            'coldshower_warning3',
+          ])
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.warning_amber_rounded,
+                      color: AppTheme.danger, size: 16),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(L10n.get(context, key),
+                        style: const TextStyle(color: AppTheme.textDim, fontSize: 12)),
+                  ),
+                ],
+              ),
+            ),
+          if (monthCount > 0) ...[
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              children: [
+                const Icon(Icons.trending_up_rounded, color: color, size: 16),
+                const SizedBox(width: AppSpacing.sm),
+                Text(
+                  "$monthCount ${L10n.get(context, 'coldshower_stat_month_suffix')}",
+                  style: const TextStyle(color: AppTheme.textLight, fontSize: 13),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: AppSpacing.lg),
+          ElevatedButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(L10n.get(context, 'common_ok')),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _log(BuildContext context, WidgetRef ref) async {
@@ -93,6 +173,8 @@ class _ColdShowerCardState extends ConsumerState<ColdShowerCard> {
                 ),
               ),
             ),
+            _DurationStepButton(icon: Icons.info_outline_rounded, color: color,
+                onTap: () => _showInfo(context, ref)),
             _DurationStepButton(icon: Icons.remove_rounded, color: color,
                 onTap: () => _adjust(-_stepSec)),
             SizedBox(

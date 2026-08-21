@@ -33,6 +33,32 @@ class CustomPresetRepository {
         );
   }
 
+  /// Overwrites an existing preset's parameters in place — previously the
+  /// only way to change one value was to delete and rebuild the whole
+  /// preset from memory. Keeps the same `id`/`syncId` (unlike a
+  /// delete+recreate, this doesn't orphan the old row on other devices).
+  Future<void> updatePreset({
+    required int id,
+    required String name,
+    required int inhaleSec,
+    required int holdInSec,
+    required int exhaleSec,
+    required int holdOutSec,
+    required int cycles,
+    required int rounds,
+  }) {
+    return (_db.update(_db.customPresets)..where((t) => t.id.equals(id))).write(
+        CustomPresetsCompanion(
+      name: Value(name),
+      inhaleSec: Value(inhaleSec),
+      holdInSec: Value(holdInSec),
+      exhaleSec: Value(exhaleSec),
+      holdOutSec: Value(holdOutSec),
+      cycles: Value(cycles),
+      rounds: Value(rounds),
+    ));
+  }
+
   /// Soft-delete — sets [deletedAt] instead of removing the row outright, so
   /// the deletion propagates to other devices on next sync rather than the
   /// server's still-active copy silently reappearing here.

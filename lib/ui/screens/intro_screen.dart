@@ -72,9 +72,9 @@ class IntroScreen extends ConsumerWidget {
               _Intro(level: level),
               const SizedBox(height: AppSpacing.xl),
               _Steps(level: level),
-              if (level.type == ExerciseType.fireBreathing) ...[
+              if (level.introWarningKey != null) ...[
                 const SizedBox(height: AppSpacing.lg),
-                _FireWarning(),
+                _IntroWarning(warningKey: level.introWarningKey!),
               ],
               const SizedBox(height: AppSpacing.lg),
             ],
@@ -122,9 +122,9 @@ class IntroScreen extends ConsumerWidget {
                 AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.lg),
             children: [
               _Steps(level: level),
-              if (level.type == ExerciseType.fireBreathing) ...[
+              if (level.introWarningKey != null) ...[
                 const SizedBox(height: AppSpacing.lg),
-                _FireWarning(),
+                _IntroWarning(warningKey: level.introWarningKey!),
               ],
             ],
           ),
@@ -223,7 +223,14 @@ class _Steps extends StatelessWidget {
   }
 }
 
-class _FireWarning extends StatelessWidget {
+/// A highlighted, danger-styled banner for exercises whose real risk
+/// deserves more visual weight than just another bullet in the numbered
+/// steps above — driven by [LevelData.introWarningKey], not hardcoded to
+/// any one exercise type.
+class _IntroWarning extends StatelessWidget {
+  const _IntroWarning({required this.warningKey});
+  final String warningKey;
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -240,7 +247,7 @@ class _FireWarning extends StatelessWidget {
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Text(
-              L10n.get(context, 'warning_fire_breath'),
+              L10n.get(context, warningKey),
               style: const TextStyle(
                   color: AppTheme.danger, fontSize: 12, fontWeight: FontWeight.bold),
             ),

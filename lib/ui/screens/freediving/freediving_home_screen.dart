@@ -8,6 +8,7 @@ import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
 import 'package:okrutnik_breath/config/levels.dart';
 import 'package:okrutnik_breath/data/db/database.dart';
+import 'package:okrutnik_breath/data/repositories/freediving_repository.dart';
 import 'package:okrutnik_breath/logic/freediving/co2_o2_table_generator.dart';
 import 'package:okrutnik_breath/logic/notifiers/session_notifier.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
@@ -232,7 +233,8 @@ class _FreedivingContent extends ConsumerWidget {
             subtitleKey: 'freediving_co2_subtitle',
             color: const Color(0xFF4FC3F7),
             icon: Icons.co2_rounded,
-            pbSeconds: profile.virtualPbCo2Sec ?? profile.verifiedPbSec!,
+            pbSeconds: FreedivingRepository.effectivePb(
+                tableType: FreedivingTableType.co2, profile: profile),
           ),
           const SizedBox(height: AppSpacing.md),
           _TableTile(
@@ -241,7 +243,8 @@ class _FreedivingContent extends ConsumerWidget {
             subtitleKey: 'freediving_o2_subtitle',
             color: const Color(0xFFFF7043),
             icon: Icons.bolt_rounded,
-            pbSeconds: profile.virtualPbO2Sec ?? profile.verifiedPbSec!,
+            pbSeconds: FreedivingRepository.effectivePb(
+                tableType: FreedivingTableType.o2, profile: profile),
           ),
         ] else
           // A single dimmed placeholder instead of two separate disabled
@@ -274,7 +277,19 @@ class _CustomFreedivingSection extends ConsumerWidget {
     }
   }
 
-  void _start(BuildContext context, WidgetRef ref, CustomFreedivingPreset p) {
+  // A custom table has no PB-relative safety cap at all, so this reminder is
+  // its one safety checkpoint — it used to only fire when the preset was
+  // first created, not on every subsequent reuse from this screen.
+  Future<void> _start(BuildContext context, WidgetRef ref, CustomFreedivingPreset p) async {
+    final confirmed = await showGlassConfirm(
+      context,
+      title: L10n.get(context, 'freediving_safety_confirm_title'),
+      body: L10n.get(context, 'freediving_safety_rule1'),
+      confirmLabel: L10n.get(context, 'freediving_start_table'),
+      cancelLabel: L10n.get(context, 'common_cancel'),
+      icon: Icons.warning_amber_rounded,
+    );
+    if (!confirmed || !context.mounted) return;
     final rounds = Co2O2TableGenerator.generateCustomTable(
       startApneaSec: p.startApneaSec,
       endApneaSec: p.endApneaSec,
@@ -312,6 +327,8 @@ class _CustomFreedivingSection extends ConsumerWidget {
           _CustomFreedivingPresetCard(
             preset: p,
             onTap: () => _start(context, ref, p),
+            onEdit: () => Navigator.of(context).push(
+                fadeThroughRoute(CustomFreedivingBuilderScreen(existingPreset: p))),
             onDelete: () => _delete(context, ref, p),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -349,15 +366,35 @@ class _CustomFreedivingSection extends ConsumerWidget {
   }
 }
 
+/// Includes each round's breathe-up + final inhale + exhale overhead, same
+/// as FreedivingTableIntroScreen's estimate — without it this card's number
+/// disagreed with (and understated) what the session preview shows.
+int _estimateMinutes(CustomFreedivingPreset p) {
+  final rounds = Co2O2TableGenerator.generateCustomTable(
+    startApneaSec: p.startApneaSec,
+    endApneaSec: p.endApneaSec,
+    startRestSec: p.startRestSec,
+    endRestSec: p.endRestSec,
+    rounds: p.rounds,
+  );
+  final totalSec = rounds.fold<int>(
+      0,
+      (s, r) =>
+          s + r.apneaSec + r.restSec + FreedivingSessionTiming.perRoundOverheadSec);
+  return (totalSec / 60).round();
+}
+
 class _CustomFreedivingPresetCard extends StatelessWidget {
   const _CustomFreedivingPresetCard({
     required this.preset,
     required this.onTap,
+    required this.onEdit,
     required this.onDelete,
   });
 
   final CustomFreedivingPreset preset;
   final VoidCallback onTap;
+  final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   @override
@@ -389,6 +426,7 @@ class _CustomFreedivingPresetCard extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.xs),
                   Text(
+                    '~${_estimateMinutes(preset)} min • '
                     '${preset.startApneaSec}-${preset.endApneaSec}s apnea • '
                     '${preset.startRestSec}-${preset.endRestSec}s rest • ${preset.rounds}×',
                     style: TextStyle(
@@ -396,6 +434,11 @@ class _CustomFreedivingPresetCard extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.edit_outlined,
+                  color: Colors.white38, size: 20),
+              onPressed: onEdit,
             ),
             IconButton(
               icon: const Icon(Icons.delete_outline_rounded,

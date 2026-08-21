@@ -43,6 +43,7 @@ class WimHofNextUp {
     this.resetTrialWindow = false,
     this.pbCautionAdvised = false,
     this.idleDaysBeforeRollback = 0,
+    this.hasNoRpeData = false,
   });
 
   /// The ladder level the app currently treats as "confirmed" (the one
@@ -85,6 +86,14 @@ class WimHofNextUp {
   /// triggered the rollback, so the UI can explain "why" with a concrete
   /// number instead of a generic message.
   final int idleDaysBeforeRollback;
+
+  /// True when there are sessions logged at [currentLevelKey] but none of
+  /// them carry an RPE score — missing RPE is treated as a free pass by the
+  /// eligibility/trial checks (deliberately not changed to a hard block,
+  /// that's a product decision), so a user who never rates a session
+  /// advances on session count and days alone, with the "listen to how it
+  /// felt" signal never actually engaged for them. Advisory-only nudge.
+  final bool hasNoRpeData;
 }
 
 /// Pure progression logic for the Wim Hof classic ladder. The ladder itself
@@ -173,6 +182,7 @@ class WimHofProgression {
     int detrainingDays = kDetrainingDays,
     double pbCautionRatio = kPbCautionRetentionRatio,
     double maxAvgRpeToAdvance = kMaxAvgRpeToAdvance,
+    double maxAvgRpeToConfirmTrial = kMaxAvgRpeToConfirmTrial,
   }) {
     now ??= DateTime.now();
     final current = progress.currentLevelKey;
@@ -234,7 +244,7 @@ class WimHofProgression {
         .toList());
     if (trialSessions.length >= kMinTrialSessions) {
       final trialAvgRpe = _avgRpe(trialSessions);
-      final tooHard = trialAvgRpe != null && trialAvgRpe > kMaxAvgRpeToConfirmTrial;
+      final tooHard = trialAvgRpe != null && trialAvgRpe > maxAvgRpeToConfirmTrial;
       if (!tooHard) {
         return WimHofNextUp(currentLevelKey: next);
       }
@@ -271,6 +281,7 @@ class WimHofProgression {
             verifiedPbSec: verifiedPbSec,
             pbCautionRatio: pbCautionRatio,
           ),
+      hasNoRpeData: avgRpe == null && currentLevelSessions.isNotEmpty,
     );
   }
 }

@@ -12,7 +12,11 @@ class BreathHoldRound {
   final int restSec;
 }
 
-enum FreedivingTableType { co2, o2 }
+/// [custom] and [packing] carry no PB cap and no baseline PB to adjust — a
+/// session of either type is logged for history/safety (progress counting,
+/// symptom check-in) but never drives [RpeProgression]'s virtual-PB
+/// adjustment, since there's no PB for it to adjust.
+enum FreedivingTableType { co2, o2, custom, packing }
 
 /// Fixed per-round timing that sits around a table's own apnea+rest
 /// seconds — a calm breathe-up, the final full inhale, and the exhale right

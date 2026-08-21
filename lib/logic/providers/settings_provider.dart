@@ -22,6 +22,7 @@ class Settings {
     this.weeklyHardCapOverride,
     this.pbCautionRatioOverride,
     this.maxAvgRpeToAdvanceOverride,
+    this.maxAvgRpeToConfirmTrialOverride,
   });
 
   final String profileName;
@@ -65,6 +66,12 @@ class Settings {
   final double? pbCautionRatioOverride;
   final double? maxAvgRpeToAdvanceOverride;
 
+  /// Override for `kMaxAvgRpeToConfirmTrial` — the trial-confirm gate's own
+  /// threshold, a sibling of [maxAvgRpeToAdvanceOverride]'s
+  /// `kMaxAvgRpeToAdvance` that was previously the one threshold with no
+  /// override at all despite both being exposed here.
+  final double? maxAvgRpeToConfirmTrialOverride;
+
   Settings copyWith({
     String? profileName,
     bool? soundEnabled,
@@ -79,6 +86,7 @@ class Settings {
     int? weeklyHardCapOverride,
     double? pbCautionRatioOverride,
     double? maxAvgRpeToAdvanceOverride,
+    double? maxAvgRpeToConfirmTrialOverride,
   }) {
     return Settings(
       profileName: profileName ?? this.profileName,
@@ -96,18 +104,21 @@ class Settings {
       pbCautionRatioOverride: pbCautionRatioOverride ?? this.pbCautionRatioOverride,
       maxAvgRpeToAdvanceOverride:
           maxAvgRpeToAdvanceOverride ?? this.maxAvgRpeToAdvanceOverride,
+      maxAvgRpeToConfirmTrialOverride: maxAvgRpeToConfirmTrialOverride ??
+          this.maxAvgRpeToConfirmTrialOverride,
     );
   }
 
-  /// Like [copyWith], but for the four advanced-threshold overrides only —
-  /// kept separate because `null` is their meaningful "use the default"
-  /// value, not "leave unchanged", so [copyWith]'s usual `?? this.x` pattern
+  /// Like [copyWith], but for the advanced-threshold overrides only — kept
+  /// separate because `null` is their meaningful "use the default" value,
+  /// not "leave unchanged", so [copyWith]'s usual `?? this.x` pattern
   /// would make them impossible to ever reset back to a default.
   Settings withAdvancedThresholds({
     int? detrainingDaysOverride,
     int? weeklyHardCapOverride,
     double? pbCautionRatioOverride,
     double? maxAvgRpeToAdvanceOverride,
+    double? maxAvgRpeToConfirmTrialOverride,
   }) {
     return Settings(
       profileName: profileName,
@@ -123,6 +134,7 @@ class Settings {
       weeklyHardCapOverride: weeklyHardCapOverride,
       pbCautionRatioOverride: pbCautionRatioOverride,
       maxAvgRpeToAdvanceOverride: maxAvgRpeToAdvanceOverride,
+      maxAvgRpeToConfirmTrialOverride: maxAvgRpeToConfirmTrialOverride,
     );
   }
 }
@@ -150,6 +162,8 @@ class SettingsNotifier extends StateNotifier<Settings> {
   static const _kWeeklyHardCapOverride = 'adv_weekly_hard_cap_override';
   static const _kPbCautionRatioOverride = 'adv_pb_caution_ratio_override';
   static const _kMaxAvgRpeToAdvanceOverride = 'adv_max_avg_rpe_to_advance_override';
+  static const _kMaxAvgRpeToConfirmTrialOverride =
+      'adv_max_avg_rpe_to_confirm_trial_override';
 
   /// Older builds had a dead 'schedule_active' flag (from a since-replaced
   /// time-picker scheduler) that was never written, so a splash-screen guard
@@ -202,6 +216,8 @@ class SettingsNotifier extends StateNotifier<Settings> {
       weeklyHardCapOverride: p.getInt(_kWeeklyHardCapOverride),
       pbCautionRatioOverride: p.getDouble(_kPbCautionRatioOverride),
       maxAvgRpeToAdvanceOverride: p.getDouble(_kMaxAvgRpeToAdvanceOverride),
+      maxAvgRpeToConfirmTrialOverride:
+          p.getDouble(_kMaxAvgRpeToConfirmTrialOverride),
     );
   }
 
@@ -259,12 +275,14 @@ class SettingsNotifier extends StateNotifier<Settings> {
     int? weeklyHardCap,
     double? pbCautionRatio,
     double? maxAvgRpeToAdvance,
+    double? maxAvgRpeToConfirmTrial,
   }) async {
     state = state.withAdvancedThresholds(
       detrainingDaysOverride: detrainingDays,
       weeklyHardCapOverride: weeklyHardCap,
       pbCautionRatioOverride: pbCautionRatio,
       maxAvgRpeToAdvanceOverride: maxAvgRpeToAdvance,
+      maxAvgRpeToConfirmTrialOverride: maxAvgRpeToConfirmTrial,
     );
     final p = await SharedPreferences.getInstance();
     if (detrainingDays != null) {
@@ -286,6 +304,11 @@ class SettingsNotifier extends StateNotifier<Settings> {
       await p.setDouble(_kMaxAvgRpeToAdvanceOverride, maxAvgRpeToAdvance);
     } else {
       await p.remove(_kMaxAvgRpeToAdvanceOverride);
+    }
+    if (maxAvgRpeToConfirmTrial != null) {
+      await p.setDouble(_kMaxAvgRpeToConfirmTrialOverride, maxAvgRpeToConfirmTrial);
+    } else {
+      await p.remove(_kMaxAvgRpeToConfirmTrialOverride);
     }
   }
 

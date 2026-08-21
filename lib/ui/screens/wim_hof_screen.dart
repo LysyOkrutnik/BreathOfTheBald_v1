@@ -281,6 +281,14 @@ class _ProgressCard extends StatelessWidget {
                   "$days/$kMinDaysAtLevel${L10n.get(context, 'wimhof_progress_days_suffix')}",
                   style: const TextStyle(color: AppTheme.textDim, fontSize: 12),
                 ),
+                if (nextUp.hasNoRpeData) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    L10n.get(context, 'wimhof_rpe_nudge'),
+                    style: const TextStyle(
+                        color: AppTheme.lure, fontSize: 11, height: 1.3),
+                  ),
+                ],
               ],
             ),
           ),

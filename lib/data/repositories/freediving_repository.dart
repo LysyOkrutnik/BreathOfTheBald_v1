@@ -12,6 +12,48 @@ class FreedivingRepository {
 
   final AppDatabase _db;
 
+  static String _typeStr(FreedivingTableType t) => switch (t) {
+        FreedivingTableType.co2 => 'co2',
+        FreedivingTableType.o2 => 'o2',
+        FreedivingTableType.custom => 'custom',
+        FreedivingTableType.packing => 'packing',
+      };
+
+  /// Mirrors the Wim Hof ladder's detraining rollback for freediving's
+  /// working PB: unlike the ladder, a virtual PB nudged up by a string of
+  /// "too easy" RPEs never eased back down on its own however long the user
+  /// then went without practicing that table — the next generated table
+  /// would still assume undiminished retention. Idle days beyond
+  /// [kFreedivingDetrainingDays] linearly ease the working PB back toward
+  /// the verified baseline (fully there by 2x the threshold) rather than
+  /// snapping to it immediately — a gentler, gradual correction in the same
+  /// spirit as [RpeProgression]'s own step size. Pure and side-effect-free:
+  /// callers use the return value to build the next table: the *stored*
+  /// virtualPb is left untouched until a real session's RPE feedback next
+  /// updates it.
+  static const int kFreedivingDetrainingDays = 21;
+
+  static int effectivePb({
+    required FreedivingTableType tableType,
+    required FreedivingProfileData profile,
+  }) {
+    final isCo2 = tableType == FreedivingTableType.co2;
+    final verifiedPb = isCo2 ? profile.verifiedPbCo2Sec : profile.verifiedPbSec;
+    final virtualPb = isCo2 ? profile.virtualPbCo2Sec : profile.virtualPbO2Sec;
+    final lastSessionAt = isCo2 ? profile.lastCo2SessionAt : profile.lastO2SessionAt;
+    final current = virtualPb ?? verifiedPb;
+    if (current == null) return 0; // No baseline at all yet.
+    if (verifiedPb == null || lastSessionAt == null) return current;
+
+    final idleDays = DateTime.now().difference(lastSessionAt).inDays;
+    if (idleDays <= kFreedivingDetrainingDays) return current;
+
+    final easeRatio =
+        ((idleDays - kFreedivingDetrainingDays) / kFreedivingDetrainingDays)
+            .clamp(0.0, 1.0);
+    return (current - (current - verifiedPb) * easeRatio).round();
+  }
+
   /// Ensures a single profile row exists and returns it. Wrapped in a
   /// transaction so two near-simultaneous first calls (plausible right at
   /// app startup) can't both see "no row yet" and both insert one —
@@ -105,7 +147,7 @@ class FreedivingRepository {
     return _db.into(_db.freedivingSessionLog).insert(
           FreedivingSessionLogCompanion.insert(
             timestamp: DateTime.now(),
-            tableType: tableType == FreedivingTableType.co2 ? 'co2' : 'o2',
+            tableType: _typeStr(tableType),
             pbUsedSec: pbUsedSec,
             roundsPlanned: rounds.length,
             roundsCompleted: roundsCompleted,
@@ -124,7 +166,7 @@ class FreedivingRepository {
     required FreedivingTableType tableType,
     required int rpeScore,
   }) async {
-    final typeStr = tableType == FreedivingTableType.co2 ? 'co2' : 'o2';
+    final typeStr = _typeStr(tableType);
 
     final lastLog = await (_db.select(_db.freedivingSessionLog)
           ..where((t) => t.tableType.equals(typeStr))
@@ -135,6 +177,14 @@ class FreedivingRepository {
       await (_db.update(_db.freedivingSessionLog)
             ..where((t) => t.id.equals(lastLog.id)))
           .write(FreedivingSessionLogCompanion(rpeScore: Value(rpeScore)));
+    }
+
+    // Custom tables and packing have no PB cap and no baseline PB to
+    // adjust — recording the rating on the log row above is all there is
+    // to do for them.
+    if (tableType == FreedivingTableType.custom ||
+        tableType == FreedivingTableType.packing) {
+      return;
     }
 
     final profile = await getProfile();
@@ -171,8 +221,13 @@ class FreedivingRepository {
   }
 
   /// Concerning symptom tags (see the check-in chips on the summary screen)
-  /// — 'ok' is deliberately excluded, it's the reassuring option.
-  static const _concerningSymptoms = {'tingling', 'dizziness'};
+  /// — 'ok' is deliberately excluded, it's the reassuring option. Matches
+  /// the stop-signal symptoms the app's own safety copy calls out
+  /// (freediving_safety_rule4, freediving_safety_intro): tingling and
+  /// dizziness were already tracked; euphoria and LMC (loss of motor
+  /// control, a normal pre-blackout warning sign) were not, despite being
+  /// named there as symptoms to watch for.
+  static const _concerningSymptoms = {'tingling', 'dizziness', 'euphoria', 'lmc'};
 
   /// Records the post-session symptom check-in on the most recent log of
   /// [tableType] — same "find the last log, attach it" pattern as
@@ -185,7 +240,7 @@ class FreedivingRepository {
     required FreedivingTableType tableType,
     required String symptomTag,
   }) async {
-    final typeStr = tableType == FreedivingTableType.co2 ? 'co2' : 'o2';
+    final typeStr = _typeStr(tableType);
     final recentLogs = await (_db.select(_db.freedivingSessionLog)
           ..where((t) => t.tableType.equals(typeStr))
           ..orderBy([(t) => OrderingTerm.desc(t.timestamp)])
@@ -203,6 +258,12 @@ class FreedivingRepository {
         .where((l) => _concerningSymptoms.contains(l.symptomTag))
         .isNotEmpty;
     if (!priorConcerning) return; // First report — not a pattern yet.
+    // Custom tables and packing have no baseline PB to ease — the tag is
+    // still recorded above as a pure safety signal.
+    if (tableType == FreedivingTableType.custom ||
+        tableType == FreedivingTableType.packing) {
+      return;
+    }
 
     final profile = await getProfile();
     final verifiedPb =

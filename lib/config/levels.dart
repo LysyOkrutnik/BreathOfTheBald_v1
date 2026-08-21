@@ -38,6 +38,7 @@ class GuidedStep {
     required this.phase,
     this.isInhale,
     this.recordAsRetention = false,
+    this.cycleStepIndex,
   });
 
   final String labelKey;
@@ -57,6 +58,35 @@ class GuidedStep {
   /// incidental holds (a "return to center" pause, a rest beat) that would
   /// just clutter that list with numbers nobody cares to see afterwards.
   final bool recordAsRetention;
+
+  /// Which node of [LevelData.cycleSteps] this engine step corresponds to,
+  /// for the live cycle diagram — null for a step with no diagram node of
+  /// its own (e.g. a mid-set rest break), in which case the diagram keeps
+  /// showing whichever node was last active rather than losing the
+  /// highlight. Several consecutive steps can share the same index (e.g.
+  /// packing's 12 individual "gulp" steps all collapse into one "×12" node).
+  final int? cycleStepIndex;
+}
+
+/// One node of a live "cycle diagram" — every step of a single repeating
+/// cycle of an exercise (e.g. inhale->hold->exhale->hold for box breathing),
+/// shown as a box in `session_screen.dart`'s diagram with the currently
+/// active one highlighted. Deliberately separate from [GuidedStep]/the
+/// per-phase duration fields: those drive the session engine, this only
+/// drives what the diagram displays, which isn't always a 1:1 mirror (e.g.
+/// packing's 12 "gulp" engine steps collapse into a single node here).
+class CycleStep {
+  const CycleStep({required this.labelKey, this.durationSec, this.countLabel});
+
+  final String labelKey;
+
+  /// Shown as "Ns" on the node. Null for an open-ended phase with no fixed
+  /// length (e.g. Wim Hof's retention, which lasts until the user taps).
+  final int? durationSec;
+
+  /// Shown instead of a duration for a node that collapses several repeated
+  /// engine steps into one (e.g. "×12" for packing's gulps).
+  final String? countLabel;
 }
 
 extension ExerciseTypeX on ExerciseType {
@@ -103,11 +133,25 @@ class LevelData {
   /// once per round ([totalRounds] rounds total). Null for every other type.
   final List<GuidedStep>? guidedSteps;
 
+  /// The live cycle-diagram definition for this exercise — every node of
+  /// one repeating cycle, shown as boxes+arrows in `session_screen.dart`
+  /// with the current one highlighted. Null for exercise types with no
+  /// single repeating cycle to diagram (freediving tables/PB test are a
+  /// table of changing rounds, not a fixed cycle — they keep their existing
+  /// round-list preview instead).
+  final List<CycleStep>? cycleSteps;
+
   // UI presentation mapping.
   final Color color;
   final String instructionTitleKey;
   final String instructionDescriptionKey;
   final List<String> instructionStepKeys;
+
+  /// A highlighted, danger-styled banner shown on IntroScreen right below
+  /// the step list — for the handful of exercises whose real risk (blackout,
+  /// a specific medical contraindication) is easy to skim past as just
+  /// another bullet in the numbered steps above. Null shows no banner.
+  final String? introWarningKey;
 
   const LevelData({
     required this.title,
@@ -126,10 +170,12 @@ class LevelData {
     this.freedivingRounds,
     this.freedivingPbUsedSec,
     this.guidedSteps,
+    this.cycleSteps,
     required this.color,
     required this.instructionTitleKey,
     required this.instructionDescriptionKey,
     required this.instructionStepKeys,
+    this.introWarningKey,
   });
 
   /// Builds a runtime [LevelData] for a user-defined custom pattern. [cycles]
@@ -156,6 +202,15 @@ class LevelData {
       holdInSec: holdInSec,
       exhaleSec: exhaleSec,
       holdOutSec: holdOutSec,
+      // Skips zero-duration phases, same rule SessionNotifier._customPhase
+      // itself uses to skip running them — kept in sync there via
+      // `_startCustom`'s own parallel skip-and-index logic.
+      cycleSteps: [
+        if (inhaleSec > 0) CycleStep(labelKey: "session_inhale", durationSec: inhaleSec),
+        if (holdInSec > 0) CycleStep(labelKey: "session_hold", durationSec: holdInSec),
+        if (exhaleSec > 0) CycleStep(labelKey: "session_exhale", durationSec: exhaleSec),
+        if (holdOutSec > 0) CycleStep(labelKey: "session_hold", durationSec: holdOutSec),
+      ],
       color: color,
       instructionTitleKey: name,
       instructionDescriptionKey: '',
@@ -234,6 +289,11 @@ class LevelData {
       totalRounds: 3,
       totalBreaths: 30,
       breathPace: Duration(milliseconds: 3000),
+      cycleSteps: [
+        CycleStep(labelKey: "session_breathing_phase", countLabel: "×30"),
+        CycleStep(labelKey: "session_hold"),
+        CycleStep(labelKey: "session_recovery", durationSec: 15),
+      ],
       color: Color(0xFF4DB6AC),
       instructionTitleKey: "intro_title_mild",
       instructionDescriptionKey: "intro_desc_mild",
@@ -254,6 +314,11 @@ class LevelData {
       totalRounds: 3,
       totalBreaths: 40,
       breathPace: Duration(milliseconds: 2500),
+      cycleSteps: [
+        CycleStep(labelKey: "session_breathing_phase", countLabel: "×40"),
+        CycleStep(labelKey: "session_hold"),
+        CycleStep(labelKey: "session_recovery", durationSec: 15),
+      ],
       color: Color(0xFF81C784),
       instructionTitleKey: "intro_title_strong",
       instructionDescriptionKey: "intro_desc_strong",
@@ -274,6 +339,11 @@ class LevelData {
       totalRounds: 4,
       totalBreaths: 50,
       breathPace: Duration(milliseconds: 2000),
+      cycleSteps: [
+        CycleStep(labelKey: "session_breathing_phase", countLabel: "×50"),
+        CycleStep(labelKey: "session_hold"),
+        CycleStep(labelKey: "session_recovery", durationSec: 15),
+      ],
       color: Color(0xFFFFB74D),
       instructionTitleKey: "intro_title_beast",
       instructionDescriptionKey: "intro_desc_beast",
@@ -294,16 +364,24 @@ class LevelData {
       totalRounds: 5,
       totalBreaths: 60,
       breathPace: Duration(milliseconds: 1800),
+      cycleSteps: [
+        CycleStep(labelKey: "session_breathing_phase", countLabel: "×60"),
+        CycleStep(labelKey: "session_hold"),
+        CycleStep(labelKey: "session_recovery", durationSec: 15),
+      ],
       color: Color(0xFFE57373),
       instructionTitleKey: "intro_title_guru",
       instructionDescriptionKey: "intro_desc_guru",
       instructionStepKeys: [
         "intro_steps_guru_1",
         "intro_steps_guru_2",
+        "intro_steps_guru_contraindications",
         "intro_steps_guru_3",
         "intro_steps_guru_4",
+        "intro_steps_guru_recovery",
         "intro_steps_guru_5",
       ],
+      introWarningKey: "warning_guru",
     ),
 
     // --- AUTOMATED EXERCISES ---
@@ -314,6 +392,12 @@ class LevelData {
       subtitle: "desc_focus",
       type: ExerciseType.boxBreathing,
       loopCount: 16,
+      cycleSteps: [
+        CycleStep(labelKey: "session_inhale", durationSec: 4),
+        CycleStep(labelKey: "session_hold", durationSec: 4),
+        CycleStep(labelKey: "session_exhale", durationSec: 4),
+        CycleStep(labelKey: "session_hold", durationSec: 4),
+      ],
       color: Color(0xFF5C6BC0),
       instructionTitleKey: "intro_title_box",
       instructionDescriptionKey: "intro_desc_box",
@@ -333,6 +417,11 @@ class LevelData {
       subtitle: "desc_sleep",
       type: ExerciseType.relax478,
       loopCount: 32, // Approximate a 10-minute session.
+      cycleSteps: [
+        CycleStep(labelKey: "session_inhale", durationSec: 4),
+        CycleStep(labelKey: "session_hold", durationSec: 7),
+        CycleStep(labelKey: "session_exhale", durationSec: 8),
+      ],
       color: Color(0xFFBA68C8),
       instructionTitleKey: "intro_title_relax",
       instructionDescriptionKey: "intro_desc_relax",
@@ -362,6 +451,7 @@ class LevelData {
         "intro_steps_fire_5",
         "intro_steps_fire_6",
       ],
+      introWarningKey: "warning_fire_breath",
     ),
 
     // --- FREEDIVING (display/lookup only) ---
@@ -421,12 +511,23 @@ class LevelData {
       color: Color(0xFF26A69A),
       instructionTitleKey: "exercise_stretch_chest_title",
       instructionDescriptionKey: "exercise_stretch_chest_subtitle",
-      instructionStepKeys: [],
+      instructionStepKeys: [
+        "guide_stretch_chest_step1",
+        "guide_stretch_chest_step2",
+        "guide_stretch_chest_step3",
+        "guide_stretch_chest_step4",
+      ],
       guidedSteps: [
-        GuidedStep(labelKey: "guided_stretch_right", durationSec: 25, phase: GuidedStepPhase.hold),
-        GuidedStep(labelKey: "guided_stretch_return", durationSec: 3, phase: GuidedStepPhase.hold),
-        GuidedStep(labelKey: "guided_stretch_left", durationSec: 25, phase: GuidedStepPhase.hold),
-        GuidedStep(labelKey: "guided_stretch_return", durationSec: 3, phase: GuidedStepPhase.hold),
+        GuidedStep(labelKey: "guided_stretch_right", durationSec: 25, phase: GuidedStepPhase.hold, cycleStepIndex: 0),
+        GuidedStep(labelKey: "guided_stretch_return", durationSec: 3, phase: GuidedStepPhase.hold, cycleStepIndex: 1),
+        GuidedStep(labelKey: "guided_stretch_left", durationSec: 25, phase: GuidedStepPhase.hold, cycleStepIndex: 2),
+        GuidedStep(labelKey: "guided_stretch_return", durationSec: 3, phase: GuidedStepPhase.hold, cycleStepIndex: 3),
+      ],
+      cycleSteps: [
+        CycleStep(labelKey: "guided_stretch_right", durationSec: 25),
+        CycleStep(labelKey: "guided_stretch_return", durationSec: 3),
+        CycleStep(labelKey: "guided_stretch_left", durationSec: 25),
+        CycleStep(labelKey: "guided_stretch_return", durationSec: 3),
       ],
     ),
     'uddiyana_bandha': LevelData(
@@ -438,12 +539,25 @@ class LevelData {
       color: Color(0xFF7E57C2),
       instructionTitleKey: "exercise_uddiyana_title",
       instructionDescriptionKey: "exercise_uddiyana_subtitle",
-      instructionStepKeys: [],
+      instructionStepKeys: [
+        "guide_uddiyana_step1",
+        "guide_uddiyana_step2",
+        "guide_uddiyana_step3",
+        "guide_uddiyana_step4",
+        "guide_uddiyana_step5",
+      ],
+      introWarningKey: "warning_uddiyana",
       guidedSteps: [
-        GuidedStep(labelKey: "guided_uddiyana_inhale", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: true),
-        GuidedStep(labelKey: "guided_uddiyana_exhale", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: false),
-        GuidedStep(labelKey: "guided_uddiyana_hold", durationSec: 7, phase: GuidedStepPhase.hold, recordAsRetention: true),
-        GuidedStep(labelKey: "guided_uddiyana_rest", durationSec: 5, phase: GuidedStepPhase.hold),
+        GuidedStep(labelKey: "guided_uddiyana_inhale", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: true, cycleStepIndex: 0),
+        GuidedStep(labelKey: "guided_uddiyana_exhale", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: false, cycleStepIndex: 1),
+        GuidedStep(labelKey: "guided_uddiyana_hold", durationSec: 7, phase: GuidedStepPhase.hold, recordAsRetention: true, cycleStepIndex: 2),
+        GuidedStep(labelKey: "guided_uddiyana_rest", durationSec: 5, phase: GuidedStepPhase.hold, cycleStepIndex: 3),
+      ],
+      cycleSteps: [
+        CycleStep(labelKey: "guided_uddiyana_inhale", durationSec: 3),
+        CycleStep(labelKey: "guided_uddiyana_exhale", durationSec: 3),
+        CycleStep(labelKey: "guided_uddiyana_hold", durationSec: 7),
+        CycleStep(labelKey: "guided_uddiyana_rest", durationSec: 5),
       ],
     ),
     'resisted_breathing': LevelData(
@@ -460,7 +574,19 @@ class LevelData {
       color: Color(0xFF42A5F5),
       instructionTitleKey: "exercise_resisted_breathing_title",
       instructionDescriptionKey: "exercise_resisted_breathing_subtitle",
-      instructionStepKeys: [],
+      instructionStepKeys: [
+        "guide_resisted_breathing_step1",
+        "guide_resisted_breathing_step2",
+        "guide_resisted_breathing_step3",
+        "guide_resisted_breathing_step4",
+      ],
+      // The cycle diagram shows just the repeating inhale/exhale pair — not
+      // the fully flattened 45-step engine list below (15 reps x 3 sets),
+      // which would be nonsensical as a "cycle" to display.
+      cycleSteps: [
+        CycleStep(labelKey: "guided_resisted_inhale", durationSec: 2),
+        CycleStep(labelKey: "guided_resisted_exhale", durationSec: 2),
+      ],
       guidedSteps: [
         ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
         ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
@@ -490,16 +616,31 @@ class LevelData {
       color: Color(0xFF66BB6A),
       instructionTitleKey: "exercise_three_part_breath_title",
       instructionDescriptionKey: "exercise_three_part_breath_subtitle",
-      instructionStepKeys: [],
+      instructionStepKeys: [
+        "guide_three_part_breath_step1",
+        "guide_three_part_breath_step2",
+        "guide_three_part_breath_step3",
+        "guide_three_part_breath_step4",
+      ],
       guidedSteps: [
-        GuidedStep(labelKey: "guided_threepart_belly_in", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: true),
-        GuidedStep(labelKey: "guided_threepart_ribs_in", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: true),
-        GuidedStep(labelKey: "guided_threepart_chest_in", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: true),
-        GuidedStep(labelKey: "guided_threepart_hold_full", durationSec: 2, phase: GuidedStepPhase.hold),
-        GuidedStep(labelKey: "guided_threepart_chest_out", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: false),
-        GuidedStep(labelKey: "guided_threepart_ribs_out", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: false),
-        GuidedStep(labelKey: "guided_threepart_belly_out", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: false),
-        GuidedStep(labelKey: "guided_threepart_hold_empty", durationSec: 2, phase: GuidedStepPhase.hold),
+        GuidedStep(labelKey: "guided_threepart_belly_in", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: true, cycleStepIndex: 0),
+        GuidedStep(labelKey: "guided_threepart_ribs_in", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: true, cycleStepIndex: 1),
+        GuidedStep(labelKey: "guided_threepart_chest_in", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: true, cycleStepIndex: 2),
+        GuidedStep(labelKey: "guided_threepart_hold_full", durationSec: 2, phase: GuidedStepPhase.hold, cycleStepIndex: 3),
+        GuidedStep(labelKey: "guided_threepart_chest_out", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: false, cycleStepIndex: 4),
+        GuidedStep(labelKey: "guided_threepart_ribs_out", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: false, cycleStepIndex: 5),
+        GuidedStep(labelKey: "guided_threepart_belly_out", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: false, cycleStepIndex: 6),
+        GuidedStep(labelKey: "guided_threepart_hold_empty", durationSec: 2, phase: GuidedStepPhase.hold, cycleStepIndex: 7),
+      ],
+      cycleSteps: [
+        CycleStep(labelKey: "guided_threepart_belly_in", durationSec: 2),
+        CycleStep(labelKey: "guided_threepart_ribs_in", durationSec: 2),
+        CycleStep(labelKey: "guided_threepart_chest_in", durationSec: 2),
+        CycleStep(labelKey: "guided_threepart_hold_full", durationSec: 2),
+        CycleStep(labelKey: "guided_threepart_chest_out", durationSec: 2),
+        CycleStep(labelKey: "guided_threepart_ribs_out", durationSec: 2),
+        CycleStep(labelKey: "guided_threepart_belly_out", durationSec: 2),
+        CycleStep(labelKey: "guided_threepart_hold_empty", durationSec: 2),
       ],
     ),
     // Freediving-specific — surfaced from the Freediving section (already
@@ -515,12 +656,27 @@ class LevelData {
       color: Color(0xFFEF5350),
       instructionTitleKey: "exercise_packing_title",
       instructionDescriptionKey: "exercise_packing_subtitle",
-      instructionStepKeys: [],
+      instructionStepKeys: [
+        "guide_packing_step1",
+        "guide_packing_step2",
+        "guide_packing_step3",
+        "guide_packing_step4",
+        "guide_packing_step5",
+      ],
+      // The 12 individual "gulp" engine steps below all collapse into one
+      // "×12" diagram node (index 1) — showing 12 separate boxes for a
+      // single top-up motion repeated in place would be absurd.
+      cycleSteps: [
+        CycleStep(labelKey: "guided_packing_full_inhale", durationSec: 3),
+        CycleStep(labelKey: "guided_packing_gulp", countLabel: "×12"),
+        CycleStep(labelKey: "guided_packing_hold", durationSec: 10),
+        CycleStep(labelKey: "guided_packing_exhale", durationSec: 4),
+      ],
       guidedSteps: [
-        GuidedStep(labelKey: "guided_packing_full_inhale", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: true),
+        GuidedStep(labelKey: "guided_packing_full_inhale", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: true, cycleStepIndex: 0),
         ..._packingGulps,
-        GuidedStep(labelKey: "guided_packing_hold", durationSec: 10, phase: GuidedStepPhase.hold, recordAsRetention: true),
-        GuidedStep(labelKey: "guided_packing_exhale", durationSec: 4, phase: GuidedStepPhase.breath, isInhale: false),
+        GuidedStep(labelKey: "guided_packing_hold", durationSec: 10, phase: GuidedStepPhase.hold, recordAsRetention: true, cycleStepIndex: 2),
+        GuidedStep(labelKey: "guided_packing_exhale", durationSec: 4, phase: GuidedStepPhase.breath, isInhale: false, cycleStepIndex: 3),
       ],
     ),
   };
@@ -529,14 +685,14 @@ class LevelData {
   /// a plain `for`-generated list can't be used inside this `const` map, so
   /// the repetition is a `...` spread of a single const rep instead.
   static const _resistedBreathingReps = [
-    GuidedStep(labelKey: "guided_resisted_inhale", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: true),
-    GuidedStep(labelKey: "guided_resisted_exhale", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: false),
+    GuidedStep(labelKey: "guided_resisted_inhale", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: true, cycleStepIndex: 0),
+    GuidedStep(labelKey: "guided_resisted_exhale", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: false, cycleStepIndex: 1),
   ];
 
   /// One small "top-up" inhale, spread 12× into freediving_packing's step
   /// list — same const-context reasoning as [_resistedBreathingReps].
   static const _packingGulp = [
-    GuidedStep(labelKey: "guided_packing_gulp", durationSec: 1, phase: GuidedStepPhase.breath, isInhale: true),
+    GuidedStep(labelKey: "guided_packing_gulp", durationSec: 1, phase: GuidedStepPhase.breath, isInhale: true, cycleStepIndex: 1),
   ];
   static const _packingGulps = [
     ..._packingGulp, ..._packingGulp, ..._packingGulp, ..._packingGulp,

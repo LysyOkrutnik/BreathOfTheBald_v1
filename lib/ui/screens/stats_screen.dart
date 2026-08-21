@@ -10,6 +10,7 @@ import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/data/db/database.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/logic/services/gamification_service.dart';
+import 'package:okrutnik_breath/logic/wimhof/wimhof_progression.dart' show wimHofLadder;
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
@@ -104,13 +105,25 @@ class StatsContent extends ConsumerWidget {
             .clamp(0.0, 1.0)
         : 0.0;
 
-    // Retention trend (oldest -> newest), only sessions that had a hold.
-    final retention = sessions
-        .where((s) => s.retentionSec > 0)
+    // Retention trend (oldest -> newest), only sessions that had a hold —
+    // split by category instead of one merged series: a single chart mixing
+    // Wim Hof's single tens-of-seconds-to-minutes holds, guided-routine's
+    // fixed few-second holds (Uddiyana/packing), and a freediving table's
+    // cumulative sum of ~8 near-maximal holds (often several minutes) made
+    // the line mostly reflect which exercise was done that day rather than
+    // real progress in any one of them.
+    const guidedHoldKeys = {'uddiyana_bandha', 'freediving_packing'};
+    const freedivingTableKeys = {'freediving_co2', 'freediving_o2'};
+    List<double> retentionFor(bool Function(String levelKey) matches) => sessions
+        .where((s) => s.retentionSec > 0 && matches(s.levelKey))
         .map((s) => s.retentionSec.toDouble())
         .toList()
         .reversed
         .toList();
+    final wimHofRetention = retentionFor((k) => wimHofLadder.contains(k));
+    final freedivingTableRetention =
+        retentionFor((k) => freedivingTableKeys.contains(k));
+    final guidedHoldRetention = retentionFor((k) => guidedHoldKeys.contains(k));
 
     return ListView(
       physics: const BouncingScrollPhysics(),
@@ -127,19 +140,24 @@ class StatsContent extends ConsumerWidget {
         const SizedBox(height: AppSpacing.md),
         _XpBar(level: level, progress: xpProgress, totalXp: totalXp),
         const SizedBox(height: AppSpacing.lg),
-        if (retention.length >= 2) ...[
-          _ChartCard(
-            title: L10n.get(context, 'stats_retention_trend'),
-            child: SizedBox(
-              height: 120,
-              child: CustomPaint(
-                painter: _LineChartPainter(retention),
-                size: Size.infinite,
+        for (final trend in [
+          (wimHofRetention, 'stats_retention_trend_wimhof'),
+          (freedivingTableRetention, 'stats_retention_trend_freediving'),
+          (guidedHoldRetention, 'stats_retention_trend_guided'),
+        ])
+          if (trend.$1.length >= 2) ...[
+            _ChartCard(
+              title: L10n.get(context, trend.$2),
+              child: SizedBox(
+                height: 120,
+                child: CustomPaint(
+                  painter: _LineChartPainter(trend.$1),
+                  size: Size.infinite,
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-        ],
+            const SizedBox(height: AppSpacing.lg),
+          ],
         _ChartCard(
           title: L10n.get(context, 'stats_activity'),
           child: _Heatmap(sessions: sessions),
@@ -456,9 +474,28 @@ class _TechniqueBreakdown extends StatelessWidget {
     );
   }
 
+  /// Custom presets (breathing and freediving alike) are persisted with
+  /// `levelKey` set to the user's own preset name, which never matches a key
+  /// in the static [LevelData.levels] map — every one of them used to fall
+  /// back to the same flat [AppTheme.accent], making two differently-named
+  /// custom presets indistinguishable here despite every built-in technique
+  /// having its own unique color. A deterministic hash-based pick at least
+  /// gives each preset NAME a consistent, distinct color across renders.
+  static const _customPresetPalette = [
+    Color(0xFF4DD0E1),
+    Color(0xFF9575CD),
+    Color(0xFFFFB74D),
+    Color(0xFF81C784),
+    Color(0xFFF06292),
+    Color(0xFF64B5F6),
+  ];
+
+  Color _colorForCustomPreset(String levelKey) =>
+      _customPresetPalette[levelKey.hashCode.abs() % _customPresetPalette.length];
+
   Widget _bar(BuildContext context, String levelKey, int count, int maxCount) {
     final level = LevelData.levels[levelKey];
-    final color = level?.color ?? AppTheme.accent;
+    final color = level?.color ?? _colorForCustomPreset(levelKey);
     final name = level != null ? L10n.get(context, level.title) : levelKey;
     return Row(
       children: [

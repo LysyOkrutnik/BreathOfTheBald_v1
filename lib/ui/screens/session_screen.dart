@@ -10,6 +10,7 @@ import 'package:okrutnik_breath/logic/states/session_state.dart';
 import 'package:okrutnik_breath/ui/screens/home_shell_screen.dart';
 import 'package:okrutnik_breath/ui/screens/summary_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
+import 'package:okrutnik_breath/ui/widgets/cycle_diagram.dart';
 import 'package:okrutnik_breath/ui/widgets/ferrofluid_painter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -119,6 +120,39 @@ double _blobSize(BuildContext context, BoxConstraints c) {
   return limit.clamp(200.0, 520.0);
 }
 
+/// The live cycle diagram (see cycle_diagram.dart), shown only for exercise
+/// types that actually define one — null/empty for freediving tables, the
+/// PB test, and fire breathing, which keep this space empty as before.
+/// Wrapped in horizontal scrolling since the wider diagrams (8 nodes for
+/// three-part breath) won't fit every phone's width at a comfortable box
+/// size, and a diagram that's readable-but-scrollable beats one shrunk down
+/// to illegibility to force-fit.
+class _CycleDiagramSection extends StatelessWidget {
+  const _CycleDiagramSection({required this.state});
+  final SessionState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final steps = state.cycleSteps;
+    if (steps == null || steps.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+          child: CycleDiagram(
+            steps: steps,
+            activeIndex: state.cycleStepIndex,
+            accentColor: AppTheme.primary,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _PortraitLayout extends StatelessWidget {
   const _PortraitLayout({required this.state, required this.notifier, required this.visuals});
   final SessionState state;
@@ -151,6 +185,7 @@ class _PortraitLayout extends StatelessWidget {
             const SizedBox(height: AppSpacing.xl),
             _PhaseText(state: state, notifier: notifier),
             const Spacer(),
+            _CycleDiagramSection(state: state),
             _ProgressBar(state: state),
             const SizedBox(height: AppSpacing.xl),
           ],
@@ -206,6 +241,7 @@ class _LandscapeLayout extends StatelessWidget {
                   ),
                 ),
               ),
+              _CycleDiagramSection(state: state),
               _ProgressBar(state: state),
               const SizedBox(height: AppSpacing.xl),
             ],
@@ -646,8 +682,16 @@ class _ProgressBar extends StatelessWidget {
     // Hof retention is open-ended; even a freediving table's target isn't
     // known here) — an indeterminate animation at least reads as "running",
     // instead of the bar sitting frozen at 0% for the whole hold.
-    final isIndeterminate =
-        state.phase.maybeMap(retention: (_) => true, orElse: () => false);
+    final isIndeterminate = state.phase.maybeMap(
+      retention: (_) => true,
+      // A guided-routine hold (and the classic Wim Hof recovery-breath) both
+      // use this phase, and neither has a value this bar can compute
+      // fractional progress from here — without this, the bar just sat
+      // frozen at 0% for the whole hold (e.g. stretch_chest, which is
+      // nothing but holds), reading as broken rather than running.
+      recovery: (_) => true,
+      orElse: () => false,
+    );
     if (state.totalBreathsInRound > 0) {
       state.phase.maybeWhen(
         breathing: (index, _, __) => progress = index / state.totalBreathsInRound,

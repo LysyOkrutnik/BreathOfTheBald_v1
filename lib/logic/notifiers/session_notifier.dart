@@ -52,6 +52,12 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
   /// levels and CO2/O2 tables). Set once, at the moment a session finishes.
   ExerciseType? lastFinishedExerciseType;
 
+  /// The `LevelData.key` of the most recently finished session — needed
+  /// alongside [lastFinishedExerciseType] to single out one specific
+  /// `guidedRoutine` exercise (packing) from its siblings, which all share
+  /// that same [ExerciseType].
+  String? lastFinishedLevelKey;
+
   /// The new level, if the just-finished session pushed the user's total XP
   /// into a new level bracket — null otherwise. Read once by the summary
   /// screen, same lifecycle as [lastFinishedExerciseType].
@@ -167,6 +173,11 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
       customLabel: "session_prepare",
       customDescription: "3...",
       customIsBig: false,
+      // Copied once here rather than read from `_currentLevel` on every
+      // build — session_screen.dart stays driven purely by SessionState,
+      // same as every other display field. Null for exercise types with no
+      // diagram (freediving tables/PB test — see LevelData.cycleSteps).
+      cycleSteps: level.cycleSteps,
     );
 
     // --- COUNTDOWN ---
@@ -536,26 +547,46 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
     final cycles = level.loopCount ?? 8;
     final rounds = level.totalRounds > 0 ? level.totalRounds : 1;
 
+    // Zero-duration phases are skipped entirely below — the cycle-diagram
+    // index for each phase must skip them the exact same way, so it always
+    // points at the right node in `level.cycleSteps` (built with the same
+    // skip rule, see LevelData.custom).
+    final phaseSeconds = [
+      level.inhaleSec,
+      level.holdInSec,
+      level.exhaleSec,
+      level.holdOutSec,
+    ];
+    final cycleIndices = <int?>[];
+    var nextCycleIndex = 0;
+    for (final sec in phaseSeconds) {
+      cycleIndices.add(sec > 0 ? nextCycleIndex++ : null);
+    }
+
     for (int r = 1; r <= rounds; r++) {
       if (!_isRunning) return;
       state = state.copyWith(
           currentRound: r, totalRounds: rounds, totalBreathsInRound: cycles);
 
       for (int i = 1; i <= cycles; i++) {
-        if (!await _customPhase(
-            "session_inhale", level.inhaleSec, isBig: true, isInhale: true, index: i, cycles: cycles)) {
+        if (!await _customPhase("session_inhale", level.inhaleSec,
+            isBig: true, isInhale: true, index: i, cycles: cycles,
+            cycleStepIndex: cycleIndices[0])) {
           return;
         }
-        if (!await _customPhase(
-            "session_hold", level.holdInSec, isBig: true, isInhale: null, index: i, cycles: cycles)) {
+        if (!await _customPhase("session_hold", level.holdInSec,
+            isBig: true, isInhale: null, index: i, cycles: cycles,
+            cycleStepIndex: cycleIndices[1])) {
           return;
         }
-        if (!await _customPhase(
-            "session_exhale", level.exhaleSec, isBig: false, isInhale: false, index: i, cycles: cycles)) {
+        if (!await _customPhase("session_exhale", level.exhaleSec,
+            isBig: false, isInhale: false, index: i, cycles: cycles,
+            cycleStepIndex: cycleIndices[2])) {
           return;
         }
-        if (!await _customPhase(
-            "session_hold", level.holdOutSec, isBig: false, isInhale: null, index: i, cycles: cycles)) {
+        if (!await _customPhase("session_hold", level.holdOutSec,
+            isBig: false, isInhale: null, index: i, cycles: cycles,
+            cycleStepIndex: cycleIndices[3])) {
           return;
         }
       }
@@ -573,6 +604,7 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
     required bool? isInhale,
     required int index,
     required int cycles,
+    int? cycleStepIndex,
   }) async {
     if (seconds <= 0) return _isRunning;
     if (!_isRunning) return false;
@@ -584,6 +616,7 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
       isInhaling: isBig,
       duration: Duration(seconds: seconds),
       index: index,
+      cycleStepIndex: cycleStepIndex,
     );
     if (isInhale != null) {
       _playBreathSignal(isInhale: isInhale, progress: 1.0);
@@ -595,6 +628,11 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
   // ==========================================================
   // GUIDED ROUTINE (lung-mobility/diaphragm exercises + packing)
   // ==========================================================
+  /// Below this, a hold step is a transitional pause (e.g. "return to
+  /// center"), not the moment the exercise is actually about — see the
+  /// gong-gating comment in [_guidedStepPhase].
+  static const int _kSignificantGuidedHoldThresholdSec = 5;
+
   /// Generalizes [_startCustom]'s "labeled, timed phases repeated over
   /// rounds" loop to a data-driven [GuidedStep] list instead of a hardcoded
   /// 4-phase inhale/hold/exhale/hold cycle — one engine for every guided
@@ -606,14 +644,23 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
       return;
     }
     final rounds = level.totalRounds > 0 ? level.totalRounds : 1;
+    // Only breath-phase steps belong in the "x/y" counter's denominator —
+    // hold steps have no place in it (they show their own countdown), so
+    // counting them too made the number skip past holds and never reach
+    // "y/y" on an actual breath step.
+    final breathStepsCount =
+        steps.where((s) => s.phase == GuidedStepPhase.breath).length;
 
     for (int r = 1; r <= rounds; r++) {
       if (!_isRunning) return;
       state = state.copyWith(
-          currentRound: r, totalRounds: rounds, totalBreathsInRound: steps.length);
+          currentRound: r, totalRounds: rounds, totalBreathsInRound: breathStepsCount);
 
+      var breathIndex = 0;
       for (int i = 0; i < steps.length; i++) {
-        if (!await _guidedStepPhase(steps[i], index: i + 1)) return;
+        final step = steps[i];
+        if (step.phase == GuidedStepPhase.breath) breathIndex++;
+        if (!await _guidedStepPhase(step, index: breathIndex)) return;
       }
     }
 
@@ -634,16 +681,23 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
       // A quiet cue that a hold actually started — Wim Hof/freediving holds
       // get a gong+haptic on entry (_startRetention); guided-routine holds
       // had none, so a user with eyes closed got no signal the phase changed.
-      try { _hapticEngine.playRetentionPeak(); _audioManager.playGong(); } catch (_) {}
+      // Gated on duration: a brief transitional pause (a 3s "return to
+      // center", a 5s "rest, breathe normally") isn't the moment the
+      // exercise is actually about, and firing the same dramatic cue for
+      // those too dilutes what it means for the holds that really are.
+      if (step.durationSec > _kSignificantGuidedHoldThresholdSec) {
+        try { _hapticEngine.playRetentionPeak(); _audioManager.playGong(); } catch (_) {}
+      }
       state = state.copyWith(
         customLabel: step.labelKey,
-        customDescription: null,
+        customDescription: "${step.labelKey}_desc",
         // Null, not false — a fixed `false` short-circuits _Visuals.from
         // into treating this like a static custom-labelled step, which
         // froze the orb deflated for the whole hold. Null lets it fall
         // through to the same "breathe slowly in place" recovery-phase
         // animation freediving's rest/pause already uses.
         customIsBig: null,
+        cycleStepIndex: step.cycleStepIndex,
         phase: SessionPhase.recovery(remaining: Duration(seconds: remaining)),
       );
       while (remaining > 0) {
@@ -664,18 +718,14 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
       return _isRunning;
     }
 
-    // No hint text — unlike box/relax/fire's breathing steps, a guided
-    // routine's labelKey (e.g. "Wdech", "Brzuch") already says what to do;
-    // a fabricated "${duration}s" string passed as if it were an l10n key
-    // only "worked" by relying on L10n.get's unknown-key fallback (which
-    // just echoes the key back) rather than an explicit choice.
     _updateCustomState(
       step.labelKey,
-      null,
+      "${step.labelKey}_desc",
       isBig: step.isInhale ?? true,
       isInhaling: step.isInhale ?? true,
       duration: Duration(seconds: step.durationSec),
       index: index,
+      cycleStepIndex: step.cycleStepIndex,
     );
     if (step.isInhale != null) {
       _playBreathSignal(isInhale: step.isInhale!, progress: 1.0);
@@ -692,6 +742,7 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
       customLabel: null,
       customDescription: null,
       customIsBig: null,
+      cycleStepIndex: 0,
       phase: SessionPhase.breathing(
           breathIndex: 1,
           isInhaling: false,
@@ -733,7 +784,8 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
     try { _hapticEngine.playRetentionPeak(); _audioManager.playGong(); _audioManager.duckDrone(); } catch (_) {}
 
     final start = DateTime.now();
-    state = state.copyWith(phase: SessionPhase.retention(elapsed: Duration.zero));
+    state = state.copyWith(
+        cycleStepIndex: 1, phase: SessionPhase.retention(elapsed: Duration.zero));
 
     _phaseTimer?.cancel();
     _phaseTimer = Timer.periodic(const Duration(seconds: 1), (t) {
@@ -777,7 +829,8 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
   void _startRecovery() {
     try { _audioManager.playInhale(); _audioManager.unduckDrone(); } catch (_) {}
     int sec = 15;
-    state = state.copyWith(phase: SessionPhase.recovery(remaining: Duration(seconds: sec)));
+    state = state.copyWith(
+        cycleStepIndex: 2, phase: SessionPhase.recovery(remaining: Duration(seconds: sec)));
 
     _phaseTimer?.cancel();
     _phaseTimer = Timer.periodic(const Duration(seconds: 1), (t) {
@@ -800,6 +853,7 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
     } else {
       state = state.copyWith(
         currentRound: state.currentRound + 1,
+        cycleStepIndex: 0,
         phase: SessionPhase.breathing(breathIndex: 1, isInhaling: false, currentBreathDuration: _currentLevel!.breathPace),
       );
       Future.delayed(const Duration(milliseconds: 50), _runBreathingLoop);
@@ -816,21 +870,27 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
       if (!_isRunning) return;
       state = state.copyWith(currentRound: 1, totalRounds: 1);
 
-      _updateCustomState("session_inhale", "session_box_inhale_desc", isBig: true, isInhaling: true, duration: const Duration(seconds: 4), index: i);
+      _updateCustomState("session_inhale", "session_box_inhale_desc", isBig: true, isInhaling: true, duration: const Duration(seconds: 4), index: i, cycleStepIndex: 0);
       _playBreathSignal(isInhale: true, progress: 1.0);
       await Future.delayed(const Duration(seconds: 4));
       if (!_isRunning) return;
 
-      _updateCustomState("session_hold", "session_box_hold_full_desc", isBig: true, isInhaling: true, duration: const Duration(seconds: 4), index: i);
+      _updateCustomState("session_hold", "session_box_hold_full_desc", isBig: true, isInhaling: true, duration: const Duration(seconds: 4), index: i, cycleStepIndex: 1);
+      // A light cue that the hold phase actually started — every other
+      // "hold" moment in the app signals its start; box breathing's two
+      // holds had none, leaving eyes-closed practice with no feedback that
+      // the phase changed.
+      try { _hapticEngine.playTick(); } catch (_) {}
       await Future.delayed(const Duration(seconds: 4));
       if (!_isRunning) return;
 
-      _updateCustomState("session_exhale", "session_box_exhale_desc", isBig: false, isInhaling: false, duration: const Duration(seconds: 4), index: i);
+      _updateCustomState("session_exhale", "session_box_exhale_desc", isBig: false, isInhaling: false, duration: const Duration(seconds: 4), index: i, cycleStepIndex: 2);
       _playBreathSignal(isInhale: false, progress: 1.0);
       await Future.delayed(const Duration(seconds: 4));
       if (!_isRunning) return;
 
-      _updateCustomState("session_hold", "session_box_hold_empty_desc", isBig: false, isInhaling: false, duration: const Duration(seconds: 4), index: i);
+      _updateCustomState("session_hold", "session_box_hold_empty_desc", isBig: false, isInhaling: false, duration: const Duration(seconds: 4), index: i, cycleStepIndex: 3);
+      try { _hapticEngine.playTick(); } catch (_) {}
       await Future.delayed(const Duration(seconds: 4));
     }
     _finishSession();
@@ -845,16 +905,17 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
     for (int i = 1; i <= loops; i++) {
       if (!_isRunning) return;
 
-      _updateCustomState("session_inhale", "session_relax_inhale_desc", isBig: true, isInhaling: true, duration: const Duration(seconds: 4), index: i);
+      _updateCustomState("session_inhale", "session_relax_inhale_desc", isBig: true, isInhaling: true, duration: const Duration(seconds: 4), index: i, cycleStepIndex: 0);
       _playBreathSignal(isInhale: true, progress: 1.0);
       await Future.delayed(const Duration(seconds: 4));
       if (!_isRunning) return;
 
-      _updateCustomState("session_hold", "session_relax_hold_desc", isBig: true, isInhaling: true, duration: const Duration(seconds: 7), index: i);
+      _updateCustomState("session_hold", "session_relax_hold_desc", isBig: true, isInhaling: true, duration: const Duration(seconds: 7), index: i, cycleStepIndex: 1);
+      try { _hapticEngine.playTick(); } catch (_) {}
       await Future.delayed(const Duration(seconds: 7));
       if (!_isRunning) return;
 
-      _updateCustomState("session_exhale", "session_relax_exhale_desc", isBig: false, isInhaling: false, duration: const Duration(seconds: 8), index: i);
+      _updateCustomState("session_exhale", "session_relax_exhale_desc", isBig: false, isInhaling: false, duration: const Duration(seconds: 8), index: i, cycleStepIndex: 2);
       _playBreathSignal(isInhale: false, progress: 1.0);
       await Future.delayed(const Duration(seconds: 8));
     }
@@ -926,11 +987,13 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
     required bool isInhaling,
     required Duration duration,
     required int index,
+    int? cycleStepIndex,
   }) {
     state = state.copyWith(
       customLabel: labelKey,
       customDescription: descKey,
       customIsBig: isBig,
+      cycleStepIndex: cycleStepIndex,
       phase: SessionPhase.breathing(
         breathIndex: index,
         isInhaling: isInhaling,
@@ -966,6 +1029,7 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
     // Set before the state change below so it's already visible to the
     // summary screen's very first build after navigation.
     lastFinishedExerciseType = level?.type;
+    lastFinishedLevelKey = level?.key;
     lastFreedivingContractionSummary = (level?.type.isFreedivingTable ?? false)
         ? RoundContractionSummary.fromRounds(contractionsByRound)
         : null;
@@ -1008,22 +1072,34 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
       // XP-calculation input for these two types only. The full, honest hold
       // time is still stored as the session's real retentionSec below.
       final gamification = _ref.read(gamificationServiceProvider);
-      // Guided routines (lung-mobility exercises + packing) have no
-      // meaningful `totalBreaths`/retention of their own — the generic
-      // formula previously evaluated to a flat 0 XP for every one of them,
-      // regardless of how long or how many reps were actually completed.
-      // Award flat XP scaled by real elapsed time instead (same helper cold
-      // shower already uses for a duration-less activity, just with a
-      // computed amount instead of a constant).
-      final xpResult = level.type == ExerciseType.guidedRoutine
+      // Guided routines (lung-mobility exercises + packing), box breathing,
+      // 4-7-8, and fire breathing have no meaningful `totalBreaths`/retention
+      // of their own — `levels.dart` never sets `totalBreaths` for any of
+      // them, so the generic breathCount*multiplier formula below always
+      // evaluated to a flat 0 XP, regardless of how long or how many reps
+      // were actually completed. Award flat XP scaled by real elapsed time
+      // instead (same helper cold shower already uses for a duration-less
+      // activity, just with a computed amount instead of a constant).
+      final noNaturalBreathCount = level.type == ExerciseType.guidedRoutine ||
+          level.type == ExerciseType.boxBreathing ||
+          level.type == ExerciseType.relax478 ||
+          level.type == ExerciseType.fireBreathing;
+      final xpResult = noNaturalBreathCount
           ? await gamification.awardFlatXp(
               (duration.inSeconds * 0.5).round().clamp(1, 1000))
           : await gamification.updateXpAndLevel(
               breathCount: level.totalBreaths * totalRounds,
+              // A freediving table's breathCount is always 0 above (no
+              // natural breath count for a breath-hold table) — retention
+              // alone drives its XP. `multiplier` only ever affects Wim
+              // Hof/custom sessions, whose breathCount is real; it used to
+              // read `isFreedivingTable ? 0.5 : 1.5` as if it dampened
+              // freediving XP, but multiplied against an always-0
+              // breathCount, that branch never did anything.
               retentionSeconds: isFreedivingTable
                   ? (totalRetention * 0.3).round()
                   : totalRetention,
-              multiplier: isFreedivingTable ? 0.5 : 1.5,
+              multiplier: 1.5,
             );
       justLeveledUpTo = xpResult.leveledUp ? xpResult.newLevel : null;
       final streakResult = await gamification.updateStreak();
@@ -1049,18 +1125,41 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
         _lastSessionIdCompleter.complete(sessionId);
       }
 
-      if (isFreedivingTable &&
-          level.freedivingRounds != null &&
-          level.freedivingPbUsedSec != null) {
+      if (isFreedivingTable && level.freedivingRounds != null) {
+        // Custom tables carry no PB cap, so freedivingPbUsedSec is never set
+        // for them — logged with a 0 sentinel instead of being excluded
+        // entirely, so they still count toward history/progress and can get
+        // a post-session symptom check-in like every other freediving table.
+        final tableType = level.type == ExerciseType.co2Table
+            ? FreedivingTableType.co2
+            : level.type == ExerciseType.o2Table
+                ? FreedivingTableType.o2
+                : FreedivingTableType.custom;
         await _ref.read(freedivingRepositoryProvider).logTableSession(
-              tableType: level.type == ExerciseType.co2Table
-                  ? FreedivingTableType.co2
-                  : FreedivingTableType.o2,
-              pbUsedSec: level.freedivingPbUsedSec!,
+              tableType: tableType,
+              pbUsedSec: level.freedivingPbUsedSec ?? 0,
               rounds: level.freedivingRounds!,
               roundsCompleted: freedivingRoundsCompleted,
               durationSec: duration.inSeconds,
               contractions: contractionsByRound,
+            );
+      } else if (level.key == 'freediving_packing' && retentionLogs.isNotEmpty) {
+        // Packing carries the same real risks the audit called out for
+        // CO2/O2 tables (barotrauma, gas embolism, blackout) and has a
+        // genuine breath-hold — it deserves the same safety-signal logging,
+        // even though it's a guidedRoutine, not a table, and has no PB of
+        // its own to log against.
+        await _ref.read(freedivingRepositoryProvider).logTableSession(
+              tableType: FreedivingTableType.packing,
+              pbUsedSec: 0,
+              rounds: [
+                BreathHoldRound(
+                    index: 1,
+                    apneaSec: retentionLogs.first.inSeconds,
+                    restSec: 0)
+              ],
+              roundsCompleted: 1,
+              durationSec: duration.inSeconds,
             );
       }
 

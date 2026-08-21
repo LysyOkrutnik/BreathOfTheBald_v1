@@ -68,6 +68,7 @@ class WimHofRepository {
     int? detrainingDaysOverride,
     double? pbCautionRatioOverride,
     double? maxAvgRpeToAdvanceOverride,
+    double? maxAvgRpeToConfirmTrialOverride,
   }) async {
     final progress = await _getOrCreate();
     final sessions = await _allWimHofSessions();
@@ -83,6 +84,8 @@ class WimHofRepository {
       detrainingDays: detrainingDaysOverride ?? kDetrainingDays,
       pbCautionRatio: pbCautionRatioOverride ?? kPbCautionRetentionRatio,
       maxAvgRpeToAdvance: maxAvgRpeToAdvanceOverride ?? kMaxAvgRpeToAdvance,
+      maxAvgRpeToConfirmTrial:
+          maxAvgRpeToConfirmTrialOverride ?? kMaxAvgRpeToConfirmTrial,
     );
     if (result.currentLevelKey != progress.currentLevelKey || result.resetTrialWindow) {
       await (_db.update(_db.wimHofProgress)..where((t) => t.id.equals(progress.id)))

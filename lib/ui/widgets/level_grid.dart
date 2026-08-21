@@ -111,12 +111,23 @@ class LevelCard extends StatelessWidget {
         return '${level.totalBreaths} ${L10n.get(context, 'desc_breaths')} • '
             '${level.totalRounds} ${L10n.get(context, roundsKey)}';
       case ExerciseType.boxBreathing:
-        return '16 ${L10n.get(context, 'desc_cycles')} • '
+        // 4 phases × 4s each, per cycle — kept in sync with
+        // SessionNotifier._startBoxBreathing instead of a second hardcoded
+        // guess, so retuning loopCount there can't silently make this card
+        // wrong.
+        final boxSeconds = (level.loopCount ?? 0) * 4 * 4;
+        final boxLabel = boxSeconds < 60
+            ? '~${boxSeconds}s'
+            : '~${(boxSeconds / 60).round()} min';
+        return '$boxLabel • ${level.loopCount ?? 0} ${L10n.get(context, 'desc_cycles')} • '
             '${L10n.get(context, 'desc_steel_nerves')}';
       case ExerciseType.relax478:
-        return '~10 min • ${L10n.get(context, 'desc_deep_sleep')}';
+        // 4+7+8 = 19s per cycle, matching SessionNotifier._startRelax478.
+        final relaxSeconds = (level.loopCount ?? 0) * 19;
+        return '~${(relaxSeconds / 60).round()} min • ${L10n.get(context, 'desc_deep_sleep')}';
       case ExerciseType.fireBreathing:
-        return '3 min • ${L10n.get(context, 'desc_pure_energy')}';
+        final fireMinutes = (level.totalDuration ?? Duration.zero).inMinutes;
+        return '$fireMinutes min • ${L10n.get(context, 'desc_pure_energy')}';
       case ExerciseType.guidedRoutine:
         // Unlike box/relax/fire above, a rounds count alone doesn't convey
         // how long this actually takes — packing is ~30s, resisted
@@ -128,6 +139,10 @@ class LevelCard extends StatelessWidget {
         final timeLabel = totalSeconds < 60
             ? '~${totalSeconds}s'
             : '~${(totalSeconds / 60).round()} min';
+        // Session screen already hides the round indicator entirely for
+        // totalRounds <= 1 (packing, resisted breathing) — showing "1 round"
+        // here would disagree with what the session itself displays.
+        if (level.totalRounds <= 1) return timeLabel;
         final roundsKey =
             level.totalRounds >= 5 ? 'desc_rounds_pl' : 'desc_rounds';
         return '$timeLabel • ${level.totalRounds} ${L10n.get(context, roundsKey)}';
@@ -290,6 +305,8 @@ class CustomSection extends ConsumerWidget {
           PresetCard(
             preset: p,
             onTap: () => _start(context, ref, p),
+            onEdit: () => Navigator.of(context)
+                .push(fadeThroughRoute(CustomBuilderScreen(existingPreset: p))),
             onDelete: () => _delete(context, ref, p),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -332,11 +349,13 @@ class PresetCard extends StatelessWidget {
     super.key,
     required this.preset,
     required this.onTap,
+    required this.onEdit,
     required this.onDelete,
   });
 
   final CustomPreset preset;
   final VoidCallback onTap;
+  final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   @override
@@ -376,6 +395,11 @@ class PresetCard extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.edit_outlined,
+                  color: Colors.white38, size: 20),
+              onPressed: onEdit,
             ),
             IconButton(
               icon: const Icon(Icons.delete_outline_rounded,

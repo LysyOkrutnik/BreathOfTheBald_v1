@@ -74,7 +74,8 @@ class InstructionScreen extends StatelessWidget {
                           "guide_classic_method_warning1",
                           "guide_classic_method_warning2",
                           "guide_classic_method_warning3",
-                          "guide_classic_method_warning4"
+                          "guide_classic_method_warning4",
+                          "guide_classic_method_warning5"
                         ],
                         stepKeys: [
                           "guide_classic_method_step1",
@@ -353,6 +354,9 @@ class InstructionScreen extends StatelessWidget {
                         descriptionKey: "guide_packing_desc",
                         benefitKeys: [
                           "guide_packing_benefit1",
+                          "guide_packing_benefit2",
+                          "guide_packing_benefit3",
+                          "guide_packing_benefit4",
                         ],
                         warningKeys: [
                           "guide_packing_warning1",

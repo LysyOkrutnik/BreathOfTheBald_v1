@@ -31,6 +31,30 @@ class CustomFreedivingRepository {
         );
   }
 
+  /// Overwrites an existing preset's parameters in place — previously the
+  /// only way to change one value was to delete and rebuild the whole
+  /// preset from memory. Keeps the same `id`/`syncId` (unlike a
+  /// delete+recreate, this doesn't orphan the old row on other devices).
+  Future<void> updatePreset({
+    required int id,
+    required String name,
+    required int startApneaSec,
+    required int endApneaSec,
+    required int startRestSec,
+    required int endRestSec,
+    required int rounds,
+  }) {
+    return (_db.update(_db.customFreedivingPresets)..where((t) => t.id.equals(id)))
+        .write(CustomFreedivingPresetsCompanion(
+      name: Value(name),
+      startApneaSec: Value(startApneaSec),
+      endApneaSec: Value(endApneaSec),
+      startRestSec: Value(startRestSec),
+      endRestSec: Value(endRestSec),
+      rounds: Value(rounds),
+    ));
+  }
+
   /// Soft-delete — see CustomPresetRepository.deletePreset for why.
   Future<void> deletePreset(int id) {
     return (_db.update(_db.customFreedivingPresets)..where((t) => t.id.equals(id)))

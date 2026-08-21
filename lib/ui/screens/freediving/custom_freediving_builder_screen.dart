@@ -9,6 +9,7 @@ import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
 import 'package:okrutnik_breath/logic/freediving/co2_o2_table_generator.dart';
 import 'package:okrutnik_breath/logic/notifiers/session_notifier.dart';
+import 'package:okrutnik_breath/data/db/database.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/ui/screens/session_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
@@ -21,7 +22,12 @@ import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
 /// generated from their PB. Mirrors CustomBuilderScreen's pattern (name +
 /// steppers + inline save/start) for the breathing-pattern builder.
 class CustomFreedivingBuilderScreen extends ConsumerStatefulWidget {
-  const CustomFreedivingBuilderScreen({super.key});
+  const CustomFreedivingBuilderScreen({super.key, this.existingPreset});
+
+  /// Non-null when opened to edit an already-saved preset instead of
+  /// creating a new one — pre-fills every field and Save overwrites it in
+  /// place instead of inserting a second, separate preset.
+  final CustomFreedivingPreset? existingPreset;
 
   @override
   ConsumerState<CustomFreedivingBuilderScreen> createState() =>
@@ -30,12 +36,15 @@ class CustomFreedivingBuilderScreen extends ConsumerStatefulWidget {
 
 class _CustomFreedivingBuilderScreenState
     extends ConsumerState<CustomFreedivingBuilderScreen> {
-  final _nameController = TextEditingController();
-  int _startApnea = 30;
-  int _endApnea = 90;
-  int _startRest = 120;
-  int _endRest = 60;
-  int _rounds = 6;
+  late final _nameController =
+      TextEditingController(text: widget.existingPreset?.name ?? '');
+  late int _startApnea = widget.existingPreset?.startApneaSec ?? 30;
+  late int _endApnea = widget.existingPreset?.endApneaSec ?? 90;
+  late int _startRest = widget.existingPreset?.startRestSec ?? 120;
+  late int _endRest = widget.existingPreset?.endRestSec ?? 60;
+  late int _rounds = widget.existingPreset?.rounds ?? 6;
+
+  bool get _isEditing => widget.existingPreset != null;
 
   @override
   void dispose() {
@@ -51,8 +60,13 @@ class _CustomFreedivingBuilderScreenState
         rounds: _rounds,
       );
 
-  int get _totalSeconds =>
-      _rows.fold<int>(0, (s, r) => s + r.apneaSec + r.restSec);
+  // Includes each round's breathe-up + final inhale + exhale, matching
+  // FreedivingTableIntroScreen's estimate — omitting that overhead
+  // understated real session length by several minutes over a full table.
+  int get _totalSeconds => _rows.fold<int>(
+      0,
+      (s, r) =>
+          s + r.apneaSec + r.restSec + FreedivingSessionTiming.perRoundOverheadSec);
 
   String _fmt(int s) => "${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}";
 
@@ -124,19 +138,34 @@ class _CustomFreedivingBuilderScreenState
       return;
     }
     try {
-      await ref.read(customFreedivingRepositoryProvider).addPreset(
-            name: name,
-            startApneaSec: _startApnea,
-            endApneaSec: _endApnea,
-            startRestSec: _startRest,
-            endRestSec: _endRest,
-            rounds: _rounds,
-            createdAt: DateTime.now(),
-          );
+      final repo = ref.read(customFreedivingRepositoryProvider);
+      final existing = widget.existingPreset;
+      if (existing != null) {
+        await repo.updatePreset(
+          id: existing.id,
+          name: name,
+          startApneaSec: _startApnea,
+          endApneaSec: _endApnea,
+          startRestSec: _startRest,
+          endRestSec: _endRest,
+          rounds: _rounds,
+        );
+      } else {
+        await repo.addPreset(
+          name: name,
+          startApneaSec: _startApnea,
+          endApneaSec: _endApnea,
+          startRestSec: _startRest,
+          endRestSec: _endRest,
+          rounds: _rounds,
+          createdAt: DateTime.now(),
+        );
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(L10n.get(context, 'custom_saved'))),
         );
+        if (existing != null) Navigator.of(context).pop();
       }
     } catch (e, st) {
       developer.log('Error saving custom freediving preset',
@@ -157,7 +186,9 @@ class _CustomFreedivingBuilderScreenState
                 constraints: BoxConstraints(maxWidth: context.isTablet ? 640 : 520),
                 child: Column(
                   children: [
-                    ScreenHeader(title: L10n.get(context, 'custom_freediving_title')),
+                    ScreenHeader(
+                        title: L10n.get(context,
+                            _isEditing ? 'custom_edit_title' : 'custom_freediving_title')),
                     Expanded(
                       child: ListView(
                         physics: const BouncingScrollPhysics(),

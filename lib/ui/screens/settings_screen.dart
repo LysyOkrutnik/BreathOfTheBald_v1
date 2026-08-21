@@ -482,6 +482,9 @@ class SettingsScreen extends ConsumerWidget {
             '${settings.pbCautionRatioOverride ?? kPbCautionRetentionRatio}');
     final maxRpeController = TextEditingController(
         text: '${settings.maxAvgRpeToAdvanceOverride ?? kMaxAvgRpeToAdvance}');
+    final maxRpeTrialController = TextEditingController(
+        text:
+            '${settings.maxAvgRpeToConfirmTrialOverride ?? kMaxAvgRpeToConfirmTrial}');
 
     Widget field(TextEditingController controller, String labelKey) {
       return Padding(
@@ -524,6 +527,7 @@ class SettingsScreen extends ConsumerWidget {
             field(weeklyCapController, 'settings_advanced_weekly_cap'),
             field(pbCautionController, 'settings_advanced_pb_caution_ratio'),
             field(maxRpeController, 'settings_advanced_max_avg_rpe'),
+            field(maxRpeTrialController, 'settings_advanced_max_avg_rpe_trial'),
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton(
@@ -532,6 +536,7 @@ class SettingsScreen extends ConsumerWidget {
                   weeklyCapController.text = '$kWeeklyHardSessionCap';
                   pbCautionController.text = '$kPbCautionRetentionRatio';
                   maxRpeController.text = '$kMaxAvgRpeToAdvance';
+                  maxRpeTrialController.text = '$kMaxAvgRpeToConfirmTrial';
                 },
                 child: Text(L10n.get(context, 'settings_advanced_reset'),
                     style: const TextStyle(color: AppTheme.textDim)),
@@ -570,6 +575,8 @@ class SettingsScreen extends ConsumerWidget {
       final pbCautionRatio = rawPbCaution?.clamp(0.1, 1.0).toDouble();
       final rawMaxRpe = double.tryParse(maxRpeController.text.trim());
       final maxAvgRpe = rawMaxRpe?.clamp(1.0, 10.0).toDouble();
+      final rawMaxRpeTrial = double.tryParse(maxRpeTrialController.text.trim());
+      final maxAvgRpeTrial = rawMaxRpeTrial?.clamp(1.0, 10.0).toDouble();
       await ref.read(settingsProvider.notifier).setAdvancedThresholds(
             detrainingDays: detrainingDays == kDetrainingDays ? null : detrainingDays,
             weeklyHardCap: weeklyCap == kWeeklyHardSessionCap ? null : weeklyCap,
@@ -577,6 +584,9 @@ class SettingsScreen extends ConsumerWidget {
                 pbCautionRatio == kPbCautionRetentionRatio ? null : pbCautionRatio,
             maxAvgRpeToAdvance:
                 maxAvgRpe == kMaxAvgRpeToAdvance ? null : maxAvgRpe,
+            maxAvgRpeToConfirmTrial: maxAvgRpeTrial == kMaxAvgRpeToConfirmTrial
+                ? null
+                : maxAvgRpeTrial,
           );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -588,6 +598,7 @@ class SettingsScreen extends ConsumerWidget {
     weeklyCapController.dispose();
     pbCautionController.dispose();
     maxRpeController.dispose();
+    maxRpeTrialController.dispose();
   }
 
   void _showHomeWidgetInfo(BuildContext context) {

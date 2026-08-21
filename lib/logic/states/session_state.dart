@@ -1,4 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:okrutnik_breath/config/levels.dart' show CycleStep;
 
 part 'session_state.freezed.dart';
 
@@ -44,6 +45,15 @@ class SessionState with _$SessionState {
     // freediving hold — reset to 0 at the start of every round's hold. Only
     // meaningful while `phase` is `retention` during a freediving table.
     @Default(0) int contractionMarkCount,
+
+    // The live cycle-diagram definition and current node, copied from
+    // `LevelData.cycleSteps` once at session start — null for exercise
+    // types with no diagram (see that field's doc for why). Kept on
+    // `SessionState` rather than read from `LevelData` directly so
+    // `session_screen.dart` stays driven purely by session state, same as
+    // every other display field here.
+    List<CycleStep>? cycleSteps,
+    int? cycleStepIndex,
   }) = _SessionState;
 
   factory SessionState.initial() => const SessionState(
@@ -59,6 +69,8 @@ class SessionState with _$SessionState {
     customLabel: null,
     customDescription: null,
     customIsBig: null,
+    cycleSteps: null,
+    cycleStepIndex: null,
     awaitingRoundDecision: false,
     contractionMarkCount: 0,
   );

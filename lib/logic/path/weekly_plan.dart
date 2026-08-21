@@ -121,16 +121,30 @@ class WeeklyPlanGenerator {
       }
       groups.add(List.filled(wimHofPerWeek, wimHofAction));
     } else {
-      groups.add(List.filled(wimHofPerWeek, wimHofAction));
+      // O2 used to be the purely elastic slot, trimmed first (down to zero)
+      // whenever the shared hard-session budget was under pressure — a
+      // Beast/Guru user whose 4 weekly Wim Hof sessions alone already fill
+      // the cap would see O2 vanish from the plan every single week,
+      // contradicting this generator's own "every discipline gets a slot
+      // every week" premise. Reserve a minimum O2 slot first and trim Wim
+      // Hof's count instead when a hard Wim Hof level would otherwise crowd
+      // it out completely.
+      const minO2Guarantee = 1;
+      var wimHofCount = wimHofPerWeek;
+      if (wimHofAction.isHard) {
+        while (wimHofCount > 0 &&
+            hardSessionsUsedThisWeek + wimHofCount + minO2Guarantee >
+                weeklyHardSessionCap) {
+          wimHofCount--;
+        }
+      }
+      groups.add(List.filled(wimHofCount, wimHofAction));
       groups.add(List.filled(
           co2PerWeek, const PlannedAction(type: PathAction.co2Table)));
 
-      // O2 is the elastic slot: trimmed first if the shared hard-session
-      // budget is already under pressure this week (e.g. a Beast/Guru user
-      // whose 4 Wim Hof sessions alone already use up the cap).
       var o2Budget = o2PerWeek;
-      final hardBeforeO2 = hardSessionsUsedThisWeek +
-          (wimHofAction.isHard ? wimHofPerWeek : 0);
+      final hardBeforeO2 =
+          hardSessionsUsedThisWeek + (wimHofAction.isHard ? wimHofCount : 0);
       while (o2Budget > 0 && hardBeforeO2 + o2Budget > weeklyHardSessionCap) {
         o2Budget--;
       }
@@ -154,6 +168,7 @@ class WeeklyPlanGenerator {
     var cursor = 0;
     for (final action in sequence) {
       int? placedAt;
+      var tier1Succeeded = false;
 
       // Tier 1: no same-discipline duplicate, no second hard session.
       for (var attempt = 0; attempt < effectiveUsableDays.length; attempt++) {
@@ -163,6 +178,7 @@ class WeeklyPlanGenerator {
         if (!sameTypeAlready && !(action.isHard && hasHardAlready)) {
           placedAt = day;
           cursor = (cursor + attempt + 1) % effectiveUsableDays.length;
+          tier1Succeeded = true;
           break;
         }
       }
@@ -184,6 +200,16 @@ class WeeklyPlanGenerator {
       placedAt ??= effectiveUsableDays
           .reduce((a, b) => days[a].length <= days[b].length ? a : b);
       days[placedAt].add(action);
+
+      // Tier 1 already advances `cursor` on its own success path above; a
+      // Tier 2/3 fallback used to leave it untouched, so under tight
+      // availability every subsequent action's Tier-1 scan restarted from
+      // the exact same spot, biasing overflow toward the earliest usable
+      // days instead of spreading it out. Advance it here too whenever
+      // Tier 1 didn't already.
+      if (!tier1Succeeded) {
+        cursor = (cursor + 1) % effectiveUsableDays.length;
+      }
     }
 
     // Cold showers are the third pillar of the Wim Hof method — a daily
