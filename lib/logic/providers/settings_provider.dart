@@ -18,6 +18,10 @@ class Settings {
     this.availableHourEnd = 21,
     this.allowMultipleSessionsPerDay = true,
     this.hasVisitedFreediving = false,
+    this.detrainingDaysOverride,
+    this.weeklyHardCapOverride,
+    this.pbCautionRatioOverride,
+    this.maxAvgRpeToAdvanceOverride,
   });
 
   final String profileName;
@@ -52,6 +56,15 @@ class Settings {
   /// user has ever seen where PB tests and the term itself actually live.
   final bool hasVisitedFreediving;
 
+  /// Advanced, power-user overrides for the Wim Hof progression's safety
+  /// thresholds — null means "use the built-in default" (see the matching
+  /// `k*` constants in wimhof_progression.dart). Exposed in Settings behind
+  /// an "Advanced" section since most users should never need to touch them.
+  final int? detrainingDaysOverride;
+  final int? weeklyHardCapOverride;
+  final double? pbCautionRatioOverride;
+  final double? maxAvgRpeToAdvanceOverride;
+
   Settings copyWith({
     String? profileName,
     bool? soundEnabled,
@@ -62,6 +75,10 @@ class Settings {
     int? availableHourEnd,
     bool? allowMultipleSessionsPerDay,
     bool? hasVisitedFreediving,
+    int? detrainingDaysOverride,
+    int? weeklyHardCapOverride,
+    double? pbCautionRatioOverride,
+    double? maxAvgRpeToAdvanceOverride,
   }) {
     return Settings(
       profileName: profileName ?? this.profileName,
@@ -74,6 +91,38 @@ class Settings {
       allowMultipleSessionsPerDay:
           allowMultipleSessionsPerDay ?? this.allowMultipleSessionsPerDay,
       hasVisitedFreediving: hasVisitedFreediving ?? this.hasVisitedFreediving,
+      detrainingDaysOverride: detrainingDaysOverride ?? this.detrainingDaysOverride,
+      weeklyHardCapOverride: weeklyHardCapOverride ?? this.weeklyHardCapOverride,
+      pbCautionRatioOverride: pbCautionRatioOverride ?? this.pbCautionRatioOverride,
+      maxAvgRpeToAdvanceOverride:
+          maxAvgRpeToAdvanceOverride ?? this.maxAvgRpeToAdvanceOverride,
+    );
+  }
+
+  /// Like [copyWith], but for the four advanced-threshold overrides only —
+  /// kept separate because `null` is their meaningful "use the default"
+  /// value, not "leave unchanged", so [copyWith]'s usual `?? this.x` pattern
+  /// would make them impossible to ever reset back to a default.
+  Settings withAdvancedThresholds({
+    int? detrainingDaysOverride,
+    int? weeklyHardCapOverride,
+    double? pbCautionRatioOverride,
+    double? maxAvgRpeToAdvanceOverride,
+  }) {
+    return Settings(
+      profileName: profileName,
+      soundEnabled: soundEnabled,
+      hapticsEnabled: hapticsEnabled,
+      dailyReminderEnabled: dailyReminderEnabled,
+      availableWeekdays: availableWeekdays,
+      availableHourStart: availableHourStart,
+      availableHourEnd: availableHourEnd,
+      allowMultipleSessionsPerDay: allowMultipleSessionsPerDay,
+      hasVisitedFreediving: hasVisitedFreediving,
+      detrainingDaysOverride: detrainingDaysOverride,
+      weeklyHardCapOverride: weeklyHardCapOverride,
+      pbCautionRatioOverride: pbCautionRatioOverride,
+      maxAvgRpeToAdvanceOverride: maxAvgRpeToAdvanceOverride,
     );
   }
 }
@@ -97,6 +146,10 @@ class SettingsNotifier extends StateNotifier<Settings> {
   static const _kAvailableHourEnd = 'path_available_hour_end';
   static const _kAllowMultiplePerDay = 'path_allow_multiple_sessions_per_day';
   static const _kHasVisitedFreediving = 'has_visited_freediving';
+  static const _kDetrainingDaysOverride = 'adv_detraining_days_override';
+  static const _kWeeklyHardCapOverride = 'adv_weekly_hard_cap_override';
+  static const _kPbCautionRatioOverride = 'adv_pb_caution_ratio_override';
+  static const _kMaxAvgRpeToAdvanceOverride = 'adv_max_avg_rpe_to_advance_override';
 
   /// Older builds had a dead 'schedule_active' flag (from a since-replaced
   /// time-picker scheduler) that was never written, so a splash-screen guard
@@ -145,6 +198,10 @@ class SettingsNotifier extends StateNotifier<Settings> {
       availableHourEnd: p.getInt(_kAvailableHourEnd) ?? 21,
       allowMultipleSessionsPerDay: p.getBool(_kAllowMultiplePerDay) ?? true,
       hasVisitedFreediving: p.getBool(_kHasVisitedFreediving) ?? false,
+      detrainingDaysOverride: p.getInt(_kDetrainingDaysOverride),
+      weeklyHardCapOverride: p.getInt(_kWeeklyHardCapOverride),
+      pbCautionRatioOverride: p.getDouble(_kPbCautionRatioOverride),
+      maxAvgRpeToAdvanceOverride: p.getDouble(_kMaxAvgRpeToAdvanceOverride),
     );
   }
 
@@ -192,6 +249,44 @@ class SettingsNotifier extends StateNotifier<Settings> {
     await p.setInt(_kAvailableHourEnd, availableHourEnd);
     await p.setBool(_kAllowMultiplePerDay, allowMultipleSessionsPerDay);
     await ProfileSyncMarker.markChanged();
+  }
+
+  /// Persists the advanced Wim Hof progression thresholds in one go — a null
+  /// field resets that threshold back to its built-in default (see the
+  /// matching `k*` constants in wimhof_progression.dart).
+  Future<void> setAdvancedThresholds({
+    int? detrainingDays,
+    int? weeklyHardCap,
+    double? pbCautionRatio,
+    double? maxAvgRpeToAdvance,
+  }) async {
+    state = state.withAdvancedThresholds(
+      detrainingDaysOverride: detrainingDays,
+      weeklyHardCapOverride: weeklyHardCap,
+      pbCautionRatioOverride: pbCautionRatio,
+      maxAvgRpeToAdvanceOverride: maxAvgRpeToAdvance,
+    );
+    final p = await SharedPreferences.getInstance();
+    if (detrainingDays != null) {
+      await p.setInt(_kDetrainingDaysOverride, detrainingDays);
+    } else {
+      await p.remove(_kDetrainingDaysOverride);
+    }
+    if (weeklyHardCap != null) {
+      await p.setInt(_kWeeklyHardCapOverride, weeklyHardCap);
+    } else {
+      await p.remove(_kWeeklyHardCapOverride);
+    }
+    if (pbCautionRatio != null) {
+      await p.setDouble(_kPbCautionRatioOverride, pbCautionRatio);
+    } else {
+      await p.remove(_kPbCautionRatioOverride);
+    }
+    if (maxAvgRpeToAdvance != null) {
+      await p.setDouble(_kMaxAvgRpeToAdvanceOverride, maxAvgRpeToAdvance);
+    } else {
+      await p.remove(_kMaxAvgRpeToAdvanceOverride);
+    }
   }
 
   /// Marks the Freediving tab as visited at least once — a one-way flag,

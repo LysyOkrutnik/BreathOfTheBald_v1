@@ -51,6 +51,12 @@ class UserProfile extends Table {
   IntColumn get totalXp => integer().withDefault(const Constant(0))();
   IntColumn get dailyStreak => integer().withDefault(const Constant(0))();
   DateTimeColumn get lastSessionDate => dateTime().nullable()();
+
+  /// The highest [dailyStreak] ever reached, kept even after the streak
+  /// itself later resets — otherwise breaking a long streak leaves no
+  /// lasting record of it at all, despite the daily history already holding
+  /// everything needed to know it happened.
+  IntColumn get bestStreak => integer().withDefault(const Constant(0))();
 }
 
 class HealthMetrics extends Table {
@@ -219,7 +225,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -311,6 +317,11 @@ class AppDatabase extends _$AppDatabase {
           if (from >= 7 && from < 12) {
             await m.addColumn(freedivingProfile, freedivingProfile.verifiedPbCo2Sec);
             await m.addColumn(freedivingProfile, freedivingProfile.verifiedPbCo2At);
+          }
+          // v12 -> v13: track the best streak ever reached, separately from
+          // the current (resettable) one.
+          if (from < 13) {
+            await m.addColumn(userProfile, userProfile.bestStreak);
           }
         },
       );

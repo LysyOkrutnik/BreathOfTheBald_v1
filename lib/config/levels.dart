@@ -37,6 +37,7 @@ class GuidedStep {
     required this.durationSec,
     required this.phase,
     this.isInhale,
+    this.recordAsRetention = false,
   });
 
   final String labelKey;
@@ -47,6 +48,15 @@ class GuidedStep {
   /// pulse direction. Null for a plain repetition cue with no clear
   /// inhale/exhale (e.g. a packing "gulp").
   final bool? isInhale;
+
+  /// Only meaningful for [GuidedStepPhase.hold] steps — logs this hold's
+  /// duration into the session's `retentionLogs`, so the *one* hold that
+  /// actually defines the exercise (Uddiyana's vacuum, packing's final hold)
+  /// shows up in the summary screen's existing "Czasy wstrzymań" chips,
+  /// reusing that UI instead of a bespoke one. Left false for short,
+  /// incidental holds (a "return to center" pause, a rest beat) that would
+  /// just clutter that list with numbers nobody cares to see afterwards.
+  final bool recordAsRetention;
 }
 
 extension ExerciseTypeX on ExerciseType {
@@ -432,7 +442,7 @@ class LevelData {
       guidedSteps: [
         GuidedStep(labelKey: "guided_uddiyana_inhale", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: true),
         GuidedStep(labelKey: "guided_uddiyana_exhale", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: false),
-        GuidedStep(labelKey: "guided_uddiyana_hold", durationSec: 7, phase: GuidedStepPhase.hold),
+        GuidedStep(labelKey: "guided_uddiyana_hold", durationSec: 7, phase: GuidedStepPhase.hold, recordAsRetention: true),
         GuidedStep(labelKey: "guided_uddiyana_rest", durationSec: 5, phase: GuidedStepPhase.hold),
       ],
     ),
@@ -441,7 +451,12 @@ class LevelData {
       title: "exercise_resisted_breathing_title",
       subtitle: "exercise_resisted_breathing_subtitle",
       type: ExerciseType.guidedRoutine,
-      totalRounds: 3,
+      // A flat, single "round" spelling out all 3 sets explicitly — the
+      // generic engine repeats a round's whole guidedSteps list, which would
+      // put a 50s rest after the *last* set too if this were 3 rounds of
+      // [15 reps, rest]. Encoding the rest only *between* sets here avoids
+      // needing engine-level "skip on the final round" special-casing.
+      totalRounds: 1,
       color: Color(0xFF42A5F5),
       instructionTitleKey: "exercise_resisted_breathing_title",
       instructionDescriptionKey: "exercise_resisted_breathing_subtitle",
@@ -453,6 +468,17 @@ class LevelData {
         ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
         ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
         GuidedStep(labelKey: "guided_resisted_rest", durationSec: 50, phase: GuidedStepPhase.hold),
+        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
+        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
+        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
+        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
+        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
+        GuidedStep(labelKey: "guided_resisted_rest", durationSec: 50, phase: GuidedStepPhase.hold),
+        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
+        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
+        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
+        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
+        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
       ],
     ),
     'three_part_breath': LevelData(
@@ -491,8 +517,9 @@ class LevelData {
       instructionDescriptionKey: "exercise_packing_subtitle",
       instructionStepKeys: [],
       guidedSteps: [
+        GuidedStep(labelKey: "guided_packing_full_inhale", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: true),
         ..._packingGulps,
-        GuidedStep(labelKey: "guided_packing_hold", durationSec: 10, phase: GuidedStepPhase.hold),
+        GuidedStep(labelKey: "guided_packing_hold", durationSec: 10, phase: GuidedStepPhase.hold, recordAsRetention: true),
         GuidedStep(labelKey: "guided_packing_exhale", durationSec: 4, phase: GuidedStepPhase.breath, isInhale: false),
       ],
     ),

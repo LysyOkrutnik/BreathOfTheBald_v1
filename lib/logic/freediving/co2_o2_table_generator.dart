@@ -125,7 +125,12 @@ abstract final class Co2O2TableGenerator {
     int pbSeconds, {
     int rounds = defaultRounds,
   }) {
+    // `assert` alone is stripped in release builds — a `rounds < 2` value
+    // slipping through (e.g. a synced custom preset saved before the UI's
+    // own `min: 2` stepper existed) would divide by `rounds - 1 == 0` below,
+    // producing Infinity, and `Infinity.round()` throws.
     assert(rounds >= 2, 'A table needs at least 2 rounds to show progression.');
+    final safeRounds = rounds < 2 ? 2 : rounds;
     // validatePb only *warns* below minPlausiblePbSec, it doesn't block —
     // without this floor, a PB under ~17s makes the min:10 bound exceed
     // max:pbSeconds below, and _roundTo5Bounded's clamp-up-then-down nets
@@ -134,9 +139,9 @@ abstract final class Co2O2TableGenerator {
     // repeated 8 times with shrinking rest.
     final safePb = pbSeconds < minPlausiblePbSec ? minPlausiblePbSec : pbSeconds;
     final apnea = _roundTo5Bounded(safePb * co2ApneaPct, min: 10, max: safePb);
-    final decrement = (co2InitialRestSec - co2RestFloorSec) / (rounds - 1);
+    final decrement = (co2InitialRestSec - co2RestFloorSec) / (safeRounds - 1);
 
-    return List.generate(rounds, (i) {
+    return List.generate(safeRounds, (i) {
       final raw = co2InitialRestSec - decrement * i;
       // Never round below the floor; round5 alone could undershoot a value
       // just above the floor down to a lower multiple of 5.
@@ -150,11 +155,17 @@ abstract final class Co2O2TableGenerator {
     int rounds = defaultRounds,
   }) {
     assert(rounds >= 2, 'A table needs at least 2 rounds to show progression.');
-    final startApnea = pbSeconds * o2StartPct;
-    final maxApnea = pbSeconds * o2MaxPct;
-    final increment = (maxApnea - startApnea) / (rounds - 1);
+    final safeRounds = rounds < 2 ? 2 : rounds;
+    // Same floor CO2's generator already applies (see its own comment) —
+    // without it, a PB under a few seconds pushes startApnea/maxApnea close
+    // enough together that _roundTo5Bounded's 5-second granularity has no
+    // real room to work with.
+    final safePb = pbSeconds < minPlausiblePbSec ? minPlausiblePbSec : pbSeconds;
+    final startApnea = safePb * o2StartPct;
+    final maxApnea = safePb * o2MaxPct;
+    final increment = (maxApnea - startApnea) / (safeRounds - 1);
 
-    return List.generate(rounds, (i) {
+    return List.generate(safeRounds, (i) {
       final raw = startApnea + increment * i;
       // Bounded rounding: nearest-5 rounding on its own can push the final
       // round's target a few seconds *past* maxApnea (this is exactly the
@@ -177,10 +188,11 @@ abstract final class Co2O2TableGenerator {
     required int rounds,
   }) {
     assert(rounds >= 2, 'A table needs at least 2 rounds to show progression.');
-    final apneaStep = (endApneaSec - startApneaSec) / (rounds - 1);
-    final restStep = (endRestSec - startRestSec) / (rounds - 1);
+    final safeRounds = rounds < 2 ? 2 : rounds;
+    final apneaStep = (endApneaSec - startApneaSec) / (safeRounds - 1);
+    final restStep = (endRestSec - startRestSec) / (safeRounds - 1);
 
-    return List.generate(rounds, (i) {
+    return List.generate(safeRounds, (i) {
       final apnea = (startApneaSec + apneaStep * i).round();
       final rest = (startRestSec + restStep * i).round();
       return BreathHoldRound(index: i + 1, apneaSec: apnea, restSec: rest);
@@ -196,7 +208,13 @@ abstract final class Co2O2TableGenerator {
     final maxInt = max.floor();
     if (rounded < minInt) rounded = minInt;
     if (rounded > maxInt) rounded = maxInt;
-    return rounded < 5 ? 5 : rounded;
+    // A hard floor of 5s (nothing shorter is a meaningful hold) — but this
+    // must never re-violate the max bound just clamped above, or a `max`
+    // under 5 (e.g. an O2 table built from a very low PB) would return
+    // something longer than the caller's own safety ceiling.
+    if (rounded < 5) rounded = 5;
+    if (rounded > maxInt) rounded = maxInt;
+    return rounded;
   }
 }
 

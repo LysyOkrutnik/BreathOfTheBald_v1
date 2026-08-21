@@ -120,6 +120,7 @@ class StatsContent extends ConsumerWidget {
         _HeroGrid(
           level: level,
           streak: streak,
+          bestStreak: profile?.bestStreak ?? 0,
           sessions: sessions.length,
           minutes: totalMinutes,
         ),
@@ -157,22 +158,29 @@ class _HeroGrid extends StatelessWidget {
   const _HeroGrid({
     required this.level,
     required this.streak,
+    required this.bestStreak,
     required this.sessions,
     required this.minutes,
   });
 
   final int level;
   final int streak;
+  final int bestStreak;
   final int sessions;
   final int minutes;
 
   @override
   Widget build(BuildContext context) {
-    final cols = context.isTablet ? 4 : 2;
+    final cols = context.isTablet ? 5 : 2;
     final items = [
       (Icons.military_tech_outlined, '$level', L10n.get(context, 'stats_level')),
       (Icons.local_fire_department_outlined, '$streak',
           L10n.get(context, 'stats_streak')),
+      // Only worth a tile once it's actually distinct from the live streak —
+      // otherwise it's a redundant repeat of the number right next to it.
+      if (bestStreak > streak)
+        (Icons.emoji_events_outlined, '$bestStreak',
+            L10n.get(context, 'stats_best_streak')),
       (Icons.self_improvement, '$sessions',
           L10n.get(context, 'stats_sessions')),
       (Icons.timer_outlined, '$minutes', L10n.get(context, 'stats_minutes')),

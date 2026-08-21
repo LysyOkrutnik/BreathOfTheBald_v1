@@ -288,7 +288,14 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen> {
     // _startFromPlan) — excluded from the plannable list entirely.
     final plannableLevels = LevelData.levels.values
         .where((l) =>
-            l.type != ExerciseType.co2Table && l.type != ExerciseType.o2Table)
+            l.type != ExerciseType.co2Table &&
+            l.type != ExerciseType.o2Table &&
+            // Packing's one-time safety warning (real risks: barotrauma, gas
+            // embolism, blackout) only ever gets checked/shown from its tile
+            // in freediving_home_screen.dart — reaching it through a planned
+            // session here would skip that gate entirely for a user who has
+            // never seen it.
+            l.key != 'freediving_packing')
         .toList();
 
     // Default to the Wim Hof "Next Up" recommendation, if there is one —

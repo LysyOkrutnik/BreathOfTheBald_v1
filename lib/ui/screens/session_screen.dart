@@ -339,29 +339,31 @@ class _PhaseText extends StatelessWidget {
       hintText = state.customDescription != null
           ? L10n.get(context, state.customDescription!)
           : '';
-      final label = state.customLabel!;
-      if (label.contains('inhale')) {
-        color = AppTheme.breathInhale;
-      } else if (label.contains('exhale')) {
-        color = AppTheme.breathExhale;
-      } else if (label.contains('fire')) {
-        color = AppTheme.danger;
-      } else {
-        color = AppTheme.primary;
-      }
 
       // customLabel only overrides the *heading*; the live countdown (hold
-      // elapsed, or a rest/warm-up/cool-down countdown) still needs to be the
-      // prominent subText, with any instructional copy demoted to hintText.
+      // elapsed, a rest/warm-up/cool-down countdown, or a breath index) still
+      // needs to be the prominent subText, with any instructional copy
+      // demoted to hintText. Colour and the breath counter come from the
+      // underlying [phase] itself (isInhaling), not from matching substrings
+      // in the label string — a label like "guided_threepart_belly_in" never
+      // contains the literal word "inhale", which used to leave every
+      // guided-routine breath step in the flat default colour with no
+      // counter at all, unlike every other exercise type.
       state.phase.maybeWhen(
+        breathing: (index, isInhaling, _) {
+          color = isInhaling ? AppTheme.breathInhale : AppTheme.breathExhale;
+          subText = "$index / ${state.totalBreathsInRound}";
+        },
         retention: (elapsed) {
+          color = AppTheme.primary;
           subText =
               "${elapsed.inMinutes}:${(elapsed.inSeconds % 60).toString().padLeft(2, '0')}";
         },
         recovery: (remaining) {
+          color = AppTheme.primary;
           subText = "${remaining.inSeconds}";
         },
-        orElse: () {},
+        orElse: () => color = AppTheme.primary,
       );
     } else {
       state.phase.when(

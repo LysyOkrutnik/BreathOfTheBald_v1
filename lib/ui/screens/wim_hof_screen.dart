@@ -7,6 +7,7 @@ import 'package:okrutnik_breath/config/responsive.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
+import 'package:okrutnik_breath/logic/providers/settings_provider.dart';
 import 'package:okrutnik_breath/logic/wimhof/wimhof_progression.dart';
 import 'package:okrutnik_breath/ui/screens/intro_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
@@ -28,6 +29,8 @@ class WimHofScreen extends ConsumerWidget {
     final columns = (context.isTablet || context.isLandscape) ? 2 : 1;
     final nextUp = ref.watch(wimHofNextUpProvider).value;
     final weeklyHardCount = ref.watch(weeklyHardSessionCountProvider);
+    final weeklyHardCap =
+        ref.watch(settingsProvider).weeklyHardCapOverride ?? kWeeklyHardSessionCap;
 
     return SafeArea(
       child: Center(
@@ -78,13 +81,28 @@ class WimHofScreen extends ConsumerWidget {
                         const SizedBox(height: AppSpacing.lg),
                       ],
                       if (nextUp?.justRolledBackFrom != null) ...[
-                        _RollbackNotice(levelKey: nextUp!.currentLevelKey),
+                        _RollbackNotice(
+                          levelKey: nextUp!.currentLevelKey,
+                          idleDays: nextUp.idleDaysBeforeRollback,
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                      ] else if (nextUp?.recommendedLevelKey == null &&
+                          nextUp != null &&
+                          _classic.indexOf(nextUp.currentLevelKey) <
+                              _classic.length - 1) ...[
+                        _ProgressCard(nextUp: nextUp),
                         const SizedBox(height: AppSpacing.lg),
                       ],
-                      if (weeklyHardCount >= kWeeklyHardSessionCap) ...[
+                      if (weeklyHardCount >= weeklyHardCap) ...[
                         const _WeeklyCapWarning(),
                         const SizedBox(height: AppSpacing.lg),
-                      ],
+                      ] else
+                        Padding(
+                          padding:
+                              const EdgeInsets.only(bottom: AppSpacing.lg),
+                          child: _WeeklyCountBadge(
+                              count: weeklyHardCount, cap: weeklyHardCap),
+                        ),
                       LevelGrid(keys: _classic, columns: columns),
                     ],
                   ),
@@ -181,8 +199,9 @@ class _NextUpCard extends StatelessWidget {
 }
 
 class _RollbackNotice extends StatelessWidget {
-  const _RollbackNotice({required this.levelKey});
+  const _RollbackNotice({required this.levelKey, this.idleDays = 0});
   final String levelKey;
+  final int idleDays;
 
   @override
   Widget build(BuildContext context) {
@@ -209,12 +228,86 @@ class _RollbackNotice extends StatelessWidget {
                   L10n.get(context, 'wimhof_rollback_body'),
                   style: const TextStyle(color: AppTheme.textDim, fontSize: 11),
                 ),
+                if (idleDays > 0) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    "${L10n.get(context, 'wimhof_rollback_idle_prefix')}$idleDays${L10n.get(context, 'wimhof_rollback_idle_suffix')}",
+                    style: const TextStyle(
+                      color: AppTheme.textDim,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
         ],
       ),
     ).animate().fadeIn(duration: AppMotion.medium);
+  }
+}
+
+class _ProgressCard extends StatelessWidget {
+  const _ProgressCard({required this.nextUp});
+  final WimHofNextUp nextUp;
+
+  @override
+  Widget build(BuildContext context) {
+    final level = LevelData.levels[nextUp.currentLevelKey]!;
+    final sessions = nextUp.sessionsAtLevel.clamp(0, kMinSessionsAtLevel);
+    final days = nextUp.daysAtLevel.clamp(0, kMinDaysAtLevel);
+    return GlassCard(
+      child: Row(
+        children: [
+          Icon(Icons.timeline_rounded, color: level.color, size: 22),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  L10n.get(context, 'wimhof_progress_title'),
+                  style: TextStyle(
+                    color: level.color,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  "$sessions/$kMinSessionsAtLevel${L10n.get(context, 'wimhof_progress_sessions_suffix')} · "
+                  "$days/$kMinDaysAtLevel${L10n.get(context, 'wimhof_progress_days_suffix')}",
+                  style: const TextStyle(color: AppTheme.textDim, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ).animate().fadeIn(duration: AppMotion.medium);
+  }
+}
+
+class _WeeklyCountBadge extends StatelessWidget {
+  const _WeeklyCountBadge({required this.count, required this.cap});
+  final int count;
+  final int cap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(Icons.bolt_rounded, color: AppTheme.textDim, size: 14),
+        const SizedBox(width: 4),
+        Text(
+          "$count/$cap${L10n.get(context, 'wimhof_weekly_count_suffix')}",
+          style: const TextStyle(color: AppTheme.textDim, fontSize: 11),
+        ),
+      ],
+    );
   }
 }
 

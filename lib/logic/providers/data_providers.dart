@@ -118,7 +118,22 @@ final wimHofNextUpProvider = StreamProvider<WimHofNextUp>((ref) async* {
   // Re-run whenever a session finishes — that's the only thing that can move
   // progression forward.
   ref.watch(sessionHistoryProvider);
-  yield await repo.refresh();
+  final settings = ref.watch(settingsProvider);
+  yield await repo.refresh(
+    detrainingDaysOverride: settings.detrainingDaysOverride,
+    pbCautionRatioOverride: settings.pbCautionRatioOverride,
+    maxAvgRpeToAdvanceOverride: settings.maxAvgRpeToAdvanceOverride,
+  );
+});
+
+/// The trailing 7 days of freediving logs, unbounded by count — unlike
+/// [freedivingRecentLogsProvider]'s fixed `limit`, this can't silently drop
+/// an in-window session for a user prolific enough to log more than that
+/// limit within a week.
+final freedivingLogsPastWeekProvider =
+    StreamProvider<List<FreedivingSessionLogData>>((ref) {
+  final cutoff = DateTime.now().subtract(const Duration(days: 7));
+  return ref.watch(freedivingRepositoryProvider).watchLogsSince(cutoff);
 });
 
 /// Count of "hard" sessions (Wim Hof Beast/Okrutnik or a freediving O2 table)
@@ -126,7 +141,7 @@ final wimHofNextUpProvider = StreamProvider<WimHofNextUp>((ref) async* {
 final weeklyHardSessionCountProvider = Provider<int>((ref) {
   final sessions = ref.watch(sessionHistoryProvider).value ?? const <Session>[];
   final freedivingLogs =
-      ref.watch(freedivingRecentLogsProvider).value ?? const <FreedivingSessionLogData>[];
+      ref.watch(freedivingLogsPastWeekProvider).value ?? const <FreedivingSessionLogData>[];
   return countHardSessionsInPastWeek(sessions, freedivingLogs);
 });
 
@@ -149,8 +164,9 @@ final trainingPathProvider = Provider<PathState?>((ref) {
 
   final co2Count = logs.where((l) => l.tableType == 'co2').length;
   final o2Count = logs.where((l) => l.tableType == 'o2').length;
-  final weeklyCapReached =
-      ref.watch(weeklyHardSessionCountProvider) >= kWeeklyHardSessionCap;
+  final weeklyCap =
+      ref.watch(settingsProvider).weeklyHardCapOverride ?? kWeeklyHardSessionCap;
+  final weeklyCapReached = ref.watch(weeklyHardSessionCountProvider) >= weeklyCap;
 
   return TrainingPath.compute(
     wimHof: wimHof,
@@ -177,6 +193,7 @@ final weeklyPlanProvider = Provider<WeeklyPlan?>((ref) {
     availableWeekdays: settings.availableWeekdays,
     allowMultiplePerDay: settings.allowMultipleSessionsPerDay,
     freedivingVisited: settings.hasVisitedFreediving,
+    weeklyHardSessionCap: settings.weeklyHardCapOverride ?? kWeeklyHardSessionCap,
   );
 });
 

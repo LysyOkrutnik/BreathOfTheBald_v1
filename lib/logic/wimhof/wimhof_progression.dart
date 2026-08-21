@@ -42,6 +42,7 @@ class WimHofNextUp {
     this.daysAtLevel = 0,
     this.resetTrialWindow = false,
     this.pbCautionAdvised = false,
+    this.idleDaysBeforeRollback = 0,
   });
 
   /// The ladder level the app currently treats as "confirmed" (the one
@@ -79,6 +80,11 @@ class WimHofNextUp {
   /// since Wim Hof retention isn't directly comparable to a plain
   /// breath-hold. Advisory only — never hides or blocks the recommendation.
   final bool pbCautionAdvised;
+
+  /// Set only alongside [justRolledBackFrom]: how many days of inactivity
+  /// triggered the rollback, so the UI can explain "why" with a concrete
+  /// number instead of a generic message.
+  final int idleDaysBeforeRollback;
 }
 
 /// Pure progression logic for the Wim Hof classic ladder. The ladder itself
@@ -134,11 +140,15 @@ class WimHofProgression {
     required String nextLevelKey,
     required List<Session> sessionsAtCurrentLevel,
     required int? verifiedPbSec,
+    double pbCautionRatio = kPbCautionRetentionRatio,
   }) {
     if (!kHardWimHofLevels.contains(nextLevelKey)) return false;
     if (verifiedPbSec == null || verifiedPbSec <= 0) return false;
 
-    final withRetention = sessionsAtCurrentLevel
+    // Deduped first — same as every other average/eligibility check in this
+    // file — so a single day of repeated logging can't dominate the last-5
+    // window and skew the average retention this compares against the PB.
+    final withRetention = _dedupeSameDay(sessionsAtCurrentLevel)
         .where((s) => s.retentionSec > 0)
         .toList()
       ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
@@ -147,7 +157,7 @@ class WimHofProgression {
 
     final avgRetention =
         recent.fold<int>(0, (sum, s) => sum + s.retentionSec) / recent.length;
-    return avgRetention >= verifiedPbSec * kPbCautionRetentionRatio;
+    return avgRetention >= verifiedPbSec * pbCautionRatio;
   }
 
   /// Computes the next-up recommendation and any detraining rollback, given
@@ -160,6 +170,9 @@ class WimHofProgression {
     required List<Session> allWimHofSessions,
     int? verifiedPbSec,
     DateTime? now,
+    int detrainingDays = kDetrainingDays,
+    double pbCautionRatio = kPbCautionRetentionRatio,
+    double maxAvgRpeToAdvance = kMaxAvgRpeToAdvance,
   }) {
     now ??= DateTime.now();
     final current = progress.currentLevelKey;
@@ -172,21 +185,25 @@ class WimHofProgression {
         .length;
     final daysAtLevel = since == null ? kMinDaysAtLevel : now.difference(since).inDays;
 
-    // Detraining: no Wim Hof session at all since the current level was set,
-    // for more than kDetrainingDays. Gated on `since` (not just "last session
-    // ever") so a rollback only fires once per idle stretch — otherwise every
-    // recomputation during a long idle period would cascade another level
-    // down, since "last session" never moves while the user stays inactive.
-    // currentLevelSetAt is bumped to `now` whenever a rollback is persisted,
-    // which is exactly what breaks the cascade on the next check.
+    // Detraining: no Wim Hof session at all (any level) in more than
+    // kDetrainingDays — measured from the actual last session, not from
+    // `since`. A previous version required *zero* sessions since the level
+    // was set, which meant a single session right after a promotion
+    // permanently disabled this safeguard for that level forever (the idle
+    // clock never had anything to measure once `lastAny` moved past
+    // `since`, even if the user then went silent for months). No cascade
+    // risk from re-deriving this off the real last session: `refresh()`
+    // (wimhof_repository.dart) re-reads `progress` fresh and persists a
+    // rollback immediately, bumping `currentLevelSetAt` before any next call.
     final lastAny = allWimHofSessions.isEmpty
         ? null
         : allWimHofSessions
             .map((s) => s.timestamp)
             .reduce((a, b) => a.isAfter(b) ? a : b);
-    final idleSinceLevelSet =
-        since != null && now.difference(since).inDays > kDetrainingDays &&
-            (lastAny == null || !lastAny.isAfter(since));
+    final daysSinceLastSession = lastAny != null
+        ? now.difference(lastAny).inDays
+        : (since != null ? now.difference(since).inDays : 0);
+    final idleSinceLevelSet = since != null && daysSinceLastSession > detrainingDays;
     if (idleSinceLevelSet) {
       final previous = _previousLevel(current);
       if (previous != null) {
@@ -195,6 +212,7 @@ class WimHofProgression {
           justRolledBackFrom: current,
           sessionsAtLevel: sessionsAtLevel,
           daysAtLevel: daysAtLevel,
+          idleDaysBeforeRollback: daysSinceLastSession,
         );
       }
     }
@@ -236,7 +254,7 @@ class WimHofProgression {
         .where((s) => since == null || !s.timestamp.isBefore(since))
         .toList();
     final avgRpe = _avgRpe(_dedupeSameDay(currentLevelSessions));
-    final rpeOk = avgRpe == null || avgRpe <= kMaxAvgRpeToAdvance;
+    final rpeOk = avgRpe == null || avgRpe <= maxAvgRpeToAdvance;
     final eligible = sessionsAtLevel >= kMinSessionsAtLevel &&
         daysAtLevel >= kMinDaysAtLevel &&
         rpeOk;
@@ -251,15 +269,32 @@ class WimHofProgression {
             nextLevelKey: next,
             sessionsAtCurrentLevel: currentLevelSessions,
             verifiedPbSec: verifiedPbSec,
+            pbCautionRatio: pbCautionRatio,
           ),
     );
   }
 }
 
+/// Collapses same-day items into one (the first of that day), keyed by
+/// whatever [dateOf] returns — the generic counterpart of
+/// [WimHofProgression._dedupeSameDay], which only accepts a [Session] list.
+List<T> _dedupeByDay<T>(Iterable<T> items, DateTime Function(T) dateOf) {
+  final seenDays = <DateTime>{};
+  final out = <T>[];
+  for (final item in items) {
+    final d = dateOf(item);
+    if (seenDays.add(DateTime(d.year, d.month, d.day))) out.add(item);
+  }
+  return out;
+}
+
 /// Counts "hard" sessions (Wim Hof Beast/Okrutnik, or a freediving O2 table)
 /// in the trailing 7 days — a shared intensity budget across disciplines, so
 /// stacking a hard Wim Hof session with an O2 table on the same day doesn't
-/// slip past a per-discipline cap.
+/// slip past a per-discipline cap. Same-day sessions within *each* category
+/// are deduped (matching the eligibility logic above) so a spammy day
+/// doesn't burn through the weekly budget faster than actually training
+/// once a day for a week would.
 int countHardSessionsInPastWeek(
   List<Session> wimHofSessions,
   List<FreedivingSessionLogData> freedivingLogs, {
@@ -267,9 +302,14 @@ int countHardSessionsInPastWeek(
 }) {
   now ??= DateTime.now();
   final cutoff = now.subtract(const Duration(days: 7));
-  final hardWimHof = wimHofSessions.where(
-      (s) => kHardWimHofLevels.contains(s.levelKey) && s.timestamp.isAfter(cutoff));
-  final o2Sessions =
-      freedivingLogs.where((l) => l.tableType == 'o2' && l.timestamp.isAfter(cutoff));
+  final hardWimHof = _dedupeByDay(
+    wimHofSessions.where(
+        (s) => kHardWimHofLevels.contains(s.levelKey) && s.timestamp.isAfter(cutoff)),
+    (s) => s.timestamp,
+  );
+  final o2Sessions = _dedupeByDay(
+    freedivingLogs.where((l) => l.tableType == 'o2' && l.timestamp.isAfter(cutoff)),
+    (l) => l.timestamp,
+  );
   return hardWimHof.length + o2Sessions.length;
 }

@@ -148,6 +148,18 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                       child: _page == pages.length - 1
                           ? Column(
                               children: [
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                      bottom: AppSpacing.md),
+                                  child: Text(
+                                    L10n.get(context, 'onboard_account_note'),
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                        color: AppTheme.textDim,
+                                        fontSize: 12,
+                                        height: 1.4),
+                                  ),
+                                ),
                                 _Primary(
                                   label: L10n.get(context, 'onboard_enable'),
                                   onTap: () => _finish(enableNotifications: true),

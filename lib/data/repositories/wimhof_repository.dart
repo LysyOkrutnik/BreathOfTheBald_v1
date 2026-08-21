@@ -64,7 +64,11 @@ class WimHofRepository {
   /// against the latest session history and persists a level change if one
   /// is due. Cheap enough to call every time the Wim Hof tab builds — the
   /// heavy lifting is a couple of indexed SQL queries.
-  Future<WimHofNextUp> refresh() async {
+  Future<WimHofNextUp> refresh({
+    int? detrainingDaysOverride,
+    double? pbCautionRatioOverride,
+    double? maxAvgRpeToAdvanceOverride,
+  }) async {
     final progress = await _getOrCreate();
     final sessions = await _allWimHofSessions();
     // Read directly rather than depending on FreedivingRepository — this is
@@ -76,6 +80,9 @@ class WimHofRepository {
       progress: progress,
       allWimHofSessions: sessions,
       verifiedPbSec: freedivingProfile?.verifiedPbSec,
+      detrainingDays: detrainingDaysOverride ?? kDetrainingDays,
+      pbCautionRatio: pbCautionRatioOverride ?? kPbCautionRetentionRatio,
+      maxAvgRpeToAdvance: maxAvgRpeToAdvanceOverride ?? kMaxAvgRpeToAdvance,
     );
     if (result.currentLevelKey != progress.currentLevelKey || result.resetTrialWindow) {
       await (_db.update(_db.wimHofProgress)..where((t) => t.id.equals(progress.id)))

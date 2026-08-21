@@ -18,6 +18,7 @@ import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/logic/providers/locale_provider.dart';
 import 'package:okrutnik_breath/logic/providers/settings_provider.dart';
 import 'package:okrutnik_breath/logic/providers/sync_providers.dart';
+import 'package:okrutnik_breath/logic/wimhof/wimhof_progression.dart';
 import 'package:okrutnik_breath/ui/screens/auth_gate_screen.dart';
 import 'package:okrutnik_breath/ui/screens/privacy_screen.dart';
 import 'package:okrutnik_breath/ui/screens/terms_screen.dart';
@@ -192,6 +193,21 @@ class SettingsScreen extends ConsumerWidget {
                               trailing: Text(appVersion,
                                   style:
                                       const TextStyle(color: AppTheme.textDim)),
+                            ),
+                          ]),
+                          const SizedBox(height: AppSpacing.lg),
+                          SectionHeader(
+                              L10n.get(context, 'settings_section_advanced')),
+                          _Group(children: [
+                            _Tile(
+                              icon: Icons.tune_rounded,
+                              title: L10n.get(
+                                  context, 'settings_advanced_thresholds'),
+                              trailing: const Icon(
+                                  Icons.chevron_right_rounded,
+                                  color: Colors.white38),
+                              onTap: () =>
+                                  _showAdvancedThresholdsDialog(context, ref),
                             ),
                           ]),
                           const SizedBox(height: AppSpacing.lg),
@@ -377,25 +393,23 @@ class SettingsScreen extends ConsumerWidget {
                     fontSize: 16,
                     fontWeight: FontWeight.w600)),
             const SizedBox(height: AppSpacing.lg),
-            DropdownButton<String>(
-              value: category,
-              dropdownColor: const Color(0xFF1A1A1A),
-              isExpanded: true,
-              items: [
-                DropdownMenuItem(
-                    value: 'bug',
-                    child: Text(L10n.get(context, 'feedback_category_bug'),
-                        style: const TextStyle(color: AppTheme.textLight))),
-                DropdownMenuItem(
-                    value: 'opinion',
-                    child: Text(L10n.get(context, 'feedback_category_opinion'),
-                        style: const TextStyle(color: AppTheme.textLight))),
-                DropdownMenuItem(
-                    value: 'other',
-                    child: Text(L10n.get(context, 'feedback_category_other'),
-                        style: const TextStyle(color: AppTheme.textLight))),
+            Row(
+              children: [
+                for (final entry in const [
+                  ('bug', 'feedback_category_bug'),
+                  ('opinion', 'feedback_category_opinion'),
+                  ('other', 'feedback_category_other'),
+                ]) ...[
+                  if (entry.$1 != 'bug') const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: _CategoryChip(
+                      label: L10n.get(context, entry.$2),
+                      selected: category == entry.$1,
+                      onTap: () => setDialogState(() => category = entry.$1),
+                    ),
+                  ),
+                ],
               ],
-              onChanged: (v) => setDialogState(() => category = v ?? category),
             ),
             const SizedBox(height: AppSpacing.md),
             TextField(
@@ -453,6 +467,127 @@ class SettingsScreen extends ConsumerWidget {
     } catch (_) {
       messenger.showSnackBar(SnackBar(content: Text(errorText)));
     }
+  }
+
+  Future<void> _showAdvancedThresholdsDialog(
+      BuildContext context, WidgetRef ref) async {
+    final settings = ref.read(settingsProvider);
+    final detrainingController = TextEditingController(
+        text:
+            '${settings.detrainingDaysOverride ?? kDetrainingDays}');
+    final weeklyCapController = TextEditingController(
+        text: '${settings.weeklyHardCapOverride ?? kWeeklyHardSessionCap}');
+    final pbCautionController = TextEditingController(
+        text:
+            '${settings.pbCautionRatioOverride ?? kPbCautionRetentionRatio}');
+    final maxRpeController = TextEditingController(
+        text: '${settings.maxAvgRpeToAdvanceOverride ?? kMaxAvgRpeToAdvance}');
+
+    Widget field(TextEditingController controller, String labelKey) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: AppSpacing.md),
+        child: TextField(
+          controller: controller,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          style: const TextStyle(color: AppTheme.textLight),
+          cursorColor: AppTheme.primary,
+          decoration: InputDecoration(
+            labelText: L10n.get(context, labelKey),
+            labelStyle: const TextStyle(color: AppTheme.textDim),
+            enabledBorder: const UnderlineInputBorder(
+                borderSide: BorderSide(color: Colors.white24)),
+            focusedBorder: const UnderlineInputBorder(
+                borderSide: BorderSide(color: AppTheme.primary)),
+          ),
+        ),
+      );
+    }
+
+    final saved = await showGlassDialog<bool>(
+      context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(L10n.get(context, 'settings_advanced_thresholds'),
+                style: const TextStyle(
+                    color: AppTheme.textLight,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: AppSpacing.sm),
+            Text(L10n.get(context, 'settings_advanced_thresholds_desc'),
+                style: const TextStyle(
+                    color: AppTheme.textDim, fontSize: 12, height: 1.4)),
+            const SizedBox(height: AppSpacing.lg),
+            field(detrainingController, 'settings_advanced_detraining_days'),
+            field(weeklyCapController, 'settings_advanced_weekly_cap'),
+            field(pbCautionController, 'settings_advanced_pb_caution_ratio'),
+            field(maxRpeController, 'settings_advanced_max_avg_rpe'),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: () {
+                  detrainingController.text = '$kDetrainingDays';
+                  weeklyCapController.text = '$kWeeklyHardSessionCap';
+                  pbCautionController.text = '$kPbCautionRetentionRatio';
+                  maxRpeController.text = '$kMaxAvgRpeToAdvance';
+                },
+                child: Text(L10n.get(context, 'settings_advanced_reset'),
+                    style: const TextStyle(color: AppTheme.textDim)),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(false),
+                    child: Text(L10n.get(context, 'common_cancel'),
+                        style: const TextStyle(color: Colors.white70)),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(true),
+                    child: Text(L10n.get(context, 'common_save')),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (saved == true) {
+      final rawDetraining = int.tryParse(detrainingController.text.trim());
+      final detrainingDays = rawDetraining?.clamp(1, 365).toInt();
+      final rawWeeklyCap = int.tryParse(weeklyCapController.text.trim());
+      final weeklyCap = rawWeeklyCap?.clamp(1, 14).toInt();
+      final rawPbCaution = double.tryParse(pbCautionController.text.trim());
+      final pbCautionRatio = rawPbCaution?.clamp(0.1, 1.0).toDouble();
+      final rawMaxRpe = double.tryParse(maxRpeController.text.trim());
+      final maxAvgRpe = rawMaxRpe?.clamp(1.0, 10.0).toDouble();
+      await ref.read(settingsProvider.notifier).setAdvancedThresholds(
+            detrainingDays: detrainingDays == kDetrainingDays ? null : detrainingDays,
+            weeklyHardCap: weeklyCap == kWeeklyHardSessionCap ? null : weeklyCap,
+            pbCautionRatio:
+                pbCautionRatio == kPbCautionRetentionRatio ? null : pbCautionRatio,
+            maxAvgRpeToAdvance:
+                maxAvgRpe == kMaxAvgRpeToAdvance ? null : maxAvgRpe,
+          );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(L10n.get(context, 'settings_advanced_saved'))));
+      }
+    }
+
+    detrainingController.dispose();
+    weeklyCapController.dispose();
+    pbCautionController.dispose();
+    maxRpeController.dispose();
   }
 
   void _showHomeWidgetInfo(BuildContext context) {
@@ -576,6 +711,10 @@ class _AccountSection extends ConsumerStatefulWidget {
 
 class _AccountSectionState extends ConsumerState<_AccountSection> {
   static const _minPasswordLength = 8;
+
+  // Same deliberately simple check as AuthGateScreen's — good enough to
+  // catch a typo before a round trip to the server, not a full validator.
+  static final _emailFormatPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
   bool _loading = false;
 
@@ -859,6 +998,7 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
     final emailController = TextEditingController();
     final passwordController = TextEditingController();
     String? errorKey;
+    var submitting = false;
     final changed = await showGlassDialog<bool>(
       context,
       builder: (dialogContext) => StatefulBuilder(
@@ -920,28 +1060,47 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () async {
-                      final newEmail = emailController.text.trim();
-                      try {
-                        await ref.read(syncApiClientProvider).changeEmail(
-                              newEmail: newEmail,
-                              currentPassword: passwordController.text,
-                              authService: ref.read(authServiceProvider),
-                            );
-                        if (dialogContext.mounted) {
-                          Navigator.of(dialogContext).pop(true);
-                        }
-                      } on SyncApiException catch (e) {
-                        setDialogState(() => errorKey = switch (e.statusCode) {
-                              401 => 'account_error_invalid_credentials',
-                              409 => 'account_error_email_taken',
-                              _ => 'account_error_unknown',
+                    // Debounced the same way _resendVerification is — without
+                    // this, a double-tap while the first request is still in
+                    // flight could fire two change-email calls at once.
+                    onPressed: submitting
+                        ? null
+                        : () async {
+                            final newEmail = emailController.text.trim();
+                            if (!_emailFormatPattern.hasMatch(newEmail)) {
+                              setDialogState(() => errorKey =
+                                  'account_error_invalid_email_format');
+                              return;
+                            }
+                            setDialogState(() {
+                              submitting = true;
+                              errorKey = null;
                             });
-                      } catch (_) {
-                        setDialogState(
-                            () => errorKey = 'account_error_network');
-                      }
-                    },
+                            try {
+                              await ref.read(syncApiClientProvider).changeEmail(
+                                    newEmail: newEmail,
+                                    currentPassword: passwordController.text,
+                                    authService: ref.read(authServiceProvider),
+                                  );
+                              if (dialogContext.mounted) {
+                                Navigator.of(dialogContext).pop(true);
+                              }
+                            } on SyncApiException catch (e) {
+                              setDialogState(() {
+                                submitting = false;
+                                errorKey = switch (e.statusCode) {
+                                  401 => 'account_error_invalid_credentials',
+                                  409 => 'account_error_email_taken',
+                                  _ => 'account_error_unknown',
+                                };
+                              });
+                            } catch (_) {
+                              setDialogState(() {
+                                submitting = false;
+                                errorKey = 'account_error_network';
+                              });
+                            }
+                          },
                     child:
                         Text(L10n.get(context, 'account_change_email_submit')),
                   ),
@@ -963,86 +1122,141 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
   }
 
   Future<void> _showDevicesDialog(BuildContext context) async {
-    final networkErrorText = L10n.get(context, 'account_error_network');
+    // Opens immediately with a loading spinner rather than awaiting
+    // listDevices() before the dialog exists at all — the previous version
+    // left the whole screen looking frozen for however long that network
+    // call took, with no feedback that anything was happening.
+    var isLoading = true;
     var devices = <Map<String, dynamic>>[];
     String? loadError;
-    try {
-      devices = await ref.read(syncApiClientProvider).listDevices();
-    } catch (_) {
-      loadError = networkErrorText;
-    }
-    if (!context.mounted) return;
+    String? deleteError;
+    // Tracks the one device currently mid-delete, if any — a double-tap on
+    // "Usuń" before the first request lands could otherwise fire it twice.
+    String? deletingDeviceId;
 
     await showGlassDialog<void>(
       context,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(L10n.get(context, 'devices_dialog_title'),
-                style: const TextStyle(
-                    color: AppTheme.textLight,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600)),
-            const SizedBox(height: AppSpacing.md),
-            if (loadError != null)
-              Text(loadError,
-                  style: const TextStyle(color: AppTheme.danger, fontSize: 12))
-            else if (devices.isEmpty)
-              Text(L10n.get(context, 'devices_empty'),
-                  style: const TextStyle(color: AppTheme.textDim, fontSize: 13))
-            else
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 320),
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (final device in devices)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: AppSpacing.xs),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  (device['label'] as String?) ??
-                                      device['id'] as String,
-                                  style: const TextStyle(
-                                      color: AppTheme.textLight, fontSize: 13),
-                                ),
-                              ),
-                              TextButton(
-                                onPressed: () async {
-                                  try {
-                                    await ref
-                                        .read(syncApiClientProvider)
-                                        .deleteDevice(device['id'] as String);
-                                    setDialogState(
-                                        () => devices.remove(device));
-                                  } catch (_) {
-                                    // Best-effort — dialog just keeps showing the device.
-                                  }
-                                },
-                                child: Text(L10n.get(context, 'devices_remove'),
+        builder: (dialogContext, setDialogState) {
+          if (isLoading) {
+            ref.read(syncApiClientProvider).listDevices().then((result) {
+              if (!dialogContext.mounted) return;
+              setDialogState(() {
+                devices = result;
+                isLoading = false;
+              });
+            }).catchError((_) {
+              if (!dialogContext.mounted) return;
+              setDialogState(() {
+                loadError = L10n.get(context, 'account_error_devices_load');
+                isLoading = false;
+              });
+            });
+          }
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(L10n.get(context, 'devices_dialog_title'),
+                  style: const TextStyle(
+                      color: AppTheme.textLight,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600)),
+              const SizedBox(height: AppSpacing.md),
+              if (isLoading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
+                  child: Center(
+                      child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2))),
+                )
+              else if (loadError != null)
+                Text(loadError!,
+                    style:
+                        const TextStyle(color: AppTheme.danger, fontSize: 12))
+              else if (devices.isEmpty)
+                Text(L10n.get(context, 'devices_empty'),
+                    style:
+                        const TextStyle(color: AppTheme.textDim, fontSize: 13))
+              else
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 320),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final device in devices)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                                vertical: AppSpacing.xs),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    (device['label'] as String?) ??
+                                        device['id'] as String,
                                     style: const TextStyle(
-                                        color: AppTheme.danger, fontSize: 12)),
-                              ),
-                            ],
+                                        color: AppTheme.textLight,
+                                        fontSize: 13),
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: deletingDeviceId ==
+                                          device['id']
+                                      ? null
+                                      : () async {
+                                          final deviceId =
+                                              device['id'] as String;
+                                          setDialogState(
+                                              () => deletingDeviceId =
+                                                  deviceId);
+                                          try {
+                                            await ref
+                                                .read(syncApiClientProvider)
+                                                .deleteDevice(deviceId);
+                                            setDialogState(() {
+                                              devices.remove(device);
+                                              deleteError = null;
+                                              deletingDeviceId = null;
+                                            });
+                                          } catch (_) {
+                                            setDialogState(() {
+                                              deleteError = L10n.get(
+                                                  context,
+                                                  'account_error_device_delete');
+                                              deletingDeviceId = null;
+                                            });
+                                          }
+                                        },
+                                  child: Text(
+                                      L10n.get(context, 'devices_remove'),
+                                      style: const TextStyle(
+                                          color: AppTheme.danger,
+                                          fontSize: 12)),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
+              if (deleteError != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Text(deleteError!,
+                    style:
+                        const TextStyle(color: AppTheme.danger, fontSize: 12)),
+              ],
+              const SizedBox(height: AppSpacing.lg),
+              ElevatedButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: Text(L10n.get(context, 'common_ok')),
               ),
-            const SizedBox(height: AppSpacing.lg),
-            ElevatedButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(L10n.get(context, 'common_ok')),
-            ),
-          ],
-        ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1057,20 +1271,26 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
     );
     if (!confirmed || !context.mounted) return;
     final messenger = ScaffoldMessenger.of(context);
+    var remoteLogoutFailed = false;
     try {
       await ref.read(syncApiClientProvider).logoutAllDevices();
     } catch (_) {
       // Even if the server call fails (e.g. offline), clearing the local
       // token below still logs this device out — the "all devices" part
-      // just won't have taken effect remotely.
+      // just won't have taken effect remotely, so the toast below must say
+      // so rather than claiming an unqualified success.
+      remoteLogoutFailed = true;
     }
     await ref.read(authServiceProvider).logout();
     // See _logout() — same stale-syncId leak risk applies here.
     await ref.read(databaseProvider).wipeAllLocalData();
     await ref.read(syncServiceProvider).clearLastSyncedAt();
     if (!context.mounted) return;
-    messenger.showSnackBar(
-        SnackBar(content: Text(L10n.get(context, 'account_logout_all_done'))));
+    messenger.showSnackBar(SnackBar(
+        content: Text(L10n.get(context,
+            remoteLogoutFailed
+                ? 'account_logout_all_partial'
+                : 'account_logout_all_done'))));
     _goToAuthGate(context);
   }
 
@@ -1443,6 +1663,43 @@ class _SwitchTile extends StatelessWidget {
           ),
           Switch(value: value, onChanged: onChanged),
         ],
+      ),
+    );
+  }
+}
+
+/// A single selectable pill in a segmented picker (e.g. feedback category).
+/// Deliberately not a [DropdownButton] — that widget pushes its own overlay
+/// route internally, which crashes with a `_dependents.isEmpty` assertion
+/// when used inside a `BackdropFilter`-based dialog like [showGlassDialog].
+class _CategoryChip extends StatelessWidget {
+  const _CategoryChip(
+      {required this.label, required this.selected, required this.onTap});
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: AppMotion.fast,
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        decoration: BoxDecoration(
+          color: selected ? AppTheme.primary : Colors.white.withAlpha(14),
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: selected ? Colors.black : AppTheme.textDim,
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
+          ),
+        ),
       ),
     );
   }

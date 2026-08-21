@@ -170,30 +170,76 @@ class FreedivingRepository {
               ));
   }
 
+  /// Concerning symptom tags (see the check-in chips on the summary screen)
+  /// — 'ok' is deliberately excluded, it's the reassuring option.
+  static const _concerningSymptoms = {'tingling', 'dizziness'};
+
   /// Records the post-session symptom check-in on the most recent log of
   /// [tableType] — same "find the last log, attach it" pattern as
-  /// [recordRpeAndAdjustPb], but this doesn't touch the working PB: a
-  /// symptom report is a safety signal, not a difficulty rating.
+  /// [recordRpeAndAdjustPb]. Unlike RPE, a single report doesn't move the
+  /// working PB (one dizzy spell can have any number of unrelated causes);
+  /// but a symptom recurring across recent sessions of the same table is a
+  /// real safety signal, so that eases the working PB the same way a
+  /// "brutal" RPE rating would.
   Future<void> recordSymptomTag({
     required FreedivingTableType tableType,
     required String symptomTag,
   }) async {
     final typeStr = tableType == FreedivingTableType.co2 ? 'co2' : 'o2';
-    final lastLog = await (_db.select(_db.freedivingSessionLog)
+    final recentLogs = await (_db.select(_db.freedivingSessionLog)
           ..where((t) => t.tableType.equals(typeStr))
           ..orderBy([(t) => OrderingTerm.desc(t.timestamp)])
-          ..limit(1))
-        .getSingleOrNull();
-    if (lastLog == null) return;
+          ..limit(3))
+        .get();
+    if (recentLogs.isEmpty) return;
+    final lastLog = recentLogs.first;
     await (_db.update(_db.freedivingSessionLog)
           ..where((t) => t.id.equals(lastLog.id)))
         .write(FreedivingSessionLogCompanion(symptomTag: Value(symptomTag)));
+
+    if (!_concerningSymptoms.contains(symptomTag)) return;
+    final priorConcerning = recentLogs
+        .skip(1)
+        .where((l) => _concerningSymptoms.contains(l.symptomTag))
+        .isNotEmpty;
+    if (!priorConcerning) return; // First report — not a pattern yet.
+
+    final profile = await getProfile();
+    final verifiedPb =
+        tableType == FreedivingTableType.co2 ? profile.verifiedPbCo2Sec : profile.verifiedPbSec;
+    if (verifiedPb == null) return;
+    final currentVirtual = tableType == FreedivingTableType.co2
+        ? (profile.virtualPbCo2Sec ?? verifiedPb)
+        : (profile.virtualPbO2Sec ?? verifiedPb);
+    final nextVirtual = RpeProgression.nextVirtualPb(
+      currentVirtualPbSec: currentVirtual,
+      verifiedPbSec: verifiedPb,
+      rpeScore: 10,
+    );
+    await (_db.update(_db.freedivingProfile)
+          ..where((t) => t.id.equals(profile.id)))
+        .write(tableType == FreedivingTableType.co2
+            ? FreedivingProfileCompanion(virtualPbCo2Sec: Value(nextVirtual))
+            : FreedivingProfileCompanion(virtualPbO2Sec: Value(nextVirtual)));
   }
 
   Stream<List<FreedivingSessionLogData>> watchRecentLogs({int limit = 20}) {
     return (_db.select(_db.freedivingSessionLog)
           ..orderBy([(t) => OrderingTerm.desc(t.timestamp)])
           ..limit(limit))
+        .watch();
+  }
+
+  /// Every log with `timestamp >= cutoff` — unlike [watchRecentLogs]'s count
+  /// cap, this can never silently drop a session that's still inside the
+  /// window just because a more prolific user pushed it past a fixed
+  /// `limit`. Used for the weekly hard-session cap, which needs a real
+  /// calendar week, not "however many of the last 20 logs happen to be
+  /// recent enough."
+  Stream<List<FreedivingSessionLogData>> watchLogsSince(DateTime cutoff) {
+    return (_db.select(_db.freedivingSessionLog)
+          ..where((t) => t.timestamp.isBiggerOrEqualValue(cutoff))
+          ..orderBy([(t) => OrderingTerm.desc(t.timestamp)]))
         .watch();
   }
 

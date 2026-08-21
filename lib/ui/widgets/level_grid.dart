@@ -118,9 +118,19 @@ class LevelCard extends StatelessWidget {
       case ExerciseType.fireBreathing:
         return '3 min • ${L10n.get(context, 'desc_pure_energy')}';
       case ExerciseType.guidedRoutine:
+        // Unlike box/relax/fire above, a rounds count alone doesn't convey
+        // how long this actually takes — packing is ~30s, resisted
+        // breathing is ~5-6 min, and nothing about "N rounds" hints at that
+        // difference the way the other automated exercises' time estimates do.
+        final totalSeconds = (level.guidedSteps ?? const [])
+                .fold<int>(0, (sum, step) => sum + step.durationSec) *
+            (level.totalRounds > 0 ? level.totalRounds : 1);
+        final timeLabel = totalSeconds < 60
+            ? '~${totalSeconds}s'
+            : '~${(totalSeconds / 60).round()} min';
         final roundsKey =
             level.totalRounds >= 5 ? 'desc_rounds_pl' : 'desc_rounds';
-        return '${level.totalRounds} ${L10n.get(context, roundsKey)}';
+        return '$timeLabel • ${level.totalRounds} ${L10n.get(context, roundsKey)}';
       case ExerciseType.custom:
       case ExerciseType.co2Table:
       case ExerciseType.o2Table:

@@ -75,6 +75,7 @@ class WeeklyPlanGenerator {
     // seen it" is the safer default over silently never scheduling a PB
     // test at all.
     bool freedivingVisited = true,
+    int weeklyHardSessionCap = kWeeklyHardSessionCap,
     DateTime? now,
   }) {
     now ??= DateTime.now();
@@ -130,7 +131,7 @@ class WeeklyPlanGenerator {
       var o2Budget = o2PerWeek;
       final hardBeforeO2 = hardSessionsUsedThisWeek +
           (wimHofAction.isHard ? wimHofPerWeek : 0);
-      while (o2Budget > 0 && hardBeforeO2 + o2Budget > kWeeklyHardSessionCap) {
+      while (o2Budget > 0 && hardBeforeO2 + o2Budget > weeklyHardSessionCap) {
         o2Budget--;
       }
       if (o2Budget > 0) {

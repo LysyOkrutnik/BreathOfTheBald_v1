@@ -680,9 +680,17 @@ class $UserProfileTable extends UserProfile
   late final GeneratedColumn<DateTime> lastSessionDate =
       GeneratedColumn<DateTime>('last_session_date', aliasedName, true,
           type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _bestStreakMeta =
+      const VerificationMeta('bestStreak');
+  @override
+  late final GeneratedColumn<int> bestStreak = GeneratedColumn<int>(
+      'best_streak', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(0));
   @override
   List<GeneratedColumn> get $columns =>
-      [id, level, totalXp, dailyStreak, lastSessionDate];
+      [id, level, totalXp, dailyStreak, lastSessionDate, bestStreak];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -716,6 +724,12 @@ class $UserProfileTable extends UserProfile
           lastSessionDate.isAcceptableOrUnknown(
               data['last_session_date']!, _lastSessionDateMeta));
     }
+    if (data.containsKey('best_streak')) {
+      context.handle(
+          _bestStreakMeta,
+          bestStreak.isAcceptableOrUnknown(
+              data['best_streak']!, _bestStreakMeta));
+    }
     return context;
   }
 
@@ -735,6 +749,8 @@ class $UserProfileTable extends UserProfile
           .read(DriftSqlType.int, data['${effectivePrefix}daily_streak'])!,
       lastSessionDate: attachedDatabase.typeMapping.read(
           DriftSqlType.dateTime, data['${effectivePrefix}last_session_date']),
+      bestStreak: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}best_streak'])!,
     );
   }
 
@@ -750,12 +766,19 @@ class UserProfileData extends DataClass implements Insertable<UserProfileData> {
   final int totalXp;
   final int dailyStreak;
   final DateTime? lastSessionDate;
+
+  /// The highest [dailyStreak] ever reached, kept even after the streak
+  /// itself later resets — otherwise breaking a long streak leaves no
+  /// lasting record of it at all, despite the daily history already holding
+  /// everything needed to know it happened.
+  final int bestStreak;
   const UserProfileData(
       {required this.id,
       required this.level,
       required this.totalXp,
       required this.dailyStreak,
-      this.lastSessionDate});
+      this.lastSessionDate,
+      required this.bestStreak});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -766,6 +789,7 @@ class UserProfileData extends DataClass implements Insertable<UserProfileData> {
     if (!nullToAbsent || lastSessionDate != null) {
       map['last_session_date'] = Variable<DateTime>(lastSessionDate);
     }
+    map['best_streak'] = Variable<int>(bestStreak);
     return map;
   }
 
@@ -778,6 +802,7 @@ class UserProfileData extends DataClass implements Insertable<UserProfileData> {
       lastSessionDate: lastSessionDate == null && nullToAbsent
           ? const Value.absent()
           : Value(lastSessionDate),
+      bestStreak: Value(bestStreak),
     );
   }
 
@@ -790,6 +815,7 @@ class UserProfileData extends DataClass implements Insertable<UserProfileData> {
       totalXp: serializer.fromJson<int>(json['totalXp']),
       dailyStreak: serializer.fromJson<int>(json['dailyStreak']),
       lastSessionDate: serializer.fromJson<DateTime?>(json['lastSessionDate']),
+      bestStreak: serializer.fromJson<int>(json['bestStreak']),
     );
   }
   @override
@@ -801,6 +827,7 @@ class UserProfileData extends DataClass implements Insertable<UserProfileData> {
       'totalXp': serializer.toJson<int>(totalXp),
       'dailyStreak': serializer.toJson<int>(dailyStreak),
       'lastSessionDate': serializer.toJson<DateTime?>(lastSessionDate),
+      'bestStreak': serializer.toJson<int>(bestStreak),
     };
   }
 
@@ -809,7 +836,8 @@ class UserProfileData extends DataClass implements Insertable<UserProfileData> {
           int? level,
           int? totalXp,
           int? dailyStreak,
-          Value<DateTime?> lastSessionDate = const Value.absent()}) =>
+          Value<DateTime?> lastSessionDate = const Value.absent(),
+          int? bestStreak}) =>
       UserProfileData(
         id: id ?? this.id,
         level: level ?? this.level,
@@ -818,6 +846,7 @@ class UserProfileData extends DataClass implements Insertable<UserProfileData> {
         lastSessionDate: lastSessionDate.present
             ? lastSessionDate.value
             : this.lastSessionDate,
+        bestStreak: bestStreak ?? this.bestStreak,
       );
   UserProfileData copyWithCompanion(UserProfileCompanion data) {
     return UserProfileData(
@@ -829,6 +858,8 @@ class UserProfileData extends DataClass implements Insertable<UserProfileData> {
       lastSessionDate: data.lastSessionDate.present
           ? data.lastSessionDate.value
           : this.lastSessionDate,
+      bestStreak:
+          data.bestStreak.present ? data.bestStreak.value : this.bestStreak,
     );
   }
 
@@ -839,14 +870,15 @@ class UserProfileData extends DataClass implements Insertable<UserProfileData> {
           ..write('level: $level, ')
           ..write('totalXp: $totalXp, ')
           ..write('dailyStreak: $dailyStreak, ')
-          ..write('lastSessionDate: $lastSessionDate')
+          ..write('lastSessionDate: $lastSessionDate, ')
+          ..write('bestStreak: $bestStreak')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode =>
-      Object.hash(id, level, totalXp, dailyStreak, lastSessionDate);
+      Object.hash(id, level, totalXp, dailyStreak, lastSessionDate, bestStreak);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -855,7 +887,8 @@ class UserProfileData extends DataClass implements Insertable<UserProfileData> {
           other.level == this.level &&
           other.totalXp == this.totalXp &&
           other.dailyStreak == this.dailyStreak &&
-          other.lastSessionDate == this.lastSessionDate);
+          other.lastSessionDate == this.lastSessionDate &&
+          other.bestStreak == this.bestStreak);
 }
 
 class UserProfileCompanion extends UpdateCompanion<UserProfileData> {
@@ -864,12 +897,14 @@ class UserProfileCompanion extends UpdateCompanion<UserProfileData> {
   final Value<int> totalXp;
   final Value<int> dailyStreak;
   final Value<DateTime?> lastSessionDate;
+  final Value<int> bestStreak;
   const UserProfileCompanion({
     this.id = const Value.absent(),
     this.level = const Value.absent(),
     this.totalXp = const Value.absent(),
     this.dailyStreak = const Value.absent(),
     this.lastSessionDate = const Value.absent(),
+    this.bestStreak = const Value.absent(),
   });
   UserProfileCompanion.insert({
     this.id = const Value.absent(),
@@ -877,6 +912,7 @@ class UserProfileCompanion extends UpdateCompanion<UserProfileData> {
     this.totalXp = const Value.absent(),
     this.dailyStreak = const Value.absent(),
     this.lastSessionDate = const Value.absent(),
+    this.bestStreak = const Value.absent(),
   });
   static Insertable<UserProfileData> custom({
     Expression<int>? id,
@@ -884,6 +920,7 @@ class UserProfileCompanion extends UpdateCompanion<UserProfileData> {
     Expression<int>? totalXp,
     Expression<int>? dailyStreak,
     Expression<DateTime>? lastSessionDate,
+    Expression<int>? bestStreak,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -891,6 +928,7 @@ class UserProfileCompanion extends UpdateCompanion<UserProfileData> {
       if (totalXp != null) 'total_xp': totalXp,
       if (dailyStreak != null) 'daily_streak': dailyStreak,
       if (lastSessionDate != null) 'last_session_date': lastSessionDate,
+      if (bestStreak != null) 'best_streak': bestStreak,
     });
   }
 
@@ -899,13 +937,15 @@ class UserProfileCompanion extends UpdateCompanion<UserProfileData> {
       Value<int>? level,
       Value<int>? totalXp,
       Value<int>? dailyStreak,
-      Value<DateTime?>? lastSessionDate}) {
+      Value<DateTime?>? lastSessionDate,
+      Value<int>? bestStreak}) {
     return UserProfileCompanion(
       id: id ?? this.id,
       level: level ?? this.level,
       totalXp: totalXp ?? this.totalXp,
       dailyStreak: dailyStreak ?? this.dailyStreak,
       lastSessionDate: lastSessionDate ?? this.lastSessionDate,
+      bestStreak: bestStreak ?? this.bestStreak,
     );
   }
 
@@ -927,6 +967,9 @@ class UserProfileCompanion extends UpdateCompanion<UserProfileData> {
     if (lastSessionDate.present) {
       map['last_session_date'] = Variable<DateTime>(lastSessionDate.value);
     }
+    if (bestStreak.present) {
+      map['best_streak'] = Variable<int>(bestStreak.value);
+    }
     return map;
   }
 
@@ -937,7 +980,8 @@ class UserProfileCompanion extends UpdateCompanion<UserProfileData> {
           ..write('level: $level, ')
           ..write('totalXp: $totalXp, ')
           ..write('dailyStreak: $dailyStreak, ')
-          ..write('lastSessionDate: $lastSessionDate')
+          ..write('lastSessionDate: $lastSessionDate, ')
+          ..write('bestStreak: $bestStreak')
           ..write(')'))
         .toString();
   }
@@ -4233,6 +4277,7 @@ typedef $$UserProfileTableCreateCompanionBuilder = UserProfileCompanion
   Value<int> totalXp,
   Value<int> dailyStreak,
   Value<DateTime?> lastSessionDate,
+  Value<int> bestStreak,
 });
 typedef $$UserProfileTableUpdateCompanionBuilder = UserProfileCompanion
     Function({
@@ -4241,6 +4286,7 @@ typedef $$UserProfileTableUpdateCompanionBuilder = UserProfileCompanion
   Value<int> totalXp,
   Value<int> dailyStreak,
   Value<DateTime?> lastSessionDate,
+  Value<int> bestStreak,
 });
 
 class $$UserProfileTableFilterComposer
@@ -4267,6 +4313,9 @@ class $$UserProfileTableFilterComposer
   ColumnFilters<DateTime> get lastSessionDate => $composableBuilder(
       column: $table.lastSessionDate,
       builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get bestStreak => $composableBuilder(
+      column: $table.bestStreak, builder: (column) => ColumnFilters(column));
 }
 
 class $$UserProfileTableOrderingComposer
@@ -4293,6 +4342,9 @@ class $$UserProfileTableOrderingComposer
   ColumnOrderings<DateTime> get lastSessionDate => $composableBuilder(
       column: $table.lastSessionDate,
       builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get bestStreak => $composableBuilder(
+      column: $table.bestStreak, builder: (column) => ColumnOrderings(column));
 }
 
 class $$UserProfileTableAnnotationComposer
@@ -4318,6 +4370,9 @@ class $$UserProfileTableAnnotationComposer
 
   GeneratedColumn<DateTime> get lastSessionDate => $composableBuilder(
       column: $table.lastSessionDate, builder: (column) => column);
+
+  GeneratedColumn<int> get bestStreak => $composableBuilder(
+      column: $table.bestStreak, builder: (column) => column);
 }
 
 class $$UserProfileTableTableManager extends RootTableManager<
@@ -4351,6 +4406,7 @@ class $$UserProfileTableTableManager extends RootTableManager<
             Value<int> totalXp = const Value.absent(),
             Value<int> dailyStreak = const Value.absent(),
             Value<DateTime?> lastSessionDate = const Value.absent(),
+            Value<int> bestStreak = const Value.absent(),
           }) =>
               UserProfileCompanion(
             id: id,
@@ -4358,6 +4414,7 @@ class $$UserProfileTableTableManager extends RootTableManager<
             totalXp: totalXp,
             dailyStreak: dailyStreak,
             lastSessionDate: lastSessionDate,
+            bestStreak: bestStreak,
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
@@ -4365,6 +4422,7 @@ class $$UserProfileTableTableManager extends RootTableManager<
             Value<int> totalXp = const Value.absent(),
             Value<int> dailyStreak = const Value.absent(),
             Value<DateTime?> lastSessionDate = const Value.absent(),
+            Value<int> bestStreak = const Value.absent(),
           }) =>
               UserProfileCompanion.insert(
             id: id,
@@ -4372,6 +4430,7 @@ class $$UserProfileTableTableManager extends RootTableManager<
             totalXp: totalXp,
             dailyStreak: dailyStreak,
             lastSessionDate: lastSessionDate,
+            bestStreak: bestStreak,
           ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))

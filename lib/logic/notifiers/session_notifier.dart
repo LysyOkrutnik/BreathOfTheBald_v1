@@ -631,10 +631,19 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
 
     if (step.phase == GuidedStepPhase.hold) {
       var remaining = step.durationSec;
+      // A quiet cue that a hold actually started — Wim Hof/freediving holds
+      // get a gong+haptic on entry (_startRetention); guided-routine holds
+      // had none, so a user with eyes closed got no signal the phase changed.
+      try { _hapticEngine.playRetentionPeak(); _audioManager.playGong(); } catch (_) {}
       state = state.copyWith(
         customLabel: step.labelKey,
         customDescription: null,
-        customIsBig: false,
+        // Null, not false — a fixed `false` short-circuits _Visuals.from
+        // into treating this like a static custom-labelled step, which
+        // froze the orb deflated for the whole hold. Null lets it fall
+        // through to the same "breathe slowly in place" recovery-phase
+        // animation freediving's rest/pause already uses.
+        customIsBig: null,
         phase: SessionPhase.recovery(remaining: Duration(seconds: remaining)),
       );
       while (remaining > 0) {
@@ -646,12 +655,23 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
               phase: SessionPhase.recovery(remaining: Duration(seconds: remaining)));
         }
       }
+      if (_isRunning && step.recordAsRetention) {
+        state = state.copyWith(retentionLogs: [
+          ...state.retentionLogs,
+          Duration(seconds: step.durationSec),
+        ]);
+      }
       return _isRunning;
     }
 
+    // No hint text — unlike box/relax/fire's breathing steps, a guided
+    // routine's labelKey (e.g. "Wdech", "Brzuch") already says what to do;
+    // a fabricated "${duration}s" string passed as if it were an l10n key
+    // only "worked" by relying on L10n.get's unknown-key fallback (which
+    // just echoes the key back) rather than an explicit choice.
     _updateCustomState(
       step.labelKey,
-      "${step.durationSec}s",
+      null,
       isBig: step.isInhale ?? true,
       isInhaling: step.isInhale ?? true,
       duration: Duration(seconds: step.durationSec),
@@ -901,7 +921,7 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
   // HELPERS & TEARDOWN
   // ==========================================================
 
-  void _updateCustomState(String labelKey, String descKey, {
+  void _updateCustomState(String labelKey, String? descKey, {
     required bool isBig,
     required bool isInhaling,
     required Duration duration,
@@ -988,12 +1008,23 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
       // XP-calculation input for these two types only. The full, honest hold
       // time is still stored as the session's real retentionSec below.
       final gamification = _ref.read(gamificationServiceProvider);
-      final xpResult = await gamification.updateXpAndLevel(
-        breathCount: level.totalBreaths * totalRounds,
-        retentionSeconds:
-            isFreedivingTable ? (totalRetention * 0.3).round() : totalRetention,
-        multiplier: isFreedivingTable ? 0.5 : 1.5,
-      );
+      // Guided routines (lung-mobility exercises + packing) have no
+      // meaningful `totalBreaths`/retention of their own — the generic
+      // formula previously evaluated to a flat 0 XP for every one of them,
+      // regardless of how long or how many reps were actually completed.
+      // Award flat XP scaled by real elapsed time instead (same helper cold
+      // shower already uses for a duration-less activity, just with a
+      // computed amount instead of a constant).
+      final xpResult = level.type == ExerciseType.guidedRoutine
+          ? await gamification.awardFlatXp(
+              (duration.inSeconds * 0.5).round().clamp(1, 1000))
+          : await gamification.updateXpAndLevel(
+              breathCount: level.totalBreaths * totalRounds,
+              retentionSeconds: isFreedivingTable
+                  ? (totalRetention * 0.3).round()
+                  : totalRetention,
+              multiplier: isFreedivingTable ? 0.5 : 1.5,
+            );
       justLeveledUpTo = xpResult.leveledUp ? xpResult.newLevel : null;
       final streakResult = await gamification.updateStreak();
       justUsedStreakGrace = streakResult.graceUsed;

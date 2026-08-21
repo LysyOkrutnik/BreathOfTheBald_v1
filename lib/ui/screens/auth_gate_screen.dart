@@ -210,20 +210,38 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen> {
                           letterSpacing: 4.0,
                         ),
                       ),
-                      const SizedBox(height: AppSpacing.xl),
+                      const SizedBox(height: AppSpacing.lg),
+                      // Why an account is required, made its own visually
+                      // distinct block (icon + larger, brighter text) instead
+                      // of blending in as just the first dim line inside the
+                      // form card below — this gate is a surprise for anyone
+                      // arriving straight from onboarding, so the reason for
+                      // it needs to actually catch the eye, not just be
+                      // technically present somewhere on the screen.
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.cloud_sync_outlined,
+                              color: AppTheme.primary, size: 22),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Text(
+                              L10n.get(context, 'auth_gate_intro'),
+                              style: const TextStyle(
+                                  color: AppTheme.textLight,
+                                  fontSize: 14,
+                                  height: 1.4,
+                                  fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
                       GlassCard(
                         padding: const EdgeInsets.all(AppSpacing.lg),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Text(
-                              L10n.get(context, 'auth_gate_intro'),
-                              style: const TextStyle(
-                                  color: AppTheme.textDim,
-                                  fontSize: 12,
-                                  height: 1.4),
-                            ),
-                            const SizedBox(height: AppSpacing.md),
                             TextField(
                               controller: _emailController,
                               keyboardType: TextInputType.emailAddress,

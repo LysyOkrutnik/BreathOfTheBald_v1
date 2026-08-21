@@ -112,10 +112,13 @@ class GamificationService {
       }
     }
 
+    final newBest =
+        newStreak > profile.bestStreak ? newStreak : profile.bestStreak;
     await _profileRepository.updateUserProfile(
       UserProfileCompanion(
         dailyStreak: Value(newStreak),
         lastSessionDate: Value(now),
+        bestStreak: Value(newBest),
       ),
     );
 

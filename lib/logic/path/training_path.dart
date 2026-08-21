@@ -96,7 +96,19 @@ class TrainingPath {
       progressTarget = minSessionsToAdvance;
     } else {
       stage = PathStage.advanced;
-      action = PathAction.maintain;
+      // "Advanced" still spans two ladder levels (beast, guru) — surface
+      // beast→guru progress the same way mild→strong is surfaced above,
+      // rather than collapsing straight to a generic "maintain" the moment
+      // both freediving tables are comfortable.
+      if (wimHofCurrentLevelKey == 'beast' && wimHof.recommendedLevelKey == null) {
+        action = PathAction.wimHof;
+        actionLevelKey = 'beast';
+        progressCurrent = wimHof.sessionsAtLevel;
+        progressTarget = kMinSessionsAtLevel;
+        daysRemaining = (kMinDaysAtLevel - wimHof.daysAtLevel).clamp(0, kMinDaysAtLevel);
+      } else {
+        action = PathAction.maintain;
+      }
     }
 
     // A PB test is a single all-out effort and both tables are demanding —

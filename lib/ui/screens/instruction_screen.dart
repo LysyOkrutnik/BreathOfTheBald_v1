@@ -247,6 +247,7 @@ class InstructionScreen extends StatelessWidget {
                           "guide_stretch_chest_benefit1",
                           "guide_stretch_chest_benefit2",
                           "guide_stretch_chest_benefit3",
+                          "guide_stretch_chest_benefit4",
                         ],
                         warningKeys: [
                           "guide_stretch_chest_warning1",
@@ -306,6 +307,7 @@ class InstructionScreen extends StatelessWidget {
                         warningKeys: [
                           "guide_resisted_breathing_warning1",
                           "guide_resisted_breathing_warning2",
+                          "guide_resisted_breathing_warning3",
                         ],
                         stepKeys: [
                           "guide_resisted_breathing_step1",
@@ -329,7 +331,9 @@ class InstructionScreen extends StatelessWidget {
                           "guide_three_part_breath_benefit2",
                           "guide_three_part_breath_benefit3",
                         ],
-                        warningKeys: const [],
+                        warningKeys: [
+                          "guide_three_part_breath_warning1",
+                        ],
                         stepKeys: [
                           "guide_three_part_breath_step1",
                           "guide_three_part_breath_step2",
