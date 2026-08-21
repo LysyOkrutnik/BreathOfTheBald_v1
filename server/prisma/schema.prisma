@@ -29,6 +29,14 @@ model User {
   /// (JWTs are otherwise stateless and can't be revoked individually).
   tokenVersion Int @default(0)
 
+  /// Grants access to the separate /admin web panel — never surfaced or
+  /// checked anywhere in the mobile app's own API paths.
+  isAdmin Boolean @default(false)
+
+  /// Set by an admin to ban the account. `requireAuth` rejects every mobile
+  /// request for a disabled account instead of deleting any data.
+  disabledAt DateTime?
+
   sessions                Session[]
   freedivingLogs          FreedivingLog[]
   customPresets           CustomPreset[]
@@ -36,6 +44,8 @@ model User {
   profileState            ProfileState?
   challengeParticipants   ChallengeParticipant[]
   devices                 Device[]
+  feedback                Feedback[]
+  announcementsSent       Announcement[]
 }
 
 /// One row per registered push-notification target. Replaces a single
@@ -190,4 +200,30 @@ model ChallengeParticipant {
   joinedAt    DateTime  @default(now())
 
   @@unique([challengeId, userId])
+}
+
+/// A bug report / opinion submitted from the app's Settings screen. Reviewed
+/// and resolved from the /admin panel — there is no other inbox for this.
+model Feedback {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category   String?
+  message    String
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+
+  @@index([createdAt])
+}
+
+/// History of admin-triggered push broadcasts (sent via the same FCM path
+/// as the daily notifications cron) — exists purely so the /admin panel can
+/// show what was announced and when, not for retry/delivery tracking.
+model Announcement {
+  id         String   @id @default(uuid())
+  title      String
+  body       String
+  sentAt     DateTime @default(now())
+  sentById   String
+  sentBy     User     @relation(fields: [sentById], references: [id], onDelete: Cascade)
 }

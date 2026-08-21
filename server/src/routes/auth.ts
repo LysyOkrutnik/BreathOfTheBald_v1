@@ -4,6 +4,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { env } from '../env';
+import { htmlPage } from '../htmlPage';
 import { passwordResetEmailBody, sendMail, verificationEmailBody } from '../mailer';
 import { AuthedRequest, requireAuth, signToken } from '../middleware/auth';
 import { prisma } from '../prismaClient';
@@ -13,7 +14,7 @@ const router = Router();
 // Applied only to the two endpoints that let someone test a
 // password/credential guess — everything else needs a valid JWT already,
 // which rate limiting doesn't meaningfully protect further.
-const authRateLimiter = rateLimit({
+export const authRateLimiter = rateLimit({
   windowMs: env.authRateLimitWindowMinutes * 60 * 1000,
   limit: env.authRateLimitMax,
   standardHeaders: true,
@@ -100,26 +101,6 @@ router.post('/login', authRateLimiter, async (req, res) => {
     emailVerified: user.emailVerified,
   });
 });
-
-/// Minimal, self-contained HTML page — no template engine in this project,
-/// and one isn't worth adding for two small pages.
-function htmlPage(title: string, bodyHtml: string): string {
-  return `<!doctype html><html lang="pl"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${title}</title>
-<style>
-body{background:#040D14;color:#F5F5F5;font-family:system-ui,-apple-system,sans-serif;
-display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:24px;box-sizing:border-box}
-.card{max-width:400px;text-align:center}
-h1{font-size:20px;font-weight:600;margin-bottom:12px}
-p{color:#B0BEC5;font-size:14px;line-height:1.5}
-input{width:100%;padding:12px;margin:8px 0;border-radius:8px;border:1px solid #444;
-background:#111;color:#F5F5F5;box-sizing:border-box;font-size:14px}
-button{width:100%;padding:12px;margin-top:8px;border-radius:8px;border:none;
-background:#81C784;color:#000;font-weight:700;font-size:14px;cursor:pointer}
-.err{color:#E57373}
-</style></head><body><div class="card">${bodyHtml}</div></body></html>`;
-}
 
 /// The email link is a plain hyperlink, so email clients/browsers always
 /// open it as a GET — the token is verified immediately and a plain
@@ -338,6 +319,41 @@ router.get('/me', requireAuth, async (req: AuthedRequest, res) => {
     return;
   }
   res.json({ email: user.email, emailVerified: user.emailVerified });
+});
+
+function csvEscape(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return '';
+  const s = String(value);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/// Self-service data export — the one thing account deletion (below) didn't
+/// already cover. One combined CSV across both session tables rather than a
+/// bespoke per-table format; columns that don't apply to a given row (e.g.
+/// `xpEarned` for a freediving log) are just left blank.
+router.get('/me/export', requireAuth, async (req: AuthedRequest, res) => {
+  const [sessions, freedivingLogs] = await Promise.all([
+    prisma.session.findMany({ where: { userId: req.userId! }, orderBy: { timestamp: 'asc' } }),
+    prisma.freedivingLog.findMany({ where: { userId: req.userId! }, orderBy: { timestamp: 'asc' } }),
+  ]);
+  const header = [
+    'type', 'id', 'timestamp', 'levelOrTable', 'durationSec', 'rounds',
+    'retentionOrPbUsedSec', 'rpeScore', 'xpEarned', 'symptomTag',
+  ];
+  const rows = [
+    ...sessions.map((s) => [
+      'session', s.id, s.timestamp.toISOString(), s.levelKey, s.durationSec, s.rounds,
+      s.retentionSec, s.rpeScore ?? '', s.xpEarned, '',
+    ]),
+    ...freedivingLogs.map((f) => [
+      'freediving', f.id, f.timestamp.toISOString(), f.tableType, f.durationSec, f.roundsCompleted,
+      f.pbUsedSec, f.rpeScore ?? '', '', f.symptomTag ?? '',
+    ]),
+  ];
+  const csv = [header, ...rows].map((row) => row.map(csvEscape).join(',')).join('\n');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="breath-of-the-bald-export.csv"');
+  res.send(csv);
 });
 
 /// Sliding session: exchanges a still-valid token for a fresh one with a

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/theme.dart';
+import 'package:okrutnik_breath/core/changelog.dart';
 import 'package:okrutnik_breath/logic/providers/settings_provider.dart';
 import 'package:okrutnik_breath/ui/screens/profile_screen.dart';
 import 'package:okrutnik_breath/ui/screens/today_screen.dart';
@@ -62,6 +63,51 @@ class _HomeShellScreenState extends ConsumerState<HomeShellScreen> {
     super.initState();
     _tabs[0] = _builders[0]();
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowReminderMigrationNotice());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowChangelog());
+  }
+
+  /// "What's new" after an update — without this, nothing in the UI tells
+  /// an existing user that e.g. the new mobility exercises exist at all;
+  /// they'd only find them by browsing Training on their own.
+  Future<void> _maybeShowChangelog() async {
+    final entry = await pendingChangelogEntry();
+    if (entry == null || !mounted) return;
+    final isPl = Localizations.localeOf(context).languageCode == 'pl';
+    final notes = isPl ? entry.notesPl : entry.notesEn;
+    await showGlassDialog<void>(
+      context,
+      builder: (dialogContext) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            L10n.get(context, 'changelog_title'),
+            style: const TextStyle(
+                color: AppTheme.textLight, fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          for (final note in notes)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('•  ', style: TextStyle(color: AppTheme.primary)),
+                  Expanded(
+                    child: Text(note,
+                        style: const TextStyle(color: AppTheme.textDim, fontSize: 13, height: 1.4)),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: AppSpacing.md),
+          ElevatedButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(L10n.get(context, 'common_ok')),
+          ),
+        ],
+      ),
+    );
   }
 
   /// One-time notice for users affected by the reminder migration in

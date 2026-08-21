@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:developer' as developer;
+import 'dart:io';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -10,8 +11,6 @@ import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/responsive.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
-import 'package:okrutnik_breath/core/sync/auth_service.dart';
-import 'package:okrutnik_breath/core/sync/push_registration.dart';
 import 'package:okrutnik_breath/core/sync/sync_api_client.dart';
 import 'package:okrutnik_breath/core/sync/sync_service.dart';
 import 'package:okrutnik_breath/logic/providers/app_info_provider.dart';
@@ -19,6 +18,7 @@ import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/logic/providers/locale_provider.dart';
 import 'package:okrutnik_breath/logic/providers/settings_provider.dart';
 import 'package:okrutnik_breath/logic/providers/sync_providers.dart';
+import 'package:okrutnik_breath/ui/screens/auth_gate_screen.dart';
 import 'package:okrutnik_breath/ui/screens/privacy_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/confirm_dialog.dart';
@@ -27,7 +27,9 @@ import 'package:okrutnik_breath/ui/widgets/glow_halo.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
 import 'package:okrutnik_breath/ui/widgets/section_header.dart';
 import 'package:okrutnik_breath/ui/widgets/week_preferences_sheet.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -145,6 +147,13 @@ class SettingsScreen extends ConsumerWidget {
                               trailing: const Icon(Icons.chevron_right_rounded,
                                   color: Colors.white38),
                               onTap: () => _contactSupport(context),
+                            ),
+                            _Tile(
+                              icon: Icons.bug_report_outlined,
+                              title: L10n.get(context, 'settings_feedback'),
+                              trailing: const Icon(Icons.chevron_right_rounded,
+                                  color: Colors.white38),
+                              onTap: () => _reportFeedback(context, ref),
                             ),
                           ]),
                           const SizedBox(height: AppSpacing.lg),
@@ -320,6 +329,98 @@ class SettingsScreen extends ConsumerWidget {
     }
   }
 
+  /// The only inbox for this — reviewed from the /admin panel, there's no
+  /// other channel a report or opinion submitted here ends up in.
+  Future<void> _reportFeedback(BuildContext context, WidgetRef ref) async {
+    final controller = TextEditingController();
+    String category = 'bug';
+    final submitted = await showGlassDialog<bool>(
+      context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(L10n.get(context, 'feedback_dialog_title'),
+                style: const TextStyle(
+                    color: AppTheme.textLight, fontSize: 16, fontWeight: FontWeight.w600)),
+            const SizedBox(height: AppSpacing.lg),
+            DropdownButton<String>(
+              value: category,
+              dropdownColor: const Color(0xFF1A1A1A),
+              isExpanded: true,
+              items: [
+                DropdownMenuItem(
+                    value: 'bug',
+                    child: Text(L10n.get(context, 'feedback_category_bug'),
+                        style: const TextStyle(color: AppTheme.textLight))),
+                DropdownMenuItem(
+                    value: 'opinion',
+                    child: Text(L10n.get(context, 'feedback_category_opinion'),
+                        style: const TextStyle(color: AppTheme.textLight))),
+                DropdownMenuItem(
+                    value: 'other',
+                    child: Text(L10n.get(context, 'feedback_category_other'),
+                        style: const TextStyle(color: AppTheme.textLight))),
+              ],
+              onChanged: (v) => setDialogState(() => category = v ?? category),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              maxLines: 4,
+              maxLength: 2000,
+              style: const TextStyle(color: AppTheme.textLight),
+              cursorColor: AppTheme.primary,
+              decoration: InputDecoration(
+                hintText: L10n.get(context, 'feedback_message_hint'),
+                hintStyle: const TextStyle(color: AppTheme.textDim),
+                enabledBorder:
+                    const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                focusedBorder:
+                    const UnderlineInputBorder(borderSide: BorderSide(color: AppTheme.primary)),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(false),
+                    child: Text(L10n.get(context, 'common_cancel'),
+                        style: const TextStyle(color: Colors.white70)),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(true),
+                    child: Text(L10n.get(context, 'feedback_submit')),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final message = controller.text.trim();
+    controller.dispose();
+    if (submitted != true || message.isEmpty || !context.mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final sentText = L10n.get(context, 'feedback_sent');
+    final errorText = L10n.get(context, 'feedback_error');
+    try {
+      await ref.read(syncApiClientProvider).submitFeedback(category: category, message: message);
+      messenger.showSnackBar(SnackBar(content: Text(sentText)));
+    } catch (_) {
+      messenger.showSnackBar(SnackBar(content: Text(errorText)));
+    }
+  }
+
   void _showHomeWidgetInfo(BuildContext context) {
     showGlassDialog(
       context,
@@ -434,20 +535,9 @@ class _AccountSection extends ConsumerStatefulWidget {
 }
 
 class _AccountSectionState extends ConsumerState<_AccountSection> {
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-
-  // A deliberately simple format check — good enough to catch typos before
-  // a round trip to the server, not a full RFC 5322 validator.
-  static final _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
   static const _minPasswordLength = 8;
 
   bool _loading = false;
-  // Which button is actually in flight — without this, both Register and
-  // Login disable together (correct), but the spinner used to be hardcoded
-  // to the Login button regardless of which one the user actually pressed.
-  bool _registering = false;
-  String? _errorKey;
 
   bool? _isLoggedIn;
   DateTime? _lastSyncedAt;
@@ -459,13 +549,6 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
   void initState() {
     super.initState();
     _refreshState();
-  }
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
   }
 
   Future<void> _refreshState() async {
@@ -500,66 +583,8 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
     });
   }
 
-  String _errorKeyFor(AuthErrorCode code) => switch (code) {
-        AuthErrorCode.invalidInput => 'account_error_invalid_input',
-        AuthErrorCode.emailTaken => 'account_error_email_taken',
-        AuthErrorCode.invalidCredentials => 'account_error_invalid_credentials',
-        AuthErrorCode.tooManyAttempts => 'account_error_too_many_attempts',
-        AuthErrorCode.invalidOrExpiredToken => 'account_error_invalid_or_expired_token',
-        AuthErrorCode.network => 'account_error_network',
-        AuthErrorCode.unknown => 'account_error_unknown',
-      };
-
-  /// Checked before ever making a request — a malformed email or a password
-  /// under the server's own minimum used to only get caught after a round
-  /// trip, with the "min. 8 characters" hint being just a claim rather than
-  /// something actually enforced client-side.
-  String? _validationErrorKey() {
-    final email = _emailController.text.trim();
-    if (!_emailPattern.hasMatch(email)) return 'account_error_invalid_email_format';
-    if (_passwordController.text.length < _minPasswordLength) return 'account_error_password_too_short';
-    return null;
-  }
-
-  Future<void> _submit({required bool isRegister}) async {
-    final validationError = _validationErrorKey();
-    if (validationError != null) {
-      setState(() => _errorKey = validationError);
-      return;
-    }
-
-    setState(() {
-      _loading = true;
-      _registering = isRegister;
-      _errorKey = null;
-    });
-    final auth = ref.read(authServiceProvider);
-    final email = _emailController.text.trim();
-    final password = _passwordController.text;
-    final result = isRegister
-        ? await auth.register(email: email, password: password)
-        : await auth.login(email: email, password: password);
-    if (!mounted) return;
-
-    if (!result.success) {
-      setState(() {
-        _loading = false;
-        _errorKey = _errorKeyFor(result.errorCode!);
-      });
-      return;
-    }
-
-    _passwordController.clear();
-    // Best-effort, doesn't block the login flow either way.
-    unawaited(registerPushToken(ref.read(syncApiClientProvider)));
-    await _sync();
-  }
-
   Future<void> _sync() async {
-    setState(() {
-      _loading = true;
-      _errorKey = null;
-    });
+    setState(() => _loading = true);
     try {
       final result = await ref.read(syncServiceProvider).syncNow();
       if (result.message != null) {
@@ -603,7 +628,38 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
     }
   }
 
-  Future<void> _logout() async {
+  /// Self-service export — the one thing account deletion didn't already
+  /// cover. Written to a temp file and handed to the OS share sheet rather
+  /// than saved silently into app-private storage the user can't easily
+  /// find afterwards.
+  Future<void> _exportData(BuildContext context) async {
+    setState(() => _loading = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final csv = await ref.read(syncApiClientProvider).exportData();
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/breath-of-the-bald-export.csv');
+      await file.writeAsString(csv);
+      if (!context.mounted) return;
+      await Share.shareXFiles([XFile(file.path)]);
+    } catch (_) {
+      if (context.mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(L10n.get(context, 'account_error_network'))));
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Every logout path ends the same way: back on the mandatory login gate,
+  /// not just an inline "logged out" state in Settings — there is no
+  /// anonymous mode to fall back into.
+  void _goToAuthGate(BuildContext context) {
+    Navigator.of(context)
+        .pushAndRemoveUntil(fadeThroughRoute(const AuthGateScreen()), (route) => false);
+  }
+
+  Future<void> _logout(BuildContext context) async {
     // Best-effort: stop push targeting this device before the token that
     // authorizes the unregister call itself is gone.
     try {
@@ -620,7 +676,7 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
     // logs in next on this device. See AppDatabase.wipeAllLocalData.
     await ref.read(databaseProvider).wipeAllLocalData();
     await ref.read(syncServiceProvider).clearLastSyncedAt();
-    await _refreshState();
+    if (context.mounted) _goToAuthGate(context);
   }
 
   Future<void> _resendVerification(BuildContext context) async {
@@ -644,66 +700,6 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
     if (mounted) setState(() => _resendingVerification = false);
     if (!context.mounted) return;
     messenger.showSnackBar(SnackBar(content: Text(L10n.get(context, resultKey))));
-  }
-
-  Future<void> _showForgotPasswordDialog(BuildContext context) async {
-    final controller = TextEditingController(text: _emailController.text.trim());
-    final email = await showGlassDialog<String>(
-      context,
-      builder: (dialogContext) => Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(L10n.get(context, 'account_forgot_password_title'),
-              style: const TextStyle(
-                  color: AppTheme.textLight, fontSize: 16, fontWeight: FontWeight.w600)),
-          const SizedBox(height: AppSpacing.sm),
-          Text(L10n.get(context, 'account_forgot_password_body'),
-              style: const TextStyle(color: AppTheme.textDim, fontSize: 12, height: 1.4)),
-          const SizedBox(height: AppSpacing.lg),
-          TextField(
-            controller: controller,
-            autofocus: true,
-            keyboardType: TextInputType.emailAddress,
-            style: const TextStyle(color: AppTheme.textLight),
-            cursorColor: AppTheme.primary,
-            decoration: InputDecoration(
-              hintText: L10n.get(context, 'account_email_hint'),
-              hintStyle: const TextStyle(color: AppTheme.textDim),
-              enabledBorder:
-                  const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-              focusedBorder:
-                  const UnderlineInputBorder(borderSide: BorderSide(color: AppTheme.primary)),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Row(
-            children: [
-              Expanded(
-                child: TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: Text(L10n.get(context, 'common_cancel'),
-                      style: const TextStyle(color: Colors.white70)),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(controller.text.trim()),
-                  child: Text(L10n.get(context, 'account_forgot_password_submit')),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (email == null || email.isEmpty || !context.mounted) return;
-    await ref.read(authServiceProvider).forgotPassword(email);
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(L10n.get(context, 'account_forgot_password_sent'))));
   }
 
   Future<void> _showChangePasswordDialog(BuildContext context) async {
@@ -827,9 +823,9 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
     // See _logout() — same stale-syncId leak risk applies here.
     await ref.read(databaseProvider).wipeAllLocalData();
     await ref.read(syncServiceProvider).clearLastSyncedAt();
-    await _refreshState();
     if (!context.mounted) return;
     messenger.showSnackBar(SnackBar(content: Text(L10n.get(context, 'account_logout_all_done'))));
+    _goToAuthGate(context);
   }
 
   Future<void> _deleteAccount(BuildContext context) async {
@@ -887,111 +883,18 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
     // silently re-uploading its history to whatever account logs in next.
     await ref.read(databaseProvider).wipeAllLocalData();
     await ref.read(syncServiceProvider).clearLastSyncedAt();
-    await _refreshState();
     if (!context.mounted) return;
     messenger.showSnackBar(SnackBar(content: Text(L10n.get(context, 'account_delete_done'))));
+    _goToAuthGate(context);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoggedIn == null) return const SizedBox.shrink();
-
-    if (!_isLoggedIn!) {
-      return GlassCard(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              L10n.get(context, 'account_intro'),
-              style: const TextStyle(color: AppTheme.textDim, fontSize: 12, height: 1.4),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
-              style: const TextStyle(color: AppTheme.textLight),
-              cursorColor: AppTheme.primary,
-              decoration: InputDecoration(
-                hintText: L10n.get(context, 'account_email_hint'),
-                hintStyle: const TextStyle(color: AppTheme.textDim),
-                enabledBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white24)),
-                focusedBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: AppTheme.primary)),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: _passwordController,
-              obscureText: true,
-              style: const TextStyle(color: AppTheme.textLight),
-              cursorColor: AppTheme.primary,
-              decoration: InputDecoration(
-                hintText: L10n.get(context, 'account_password_hint'),
-                hintStyle: const TextStyle(color: AppTheme.textDim),
-                enabledBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white24)),
-                focusedBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: AppTheme.primary)),
-              ),
-            ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: _loading ? null : () => _showForgotPasswordDialog(context),
-                style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
-                child: Text(L10n.get(context, 'account_forgot_password'),
-                    style: const TextStyle(color: AppTheme.textDim, fontSize: 12)),
-              ),
-            ),
-            if (_errorKey != null) ...[
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                L10n.get(context, _errorKey!),
-                style: const TextStyle(color: AppTheme.danger, fontSize: 12),
-              ),
-            ],
-            const SizedBox(height: AppSpacing.md),
-            Row(
-              children: [
-                Expanded(
-                  child: TextButton(
-                    onPressed: _loading ? null : () => _submit(isRegister: true),
-                    child: _loading && _registering
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70),
-                          )
-                        : Text(L10n.get(context, 'account_register'),
-                            style: const TextStyle(color: Colors.white70)),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _loading ? null : () => _submit(isRegister: false),
-                    child: _loading && !_registering
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
-                          )
-                        : Text(L10n.get(context, 'account_login')),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              L10n.get(context, 'account_sync_disclosure'),
-              style: TextStyle(color: AppTheme.textDim.withAlpha(160), fontSize: 11, height: 1.3),
-            ),
-          ],
-        ),
-      );
-    }
+    // Settings is only reachable once logged in (there's no anonymous mode
+    // to fall back into) — null/false here is a brief transient state while
+    // _refreshState()'s first read completes, or mid-logout just before this
+    // screen navigates away to the auth gate.
+    if (_isLoggedIn != true) return const SizedBox.shrink();
 
     final locale = Localizations.localeOf(context).toString();
     final lastSyncedLabel = _lastSyncedAt == null
@@ -1055,9 +958,14 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
             onTap: _loading ? null : () => _showChangePasswordDialog(context),
           ),
           _Tile(
+            icon: Icons.download_outlined,
+            title: L10n.get(context, 'account_export_data'),
+            onTap: _loading ? null : () => _exportData(context),
+          ),
+          _Tile(
             icon: Icons.logout_rounded,
             title: L10n.get(context, 'account_logout'),
-            onTap: _loading ? null : _logout,
+            onTap: _loading ? null : () => _logout(context),
           ),
           _Tile(
             icon: Icons.phonelink_erase_rounded,

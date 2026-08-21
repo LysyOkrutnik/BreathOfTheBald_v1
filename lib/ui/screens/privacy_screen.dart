@@ -6,9 +6,12 @@ import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
 
-/// In-app privacy policy. The app is fully offline (no network, accounts, ads or
-/// analytics), so the policy is short and concrete. Text is inlined per-locale
-/// rather than living in the l10n map because it is long-form legal copy.
+/// In-app privacy policy. An account is required to use the app, and
+/// training history syncs to the backend — this used to be optional/fully
+/// offline, so keep this in sync with reality rather than the old "nothing
+/// leaves your phone" claim. Still no ads or third-party analytics/tracking.
+/// Text is inlined per-locale rather than living in the l10n map because it
+/// is long-form legal copy.
 class PrivacyScreen extends StatelessWidget {
   const PrivacyScreen({super.key});
 
@@ -18,8 +21,8 @@ class PrivacyScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final isPl = Localizations.localeOf(context).languageCode == 'pl';
     final sections = isPl ? _pl : _en;
-    final updated = isPl ? 'Ostatnia aktualizacja: lipiec 2026'
-                         : 'Last updated: July 2026';
+    final updated = isPl ? 'Ostatnia aktualizacja: sierpień 2026'
+                         : 'Last updated: August 2026';
 
     return Scaffold(
       body: Stack(
@@ -82,21 +85,41 @@ class PrivacyScreen extends StatelessWidget {
 
   static const List<(String, String)> _pl = [
     (
-      'Zero zbierania danych',
-      'Aplikacja działa w 100% offline. Nie zbieramy, nie wysyłamy ani nie '
-          'udostępniamy żadnych danych osobowych. Nie ma kont, logowania ani '
-          'serwerów — nic nie opuszcza Twojego telefonu.'
+      'Konto i dane, które przechowujemy',
+      'Aplikacja wymaga konta (e-mail i hasło) do korzystania z niej. Adres '
+          'e-mail i zahaszowane hasło, a także historia sesji, dzienniki '
+          'freedivingu, własne presety i ustawienia planu są przechowywane na '
+          'naszym serwerze, żeby były dostępne po zalogowaniu się na innym '
+          'urządzeniu. Nie sprzedajemy i nie udostępniamy tych danych stronom '
+          'trzecim, i nie zawieramy żadnych reklam ani zewnętrznych narzędzi '
+          'analitycznych czy śledzących.'
+    ),
+    (
+      'Zgłoszenia w apce',
+      'Treść zgłoszenia wysłanego przez "Zgłoś problem/opinię" jest '
+          'przypisana do Twojego konta i przechowywana do czasu jego '
+          'rozpatrzenia — nie jest anonimowa.'
+    ),
+    (
+      'Twoja kontrola nad danymi',
+      'W Ustawieniach możesz w każdej chwili wyeksportować swoją historię '
+          'treningową (CSV) oraz trwale usunąć konto razem z wszystkimi '
+          'powiązanymi danymi na serwerze.'
     ),
     (
       'Dane na urządzeniu',
-      'Historia sesji, statystyki, zaplanowane sesje, własne presety oraz '
-          'ustawienia (w tym nazwa profilu) są zapisywane wyłącznie lokalnie na '
-          'Twoim urządzeniu. Odinstalowanie aplikacji trwale usuwa te dane.'
+      'Ta sama historia sesji, statystyki, zaplanowane sesje, własne presety '
+          'oraz ustawienia (w tym nazwa profilu) są też zapisywane lokalnie na '
+          'Twoim urządzeniu, dla szybkiego dostępu offline. Odinstalowanie '
+          'aplikacji usuwa lokalną kopię — dane na serwerze pozostają, dopóki '
+          'nie usuniesz konta.'
     ),
     (
       'Powiadomienia',
-      'Przypomnienia są planowane lokalnie na urządzeniu. Nie wymagają '
-          'internetu i nie przesyłają żadnych informacji na zewnątrz.'
+      'Przypomnienia lokalne są planowane na urządzeniu i nie wymagają '
+          'internetu. Jeśli włączysz powiadomienia push, token urządzenia jest '
+          'zarejestrowany na serwerze, żeby moglibyśmy wysłać Ci przypomnienie '
+          'lub ogłoszenie.'
     ),
     (
       'Uprawnienia',
@@ -131,21 +154,38 @@ class PrivacyScreen extends StatelessWidget {
 
   static const List<(String, String)> _en = [
     (
-      'No data collection',
-      'The app is fully offline. We do not collect, transmit or share any '
-          'personal data. There are no accounts, logins or servers — nothing '
-          'leaves your phone.'
+      'Account & data we store',
+      'The app requires an account (email and password) to use it. Your '
+          'email and hashed password, along with session history, freediving '
+          'logs, custom presets, and plan settings, are stored on our server '
+          'so they follow you across devices. We do not sell or share this '
+          'data with third parties, and we do not run any ads or third-party '
+          'analytics/tracking tools.'
+    ),
+    (
+      'In-app feedback',
+      'Anything you submit via "Report a problem / feedback" is tied to your '
+          'account and kept until it has been reviewed — it is not anonymous.'
+    ),
+    (
+      'Your control over your data',
+      'You can export your training history (CSV) and permanently delete '
+          'your account together with all its server-side data at any time '
+          'from Settings.'
     ),
     (
       'Data on your device',
-      'Session history, statistics, planned sessions, custom presets and '
-          'settings (including your profile name) are stored only locally on '
-          'your device. Uninstalling the app permanently deletes this data.'
+      'The same session history, statistics, planned sessions, custom '
+          'presets and settings (including your profile name) are also stored '
+          'locally on your device for fast offline access. Uninstalling the '
+          'app deletes the local copy — data on the server remains until you '
+          'delete your account.'
     ),
     (
       'Notifications',
-      'Reminders are scheduled locally on the device. They require no internet '
-          'and send no information anywhere.'
+      'Local reminders are scheduled on the device and require no internet. '
+          'If you enable push notifications, your device token is registered '
+          'on the server so we can deliver a reminder or announcement to it.'
     ),
     (
       'Permissions',

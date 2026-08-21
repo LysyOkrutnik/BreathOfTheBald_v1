@@ -6,6 +6,8 @@ import 'package:okrutnik_breath/config/responsive.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
 import 'package:okrutnik_breath/logic/providers/settings_provider.dart';
+import 'package:okrutnik_breath/logic/providers/sync_providers.dart';
+import 'package:okrutnik_breath/ui/screens/auth_gate_screen.dart';
 import 'package:okrutnik_breath/ui/screens/home_shell_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
@@ -88,9 +90,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       }
     }
 
-    if (mounted) {
-      Navigator.of(context).pushReplacement(fadeThroughRoute(const HomeShellScreen()));
-    }
+    if (!mounted) return;
+    // No anonymous/offline mode — a first run always needs an account. The
+    // local-only check (no network) is enough here: a first run can only
+    // already be "logged in" via a restored secure-storage backup, which
+    // SplashScreen's own, network-validating check will catch on next
+    // launch anyway if that session turns out to be stale.
+    final alreadyLoggedIn = await ref.read(authServiceProvider).isLoggedIn;
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      fadeThroughRoute(alreadyLoggedIn ? const HomeShellScreen() : const AuthGateScreen()),
+    );
   }
 
   void _next() {

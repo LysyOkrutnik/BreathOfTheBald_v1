@@ -190,6 +190,29 @@ class SyncApiClient {
     return _decodeObject(response);
   }
 
+  /// The only inbox for in-app "report a problem / feedback" — reviewed
+  /// from the /admin panel, there's no other channel.
+  Future<void> submitFeedback({String? category, required String message}) async {
+    final response = await http
+        .post(
+          Uri.parse('$syncApiBaseUrl/feedback'),
+          headers: await _headers(),
+          body: jsonEncode({if (category != null) 'category': category, 'message': message}),
+        )
+        .timeout(syncRequestTimeout);
+    _checkOk(response);
+  }
+
+  /// Self-service export of the account's training history as CSV — the raw
+  /// response body, not JSON, so this bypasses `_decodeObject`.
+  Future<String> exportData() async {
+    final response = await http
+        .get(Uri.parse('$syncApiBaseUrl/auth/me/export'), headers: await _headers())
+        .timeout(syncRequestTimeout);
+    _checkOk(response);
+    return response.body;
+  }
+
   void _checkOk(http.Response response) {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw SyncApiException(response.statusCode, response.body);

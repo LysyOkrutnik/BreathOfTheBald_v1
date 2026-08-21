@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
+import 'package:okrutnik_breath/core/sync/sync_api_client.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
+import 'package:okrutnik_breath/logic/providers/sync_providers.dart';
+import 'package:okrutnik_breath/ui/screens/auth_gate_screen.dart';
 import 'package:okrutnik_breath/ui/screens/home_shell_screen.dart';
 import 'package:okrutnik_breath/ui/screens/onboarding_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -19,6 +22,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   bool _onboardingDone = false;
+  // Irrelevant until onboarding is done — checked below only in that case.
+  bool _needsAuthGate = true;
 
   @override
   void initState() {
@@ -46,8 +51,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
       Future<void>.delayed(const Duration(milliseconds: 3200)),
     ]);
     if (!mounted) return;
-    final Widget next =
-        _onboardingDone ? const HomeShellScreen() : const OnboardingScreen();
+    final Widget next = !_onboardingDone
+        ? const OnboardingScreen()
+        : (_needsAuthGate ? const AuthGateScreen() : const HomeShellScreen());
     Navigator.of(context).pushReplacement(fadeThroughRoute(next));
   }
 
@@ -58,6 +64,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
     // One-time migration of any legacy SharedPreferences history into Drift.
     await ref.read(sessionRepositoryProvider).importLegacyData();
 
+    // No anonymous/offline mode — every cold start needs a session. Only
+    // relevant once onboarding is already done; a first run always lands on
+    // AuthGateScreen via OnboardingScreen's own finish button.
+    if (_onboardingDone) {
+      _needsAuthGate = !await _hasValidSession();
+    }
+
     // Note: the daily reminder is NOT (re)scheduled here. Once
     // notifications.scheduleDailyReminder() fires, the OS keeps the alarm
     // alive on its own (a boot receiver re-arms it after a reboot); the
@@ -65,6 +78,32 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
     // turns it on or off. Re-scheduling it here on every cold start was the
     // root cause of a past bug where the reminder kept firing with no way to
     // disable it.
+  }
+
+  /// A stored token isn't enough on its own — it could have been revoked
+  /// (logout-all from another device), the account banned, or deleted,
+  /// none of which this device would otherwise learn about until some other
+  /// authenticated call happened to fail. Only a definite 401 is treated as
+  /// "log this device out"; being offline or a transient server error must
+  /// not lock the user out of their own cached local data.
+  Future<bool> _hasValidSession() async {
+    final authService = ref.read(authServiceProvider);
+    if (!await authService.isLoggedIn) return false;
+    try {
+      await ref.read(syncApiClientProvider).getMe();
+      return true;
+    } on SyncApiException catch (e) {
+      if (!e.isAuthError) return true;
+      // Same cross-account data-leak concern as every other logout path —
+      // clear the stale local session and its data before the gate lets
+      // some other account log in on this device.
+      await authService.logout();
+      await ref.read(databaseProvider).wipeAllLocalData();
+      await ref.read(syncServiceProvider).clearLastSyncedAt();
+      return false;
+    } catch (_) {
+      return true;
+    }
   }
 
   @override
