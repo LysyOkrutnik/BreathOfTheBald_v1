@@ -13,9 +13,11 @@ import 'package:okrutnik_breath/data/db/database.dart';
 import 'package:okrutnik_breath/logic/freediving/co2_o2_table_generator.dart';
 import 'package:okrutnik_breath/logic/path/cold_shower.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
-import 'package:okrutnik_breath/logic/wimhof/wimhof_progression.dart' show kHardWimHofLevels;
+import 'package:okrutnik_breath/logic/wimhof/wimhof_progression.dart'
+    show kHardWimHofLevels;
 import 'package:okrutnik_breath/ui/screens/freediving/max_pb_test_screen.dart';
 import 'package:okrutnik_breath/ui/screens/intro_screen.dart';
+import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/confirm_dialog.dart';
 import 'package:okrutnik_breath/ui/widgets/day_timeline.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
@@ -23,9 +25,13 @@ import 'package:okrutnik_breath/ui/widgets/month_calendar.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
 import 'package:okrutnik_breath/ui/widgets/week_strip.dart';
 
-/// The "Plan" bottom-nav tab. Only ever shown as a shell tab root — the
-/// shared background lives in HomeShellScreen so it isn't torn down and
-/// rebuilt (with its animation restarting) every time the tab is switched.
+/// Pushed on top of the Training tab (see training_library_screen.dart) as
+/// its own route — NOT a shell tab root, so it needs its own [AppBackground]
+/// rather than relying on HomeShellScreen's shared instance. Without this,
+/// the previous screen's background briefly shows through the push
+/// transition and then the screen goes solid black once that screen is
+/// removed from the tree — this used to be a shell tab root, before the
+/// 3-tab redesign, and the background dependency was never re-added here.
 class SchedulerScreen extends ConsumerStatefulWidget {
   const SchedulerScreen({super.key});
 
@@ -126,60 +132,70 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen> {
       timelineHeight: twoPane ? null : 320,
     );
 
-    return SafeArea(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: context.isTablet ? 980 : 560),
-          child: Column(
-            children: [
-              ScreenHeader(
-                title: L10n.get(context, 'scheduler_title'),
-                showBackButton: false,
-              ),
-              // Asking for a permission tied to a feature the user hasn't
-              // touched yet (no plan ever saved) reads as premature — wait
-              // until they've actually created one.
-              if (_needsExactAlarmPermission == true &&
-                  !_exactAlarmCardDismissed &&
-                  plans.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.md),
-                  child: _ExactAlarmCard(
-                    onTap: _requestExactAlarmPermission,
-                    onDismiss: () => setState(() => _exactAlarmCardDismissed = true),
-                  ),
-                ),
-              Expanded(
-                child: twoPane
-                    ? Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: SingleChildScrollView(
-                              padding: const EdgeInsets.all(AppSpacing.lg),
-                              child: calendar,
-                            ),
-                          ),
-                          Expanded(child: dayPanel),
-                        ],
-                      )
-                    : SingleChildScrollView(
-                        physics: const BouncingScrollPhysics(),
-                        child: Column(
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.all(AppSpacing.lg),
-                              child: calendar,
-                            ),
-                            dayPanel,
-                          ],
+    return Scaffold(
+      body: Stack(
+        children: [
+          const Positioned.fill(child: AppBackground()),
+          SafeArea(
+            child: Center(
+              child: ConstrainedBox(
+                constraints:
+                    BoxConstraints(maxWidth: context.isTablet ? 980 : 560),
+                child: Column(
+                  children: [
+                    ScreenHeader(
+                      title: L10n.get(context, 'scheduler_title'),
+                    ),
+                    // Asking for a permission tied to a feature the user hasn't
+                    // touched yet (no plan ever saved) reads as premature — wait
+                    // until they've actually created one.
+                    if (_needsExactAlarmPermission == true &&
+                        !_exactAlarmCardDismissed &&
+                        plans.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                            AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.md),
+                        child: _ExactAlarmCard(
+                          onTap: _requestExactAlarmPermission,
+                          onDismiss: () =>
+                              setState(() => _exactAlarmCardDismissed = true),
                         ),
                       ),
+                    Expanded(
+                      child: twoPane
+                          ? Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: SingleChildScrollView(
+                                    padding:
+                                        const EdgeInsets.all(AppSpacing.lg),
+                                    child: calendar,
+                                  ),
+                                ),
+                                Expanded(child: dayPanel),
+                              ],
+                            )
+                          : SingleChildScrollView(
+                              physics: const BouncingScrollPhysics(),
+                              child: Column(
+                                children: [
+                                  Padding(
+                                    padding:
+                                        const EdgeInsets.all(AppSpacing.lg),
+                                    child: calendar,
+                                  ),
+                                  dayPanel,
+                                ],
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -215,7 +231,8 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen> {
     }
 
     var toStart = level;
-    if (level.type == ExerciseType.co2Table || level.type == ExerciseType.o2Table) {
+    if (level.type == ExerciseType.co2Table ||
+        level.type == ExerciseType.o2Table) {
       final profile = await ref.read(freedivingRepositoryProvider).getProfile();
       final tableType = level.type == ExerciseType.co2Table
           ? FreedivingTableType.co2
@@ -260,7 +277,8 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen> {
     await ref.read(plannerRepositoryProvider).deletePlan(plan.id);
     await ref.read(notificationServiceProvider).cancel(plan.id);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -275,7 +293,8 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen> {
 
     // Default to the Wim Hof "Next Up" recommendation, if there is one —
     // a light integration between the ladder progression and the planner.
-    final recommendedKey = ref.read(wimHofNextUpProvider).value?.recommendedLevelKey;
+    final recommendedKey =
+        ref.read(wimHofNextUpProvider).value?.recommendedLevelKey;
     LevelData? level =
         recommendedKey == null ? null : LevelData.levels[recommendedKey];
     var time = const TimeOfDay(hour: 8, minute: 0);
@@ -296,154 +315,165 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen> {
                 constraints: BoxConstraints(
                     maxWidth: sheetContext.isTablet ? 480 : double.infinity),
                 child: Padding(
-              padding: EdgeInsets.only(
-                left: AppSpacing.lg,
-                right: AppSpacing.lg,
-                top: AppSpacing.lg,
-                bottom: MediaQuery.viewInsetsOf(sheetContext).bottom + AppSpacing.lg,
-              ),
-              child: Container(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF141C24),
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                  border: Border.all(color: Colors.white.withAlpha(24)),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      DateFormat.yMMMMEEEEd(
-                              Localizations.localeOf(context).toString())
-                          .format(_selectedDay),
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                          color: AppTheme.textLight,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600),
+                  padding: EdgeInsets.only(
+                    left: AppSpacing.lg,
+                    right: AppSpacing.lg,
+                    top: AppSpacing.lg,
+                    bottom: MediaQuery.viewInsetsOf(sheetContext).bottom +
+                        AppSpacing.lg,
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF141C24),
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
+                      border: Border.all(color: Colors.white.withAlpha(24)),
                     ),
-                    const SizedBox(height: AppSpacing.lg),
-                    GlassCard(
-                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<LevelData>(
-                          value: level,
-                          isExpanded: true,
-                          dropdownColor: AppTheme.background,
-                          hint: Text(L10n.get(context, 'scheduler_choose_level'),
-                              style: const TextStyle(color: AppTheme.textDim)),
-                          items: plannableLevels
-                              .map((l) => DropdownMenuItem(
-                                    value: l,
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          width: 8,
-                                          height: 8,
-                                          decoration: BoxDecoration(
-                                              color: l.color, shape: BoxShape.circle),
-                                        ),
-                                        const SizedBox(width: AppSpacing.md),
-                                        Text(L10n.get(context, l.title),
-                                            style: const TextStyle(
-                                                color: AppTheme.textLight)),
-                                      ],
-                                    ),
-                                  ))
-                              .toList(),
-                          onChanged: (v) => setSheet(() => level = v),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          DateFormat.yMMMMEEEEd(
+                                  Localizations.localeOf(context).toString())
+                              .format(_selectedDay),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                              color: AppTheme.textLight,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    PressableScale(
-                      onTap: () async {
-                        final picked = await showTimePicker(
-                          context: sheetContext,
-                          initialTime: time,
-                          builder: (ctx, child) => Theme(
-                            data: ThemeData.dark().copyWith(
-                              colorScheme: const ColorScheme.dark(
-                                primary: AppTheme.primary,
-                                onPrimary: Colors.black,
-                                surface: AppTheme.background,
+                        const SizedBox(height: AppSpacing.lg),
+                        GlassCard(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<LevelData>(
+                              value: level,
+                              isExpanded: true,
+                              dropdownColor: AppTheme.background,
+                              hint: Text(
+                                  L10n.get(context, 'scheduler_choose_level'),
+                                  style:
+                                      const TextStyle(color: AppTheme.textDim)),
+                              items: plannableLevels
+                                  .map((l) => DropdownMenuItem(
+                                        value: l,
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 8,
+                                              height: 8,
+                                              decoration: BoxDecoration(
+                                                  color: l.color,
+                                                  shape: BoxShape.circle),
+                                            ),
+                                            const SizedBox(
+                                                width: AppSpacing.md),
+                                            Text(L10n.get(context, l.title),
+                                                style: const TextStyle(
+                                                    color: AppTheme.textLight)),
+                                          ],
+                                        ),
+                                      ))
+                                  .toList(),
+                              onChanged: (v) => setSheet(() => level = v),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        PressableScale(
+                          onTap: () async {
+                            final picked = await showTimePicker(
+                              context: sheetContext,
+                              initialTime: time,
+                              builder: (ctx, child) => Theme(
+                                data: ThemeData.dark().copyWith(
+                                  colorScheme: const ColorScheme.dark(
+                                    primary: AppTheme.primary,
+                                    onPrimary: Colors.black,
+                                    surface: AppTheme.background,
+                                  ),
+                                ),
+                                child: child!,
+                              ),
+                            );
+                            if (picked != null) setSheet(() => time = picked);
+                          },
+                          child: GlassCard(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.lg,
+                                vertical: AppSpacing.lg),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(time.format(context),
+                                    style: const TextStyle(
+                                      color: AppTheme.textLight,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w600,
+                                      fontFeatures: [
+                                        FontFeature.tabularFigures()
+                                      ],
+                                    )),
+                                const Icon(Icons.access_time_rounded,
+                                    color: AppTheme.primary),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        Row(
+                          children: [
+                            const Icon(Icons.notifications_active_outlined,
+                                color: AppTheme.textDim, size: 16),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: Text(
+                                L10n.get(context, 'planner_reminder_note'),
+                                style: const TextStyle(
+                                    color: AppTheme.textDim, fontSize: 12),
                               ),
                             ),
-                            child: child!,
-                          ),
-                        );
-                        if (picked != null) setSheet(() => time = picked);
-                      },
-                      child: GlassCard(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.lg, vertical: AppSpacing.lg),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(time.format(context),
-                                style: const TextStyle(
-                                  color: AppTheme.textLight,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w600,
-                                  fontFeatures: [FontFeature.tabularFigures()],
-                                )),
-                            const Icon(Icons.access_time_rounded,
-                                color: AppTheme.primary),
                           ],
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    Row(
-                      children: [
-                        const Icon(Icons.notifications_active_outlined,
-                            color: AppTheme.textDim, size: 16),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: Text(
-                            L10n.get(context, 'planner_reminder_note'),
-                            style: const TextStyle(
-                                color: AppTheme.textDim, fontSize: 12),
+                        const SizedBox(height: AppSpacing.lg),
+                        PressableScale(
+                          onTap: level == null
+                              ? null
+                              : () {
+                                  Navigator.of(sheetContext).pop();
+                                  _savePlan(level!, time);
+                                },
+                          child: Opacity(
+                            opacity: level == null ? 0.5 : 1.0,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: AppSpacing.lg),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primary,
+                                borderRadius:
+                                    BorderRadius.circular(AppRadius.md),
+                                boxShadow: level == null
+                                    ? null
+                                    : AppTheme.glow(AppTheme.primary, blur: 20),
+                              ),
+                              child: Text(
+                                L10n.get(context, 'scheduler_save'),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Colors.black,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1.5,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: AppSpacing.lg),
-                    PressableScale(
-                      onTap: level == null
-                          ? null
-                          : () {
-                              Navigator.of(sheetContext).pop();
-                              _savePlan(level!, time);
-                            },
-                      child: Opacity(
-                        opacity: level == null ? 0.5 : 1.0,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primary,
-                            borderRadius: BorderRadius.circular(AppRadius.md),
-                            boxShadow: level == null
-                                ? null
-                                : AppTheme.glow(AppTheme.primary, blur: 20),
-                          ),
-                          child: Text(
-                            L10n.get(context, 'scheduler_save'),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: Colors.black,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.5,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+                  ),
                 ),
               ),
             );
@@ -478,12 +508,15 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen> {
     final isHardLevel = level.key != 'freediving_pb_test' &&
         (level.type == ExerciseType.co2Table ||
             level.type == ExerciseType.o2Table ||
-            (level.type == ExerciseType.wimHof && kHardWimHofLevels.contains(level.key)));
+            (level.type == ExerciseType.wimHof &&
+                kHardWimHofLevels.contains(level.key)));
     if (isHardLevel) {
-      final plans = ref.read(plannedSessionsProvider).value ?? const <PlannedSession>[];
+      final plans =
+          ref.read(plannedSessionsProvider).value ?? const <PlannedSession>[];
       final hasPbTestThatDay = plans.any((p) =>
           p.levelKey == 'freediving_pb_test' &&
-          MonthCalendar.dateOnly(p.scheduledAt) == MonthCalendar.dateOnly(scheduledAt));
+          MonthCalendar.dateOnly(p.scheduledAt) ==
+              MonthCalendar.dateOnly(scheduledAt));
       if (hasPbTestThatDay) {
         final confirmed = await showGlassConfirm(
           context,
@@ -510,11 +543,11 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen> {
           );
       final notifications = ref.read(notificationServiceProvider);
       await notifications.scheduleOneTime(
-            id: planId,
-            when: scheduledAt.subtract(const Duration(minutes: 5)),
-            title: reminderTitle,
-            body: '$levelName • $timeStr',
-          );
+        id: planId,
+        when: scheduledAt.subtract(const Duration(minutes: 5)),
+        title: reminderTitle,
+        body: '$levelName • $timeStr',
+      );
       if (!mounted) return;
 
       // The persistent alarm-permission card only shows once a plan exists
@@ -576,7 +609,8 @@ class _ExactAlarmCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   L10n.get(context, 'planner_exact_alarm_body'),
-                  style: const TextStyle(color: AppTheme.textDim, fontSize: 11, height: 1.4),
+                  style: const TextStyle(
+                      color: AppTheme.textDim, fontSize: 11, height: 1.4),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 PressableScale(
@@ -592,7 +626,9 @@ class _ExactAlarmCard extends StatelessWidget {
                       L10n.get(context, 'planner_exact_alarm_allow'),
                       textAlign: TextAlign.center,
                       style: const TextStyle(
-                          color: Colors.black, fontSize: 12, fontWeight: FontWeight.bold),
+                          color: Colors.black,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),
@@ -600,7 +636,8 @@ class _ExactAlarmCard extends StatelessWidget {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.close_rounded, color: Colors.white38, size: 18),
+            icon: const Icon(Icons.close_rounded,
+                color: Colors.white38, size: 18),
             onPressed: onDismiss,
             tooltip: L10n.get(context, 'common_dismiss'),
           ),
@@ -652,7 +689,8 @@ class _DayPanel extends StatelessWidget {
           AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: timelineHeight == null ? MainAxisSize.max : MainAxisSize.min,
+        mainAxisSize:
+            timelineHeight == null ? MainAxisSize.max : MainAxisSize.min,
         children: [
           weekStrip,
           const SizedBox(height: AppSpacing.md),
@@ -750,8 +788,7 @@ class _PlanTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final level = LevelData.levels[plan.levelKey];
     final color = level?.color ?? AppTheme.primary;
-    final name =
-        level != null ? L10n.get(context, level.title) : plan.levelKey;
+    final name = level != null ? L10n.get(context, level.title) : plan.levelKey;
     final time = TimeOfDay.fromDateTime(plan.scheduledAt).format(context);
 
     return GlassCard(
