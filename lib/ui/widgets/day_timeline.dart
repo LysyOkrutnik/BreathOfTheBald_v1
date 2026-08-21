@@ -32,36 +32,47 @@ class DayTimeline extends StatelessWidget {
           // to size itself against, which is exactly the kind of layout this
           // widget doesn't need to lean on. The ruler is its own regular
           // child here instead, guaranteeing every hour actually lays out.
-          Column(
-            children: [
-              for (var h = 0; h < hourCount; h++)
-                SizedBox(
-                  height: hourHeight,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        width: labelWidth,
-                        child: Text(
-                          '${(startHour + h).toString().padLeft(2, '0')}:00',
-                          style: const TextStyle(color: Colors.white30, fontSize: 10),
+          // Excluded from semantics: a screen reader stepping through 24
+          // "00:00", "01:00"... labels before ever reaching an actual event
+          // is pure noise — each event's own merged label below already
+          // states its time.
+          ExcludeSemantics(
+            child: Column(
+              children: [
+                for (var h = 0; h < hourCount; h++)
+                  SizedBox(
+                    height: hourHeight,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: labelWidth,
+                          child: Text(
+                            '${(startHour + h).toString().padLeft(2, '0')}:00',
+                            style: const TextStyle(
+                                color: Colors.white30, fontSize: 10),
+                          ),
                         ),
-                      ),
-                      Expanded(
-                        child:
-                            Container(height: 1, color: Colors.white.withAlpha(18)),
-                      ),
-                    ],
+                        Expanded(
+                          child: Container(
+                              height: 1, color: Colors.white.withAlpha(18)),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
           for (final item in items)
             Positioned(
               top: (_offsetFor(item.time) - 20).clamp(0.0, totalHeight - 40),
               left: labelWidth + 8,
               right: 0,
-              child: item.child,
+              // Merges whatever the item's child exposes (e.g. a time label
+              // and a title as separate Text widgets) into one semantic
+              // node, so a screen reader reads it as a single coherent
+              // phrase instead of disconnected fragments.
+              child: MergeSemantics(child: item.child),
             ),
         ],
       ),
@@ -70,7 +81,8 @@ class DayTimeline extends StatelessWidget {
 
   double _offsetFor(TimeOfDay time) {
     final clampedHour = time.hour.clamp(startHour, endHour);
-    return (clampedHour - startHour) * hourHeight + (time.minute / 60) * hourHeight;
+    return (clampedHour - startHour) * hourHeight +
+        (time.minute / 60) * hourHeight;
   }
 }
 

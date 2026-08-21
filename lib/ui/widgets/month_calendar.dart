@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 
 /// A compact, glass-styled month calendar. Weeks start on Monday. Days that
@@ -31,7 +32,8 @@ class MonthCalendar extends StatelessWidget {
     final locale = Localizations.localeOf(context).toString();
     final today = dateOnly(DateTime.now());
     final first = DateTime(focusedMonth.year, focusedMonth.month, 1);
-    final daysInMonth = DateTime(focusedMonth.year, focusedMonth.month + 1, 0).day;
+    final daysInMonth =
+        DateTime(focusedMonth.year, focusedMonth.month + 1, 0).day;
     final leadingBlanks = (first.weekday - 1) % 7; // Monday-first
 
     return Container(
@@ -55,12 +57,14 @@ class MonthCalendar extends StatelessWidget {
               for (var day = 1; day <= daysInMonth; day++)
                 _DayCell(
                   date: DateTime(focusedMonth.year, focusedMonth.month, day),
-                  isToday: DateTime(focusedMonth.year, focusedMonth.month, day) == today,
+                  isToday:
+                      DateTime(focusedMonth.year, focusedMonth.month, day) ==
+                          today,
                   isSelected:
                       DateTime(focusedMonth.year, focusedMonth.month, day) ==
                           dateOnly(selectedDay),
-                  dotColors: markedDays[
-                          DateTime(focusedMonth.year, focusedMonth.month, day)] ??
+                  dotColors: markedDays[DateTime(
+                          focusedMonth.year, focusedMonth.month, day)] ??
                       const [],
                   onTap: () => onDaySelected(
                       DateTime(focusedMonth.year, focusedMonth.month, day)),
@@ -76,8 +80,10 @@ class MonthCalendar extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        _navButton(Icons.chevron_left_rounded,
-            () => onMonthChanged(DateTime(focusedMonth.year, focusedMonth.month - 1))),
+        _navButton(
+            Icons.chevron_left_rounded,
+            () => onMonthChanged(
+                DateTime(focusedMonth.year, focusedMonth.month - 1))),
         Text(
           toBeginningOfSentenceCase(
                   DateFormat.yMMMM(locale).format(focusedMonth)) ??
@@ -89,8 +95,10 @@ class MonthCalendar extends StatelessWidget {
             letterSpacing: 0.5,
           ),
         ),
-        _navButton(Icons.chevron_right_rounded,
-            () => onMonthChanged(DateTime(focusedMonth.year, focusedMonth.month + 1))),
+        _navButton(
+            Icons.chevron_right_rounded,
+            () => onMonthChanged(
+                DateTime(focusedMonth.year, focusedMonth.month + 1))),
       ],
     );
   }
@@ -157,60 +165,78 @@ class _DayCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final locale = Localizations.localeOf(context).toString();
+    final dayLabel =
+        toBeginningOfSentenceCase(DateFormat.MMMMd(locale).format(date));
+    // One merged label instead of a screen reader just announcing a bare
+    // number — a day with plans also says so, since the colour dots that
+    // convey that visually carry no meaning to a screen reader on their own.
+    final semanticLabel = dotColors.isNotEmpty
+        ? '$dayLabel, ${L10n.get(context, 'a11y_day_has_plan')}'
+        : dayLabel;
+
     // Fill the grid slot (with a little inset) rather than forcing a fixed
     // 38px box, which overflowed the cell on narrow widths / two-pane tablets.
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(2),
-        child: AnimatedContainer(
-          duration: AppMotion.fast,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: isSelected ? AppTheme.primary : Colors.transparent,
-            border: isToday && !isSelected
-                ? Border.all(color: AppTheme.primary.withAlpha(150))
-                : null,
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Padding(
-                  padding: const EdgeInsets.all(6),
-                  child: Text(
-                    '${date.day}',
-                    style: TextStyle(
-                      color: isSelected ? Colors.black : AppTheme.textLight,
-                      fontSize: 14,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w400,
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: semanticLabel,
+      child: ExcludeSemantics(
+        child: GestureDetector(
+          onTap: onTap,
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.all(2),
+            child: AnimatedContainer(
+              duration: AppMotion.fast,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isSelected ? AppTheme.primary : Colors.transparent,
+                border: isToday && !isSelected
+                    ? Border.all(color: AppTheme.primary.withAlpha(150))
+                    : null,
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Text(
+                        '${date.day}',
+                        style: TextStyle(
+                          color: isSelected ? Colors.black : AppTheme.textLight,
+                          fontSize: 14,
+                          fontWeight:
+                              isSelected ? FontWeight.bold : FontWeight.w400,
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                  if (dotColors.isNotEmpty)
+                    Positioned(
+                      bottom: 4,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (final color in dotColors.take(3)) ...[
+                            Container(
+                              width: 5,
+                              height: 5,
+                              margin: const EdgeInsets.symmetric(horizontal: 1),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isSelected ? Colors.black : color,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                ],
               ),
-              if (dotColors.isNotEmpty)
-                Positioned(
-                  bottom: 4,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      for (final color in dotColors.take(3)) ...[
-                        Container(
-                          width: 5,
-                          height: 5,
-                          margin: const EdgeInsets.symmetric(horizontal: 1),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: isSelected ? Colors.black : color,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-            ],
+            ),
           ),
         ),
       ),

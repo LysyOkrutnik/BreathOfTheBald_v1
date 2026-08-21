@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 
 /// A horizontal Mon–Sun strip for quickly jumping between days within a
@@ -35,7 +36,8 @@ class WeekStrip extends StatelessWidget {
             child: _DayChip(
               day: monday.add(Duration(days: i)),
               locale: locale,
-              isSelected: _isSameDay(monday.add(Duration(days: i)), selectedDay),
+              isSelected:
+                  _isSameDay(monday.add(Duration(days: i)), selectedDay),
               isToday: _isSameDay(monday.add(Duration(days: i)), today),
               hasPlan: markedDays.contains(monday.add(Duration(days: i))),
               onTap: onDaySelected,
@@ -69,53 +71,69 @@ class _DayChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => onTap(day),
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: AppMotion.fast,
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primary : Colors.white.withAlpha(10),
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: isToday && !isSelected
-              ? Border.all(color: AppTheme.primary.withAlpha(150))
-              : null,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              DateFormat.E(locale).format(day).substring(0, 2).toUpperCase(),
-              style: TextStyle(
-                color: isSelected ? Colors.black87 : Colors.white54,
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              '${day.day}',
-              style: TextStyle(
-                color: isSelected ? Colors.black : AppTheme.textLight,
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 3),
-            SizedBox(
-              height: 4,
-              width: 4,
-              child: hasPlan
-                  ? DecoratedBox(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: isSelected ? Colors.black : AppTheme.accent,
-                      ),
-                    )
+    final dayLabel =
+        toBeginningOfSentenceCase(DateFormat.MMMMd(locale).format(day));
+    final semanticLabel = hasPlan
+        ? '$dayLabel, ${L10n.get(context, 'a11y_day_has_plan')}'
+        : dayLabel;
+
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: semanticLabel,
+      child: ExcludeSemantics(
+        child: GestureDetector(
+          onTap: () => onTap(day),
+          behavior: HitTestBehavior.opaque,
+          child: AnimatedContainer(
+            duration: AppMotion.fast,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              color: isSelected ? AppTheme.primary : Colors.white.withAlpha(10),
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: isToday && !isSelected
+                  ? Border.all(color: AppTheme.primary.withAlpha(150))
                   : null,
             ),
-          ],
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  DateFormat.E(locale)
+                      .format(day)
+                      .substring(0, 2)
+                      .toUpperCase(),
+                  style: TextStyle(
+                    color: isSelected ? Colors.black87 : Colors.white54,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${day.day}',
+                  style: TextStyle(
+                    color: isSelected ? Colors.black : AppTheme.textLight,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                SizedBox(
+                  height: 4,
+                  width: 4,
+                  child: hasPlan
+                      ? DecoratedBox(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isSelected ? Colors.black : AppTheme.accent,
+                          ),
+                        )
+                      : null,
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

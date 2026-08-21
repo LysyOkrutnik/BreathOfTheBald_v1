@@ -72,7 +72,8 @@ class LevelGrid extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         const gap = AppSpacing.md;
-        final cardWidth = (constraints.maxWidth - gap * (columns - 1)) / columns;
+        final cardWidth =
+            (constraints.maxWidth - gap * (columns - 1)) / columns;
         return Wrap(
           spacing: gap,
           runSpacing: gap,
@@ -135,79 +136,93 @@ class LevelCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final level = LevelData.levels[levelKey]!;
+    final description = _description(context, level);
+    // One merged label for a screen reader instead of the title, pace, and
+    // description reading as three separate, context-free nodes.
+    final semanticLabel = [
+      L10n.get(context, level.title),
+      _paceLabel(context, level),
+      if (description.isNotEmpty) description,
+    ].join(', ');
 
-    final card = PressableScale(
-      onTap: () => Navigator.of(context).push(
-        fadeThroughRoute(IntroScreen(level: level)),
-      ),
-      child: Hero(
-        tag: 'level_card_${level.key}',
-        child: GlassCard(
-          gradient: AppTheme.cardGradient(level.color),
-          padding: const EdgeInsets.symmetric(
-            vertical: AppSpacing.lg,
-            horizontal: AppSpacing.lg,
+    final card = Semantics(
+      button: true,
+      label: semanticLabel,
+      child: ExcludeSemantics(
+        child: PressableScale(
+          onTap: () => Navigator.of(context).push(
+            fadeThroughRoute(IntroScreen(level: level)),
           ),
-          child: Row(
-            children: [
-              Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  color: level.color,
-                  shape: BoxShape.circle,
-                  boxShadow: AppTheme.glow(level.color, blur: 10),
-                ),
+          child: Hero(
+            tag: 'level_card_${level.key}',
+            child: GlassCard(
+              gradient: AppTheme.cardGradient(level.color),
+              padding: const EdgeInsets.symmetric(
+                vertical: AppSpacing.lg,
+                horizontal: AppSpacing.lg,
               ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+              child: Row(
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: level.color,
+                      shape: BoxShape.circle,
+                      boxShadow: AppTheme.glow(level.color, blur: 10),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Text(
-                            L10n.get(context, level.title),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.textLight,
-                              letterSpacing: 1.5,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                L10n.get(context, level.title),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.textLight,
+                                  letterSpacing: 1.5,
+                                ),
+                              ),
                             ),
-                          ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Flexible(
+                              child: Text(
+                                _paceLabel(context, level),
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: level.color,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Flexible(
-                          child: Text(
-                            _paceLabel(context, level),
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: level.color,
-                            ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          description,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.textDim.withAlpha(190),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      _description(context, level),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.textDim.withAlpha(190),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Icon(Icons.chevron_right_rounded,
+                      color: level.color.withAlpha(160), size: 22),
+                ],
               ),
-              const SizedBox(width: AppSpacing.sm),
-              Icon(Icons.chevron_right_rounded,
-                  color: level.color.withAlpha(160), size: 22),
-            ],
+            ),
           ),
         ),
       ),
@@ -239,7 +254,8 @@ class CustomSection extends ConsumerWidget {
     Navigator.of(context).push(fadeThroughRoute(const SessionScreen()));
   }
 
-  Future<void> _delete(BuildContext context, WidgetRef ref, CustomPreset p) async {
+  Future<void> _delete(
+      BuildContext context, WidgetRef ref, CustomPreset p) async {
     final confirmed = await showGlassConfirm(
       context,
       title: L10n.get(context, 'delete_confirm_title'),

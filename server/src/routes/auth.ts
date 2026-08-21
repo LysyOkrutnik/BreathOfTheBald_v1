@@ -27,6 +27,14 @@ const credentialsSchema = z.object({
   password: z.string().min(8).max(128),
 });
 
+// Registration additionally requires explicit terms acceptance — checked
+// server-side (not just a client-side checkbox) since this carries real
+// legal weight. `z.literal(true)` rejects anything other than the literal
+// boolean `true` (missing, `false`, or a truthy-looking string all fail).
+const registerSchema = credentialsSchema.extend({
+  acceptedTerms: z.literal(true),
+});
+
 const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
 
@@ -43,7 +51,7 @@ function randomToken(): string {
 const TOKEN_PATTERN = /^[0-9a-f]{64}$/;
 
 router.post('/register', authRateLimiter, async (req, res) => {
-  const parsed = credentialsSchema.safeParse(req.body);
+  const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: 'invalid_input', details: parsed.error.flatten() });
     return;
@@ -64,6 +72,7 @@ router.post('/register', authRateLimiter, async (req, res) => {
       passwordHash,
       emailVerificationToken,
       emailVerificationExpiresAt: new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS),
+      termsAcceptedAt: new Date(),
     },
   });
 
@@ -301,6 +310,55 @@ router.post('/change-password', requireAuth, async (req: AuthedRequest, res) => 
   // changed their password isn't immediately logged out by their own
   // action — every *other* previously-issued token is now invalid.
   res.json({ token: signToken(updated.id, updated.tokenVersion) });
+});
+
+/// Requires the current password (same reasoning as change-password: an
+/// already-authenticated session shouldn't be enough on its own to take
+/// over the account's recovery address). Unlike a password change, this
+/// does *not* bump `tokenVersion` — an email change isn't the same kind of
+/// security event as a changed credential, so other devices stay logged
+/// in. The new address starts unverified, exactly like a fresh
+/// registration, with its own verification link.
+router.post('/change-email', requireAuth, async (req: AuthedRequest, res) => {
+  const parsed = z
+    .object({
+      newEmail: z.string().trim().toLowerCase().email(),
+      currentPassword: z.string().min(1),
+    })
+    .safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'invalid_input' });
+    return;
+  }
+  const user = await prisma.user.findUnique({ where: { id: req.userId! } });
+  if (!user || !(await bcrypt.compare(parsed.data.currentPassword, user.passwordHash))) {
+    res.status(401).json({ error: 'invalid_credentials' });
+    return;
+  }
+  if (parsed.data.newEmail === user.email) {
+    res.status(400).json({ error: 'invalid_input' });
+    return;
+  }
+  const taken = await prisma.user.findUnique({ where: { email: parsed.data.newEmail } });
+  if (taken) {
+    res.status(409).json({ error: 'email_taken' });
+    return;
+  }
+
+  const emailVerificationToken = randomToken();
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      email: parsed.data.newEmail,
+      emailVerified: false,
+      emailVerificationToken,
+      emailVerificationExpiresAt: new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS),
+    },
+  });
+  const { subject, text } = verificationEmailBody(emailVerificationToken);
+  sendMail(updated.email, subject, text).catch((err) =>
+    console.error('[auth] change-email verification email failed:', err));
+  res.json({ email: updated.email });
 });
 
 /// Lets the client re-check account state that can change out-of-band from

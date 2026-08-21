@@ -9,6 +9,8 @@ import 'package:okrutnik_breath/core/sync/auth_service.dart';
 import 'package:okrutnik_breath/core/sync/push_registration.dart';
 import 'package:okrutnik_breath/logic/providers/sync_providers.dart';
 import 'package:okrutnik_breath/ui/screens/home_shell_screen.dart';
+import 'package:okrutnik_breath/ui/screens/privacy_screen.dart';
+import 'package:okrutnik_breath/ui/screens/terms_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/confirm_dialog.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
@@ -38,6 +40,11 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen> {
   bool _registering = false;
   String? _errorKey;
 
+  // Only enforced for registration — login doesn't need a fresh consent
+  // (the account already carries a `termsAcceptedAt` from when it was
+  // created), so the checkbox has no bearing on the login button.
+  bool _acceptedTerms = false;
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -50,15 +57,20 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen> {
         AuthErrorCode.emailTaken => 'account_error_email_taken',
         AuthErrorCode.invalidCredentials => 'account_error_invalid_credentials',
         AuthErrorCode.tooManyAttempts => 'account_error_too_many_attempts',
-        AuthErrorCode.invalidOrExpiredToken => 'account_error_invalid_or_expired_token',
+        AuthErrorCode.invalidOrExpiredToken =>
+          'account_error_invalid_or_expired_token',
         AuthErrorCode.network => 'account_error_network',
         AuthErrorCode.unknown => 'account_error_unknown',
       };
 
   String? _validationErrorKey() {
     final email = _emailController.text.trim();
-    if (!_emailPattern.hasMatch(email)) return 'account_error_invalid_email_format';
-    if (_passwordController.text.length < _minPasswordLength) return 'account_error_password_too_short';
+    if (!_emailPattern.hasMatch(email)) {
+      return 'account_error_invalid_email_format';
+    }
+    if (_passwordController.text.length < _minPasswordLength) {
+      return 'account_error_password_too_short';
+    }
     return null;
   }
 
@@ -66,6 +78,12 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen> {
     final validationError = _validationErrorKey();
     if (validationError != null) {
       setState(() => _errorKey = validationError);
+      return;
+    }
+    // Defensive — the register button is already disabled while this is
+    // false, but _submit shouldn't rely on the UI alone to enforce it.
+    if (isRegister && !_acceptedTerms) {
+      setState(() => _errorKey = 'auth_gate_terms_required');
       return;
     }
 
@@ -78,7 +96,8 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen> {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
     final result = isRegister
-        ? await auth.register(email: email, password: password)
+        ? await auth.register(
+            email: email, password: password, acceptedTerms: true)
         : await auth.login(email: email, password: password);
     if (!mounted) return;
 
@@ -96,12 +115,13 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen> {
     unawaited(ref.read(syncServiceProvider).syncNow());
 
     if (!mounted) return;
-    Navigator.of(context)
-        .pushAndRemoveUntil(fadeThroughRoute(const HomeShellScreen()), (route) => false);
+    Navigator.of(context).pushAndRemoveUntil(
+        fadeThroughRoute(const HomeShellScreen()), (route) => false);
   }
 
   Future<void> _showForgotPasswordDialog() async {
-    final controller = TextEditingController(text: _emailController.text.trim());
+    final controller =
+        TextEditingController(text: _emailController.text.trim());
     final email = await showGlassDialog<String>(
       context,
       builder: (dialogContext) => Column(
@@ -110,10 +130,13 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen> {
         children: [
           Text(L10n.get(context, 'account_forgot_password_title'),
               style: const TextStyle(
-                  color: AppTheme.textLight, fontSize: 16, fontWeight: FontWeight.w600)),
+                  color: AppTheme.textLight,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600)),
           const SizedBox(height: AppSpacing.sm),
           Text(L10n.get(context, 'account_forgot_password_body'),
-              style: const TextStyle(color: AppTheme.textDim, fontSize: 12, height: 1.4)),
+              style: const TextStyle(
+                  color: AppTheme.textDim, fontSize: 12, height: 1.4)),
           const SizedBox(height: AppSpacing.lg),
           TextField(
             controller: controller,
@@ -124,10 +147,10 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen> {
             decoration: InputDecoration(
               hintText: L10n.get(context, 'account_email_hint'),
               hintStyle: const TextStyle(color: AppTheme.textDim),
-              enabledBorder:
-                  const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-              focusedBorder:
-                  const UnderlineInputBorder(borderSide: BorderSide(color: AppTheme.primary)),
+              enabledBorder: const UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.white24)),
+              focusedBorder: const UnderlineInputBorder(
+                  borderSide: BorderSide(color: AppTheme.primary)),
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -143,8 +166,10 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen> {
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: ElevatedButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(controller.text.trim()),
-                  child: Text(L10n.get(context, 'account_forgot_password_submit')),
+                  onPressed: () =>
+                      Navigator.of(dialogContext).pop(controller.text.trim()),
+                  child:
+                      Text(L10n.get(context, 'account_forgot_password_submit')),
                 ),
               ),
             ],
@@ -156,8 +181,8 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen> {
     if (email == null || email.isEmpty || !mounted) return;
     await ref.read(authServiceProvider).forgotPassword(email);
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(L10n.get(context, 'account_forgot_password_sent'))));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(L10n.get(context, 'account_forgot_password_sent'))));
   }
 
   @override
@@ -193,7 +218,10 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen> {
                           children: [
                             Text(
                               L10n.get(context, 'auth_gate_intro'),
-                              style: const TextStyle(color: AppTheme.textDim, fontSize: 12, height: 1.4),
+                              style: const TextStyle(
+                                  color: AppTheme.textDim,
+                                  fontSize: 12,
+                                  height: 1.4),
                             ),
                             const SizedBox(height: AppSpacing.md),
                             TextField(
@@ -202,12 +230,16 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen> {
                               style: const TextStyle(color: AppTheme.textLight),
                               cursorColor: AppTheme.primary,
                               decoration: InputDecoration(
-                                hintText: L10n.get(context, 'account_email_hint'),
-                                hintStyle: const TextStyle(color: AppTheme.textDim),
+                                hintText:
+                                    L10n.get(context, 'account_email_hint'),
+                                hintStyle:
+                                    const TextStyle(color: AppTheme.textDim),
                                 enabledBorder: const UnderlineInputBorder(
-                                    borderSide: BorderSide(color: Colors.white24)),
+                                    borderSide:
+                                        BorderSide(color: Colors.white24)),
                                 focusedBorder: const UnderlineInputBorder(
-                                    borderSide: BorderSide(color: AppTheme.primary)),
+                                    borderSide:
+                                        BorderSide(color: AppTheme.primary)),
                               ),
                             ),
                             const SizedBox(height: AppSpacing.md),
@@ -217,29 +249,110 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen> {
                               style: const TextStyle(color: AppTheme.textLight),
                               cursorColor: AppTheme.primary,
                               decoration: InputDecoration(
-                                hintText: L10n.get(context, 'account_password_hint'),
-                                hintStyle: const TextStyle(color: AppTheme.textDim),
+                                hintText:
+                                    L10n.get(context, 'account_password_hint'),
+                                hintStyle:
+                                    const TextStyle(color: AppTheme.textDim),
                                 enabledBorder: const UnderlineInputBorder(
-                                    borderSide: BorderSide(color: Colors.white24)),
+                                    borderSide:
+                                        BorderSide(color: Colors.white24)),
                                 focusedBorder: const UnderlineInputBorder(
-                                    borderSide: BorderSide(color: AppTheme.primary)),
+                                    borderSide:
+                                        BorderSide(color: AppTheme.primary)),
                               ),
                             ),
                             Align(
                               alignment: Alignment.centerRight,
                               child: TextButton(
-                                onPressed: _loading ? null : _showForgotPasswordDialog,
+                                onPressed:
+                                    _loading ? null : _showForgotPasswordDialog,
                                 style: TextButton.styleFrom(
-                                    padding: EdgeInsets.zero, minimumSize: Size.zero),
-                                child: Text(L10n.get(context, 'account_forgot_password'),
-                                    style: const TextStyle(color: AppTheme.textDim, fontSize: 12)),
+                                    padding: EdgeInsets.zero,
+                                    minimumSize: Size.zero),
+                                child: Text(
+                                    L10n.get(
+                                        context, 'account_forgot_password'),
+                                    style: const TextStyle(
+                                        color: AppTheme.textDim, fontSize: 12)),
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                SizedBox(
+                                  height: 24,
+                                  width: 24,
+                                  child: Checkbox(
+                                    value: _acceptedTerms,
+                                    onChanged: _loading
+                                        ? null
+                                        : (v) => setState(
+                                            () => _acceptedTerms = v ?? false),
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: _loading
+                                        ? null
+                                        : () => setState(() =>
+                                            _acceptedTerms = !_acceptedTerms),
+                                    child: Text(
+                                      L10n.get(
+                                          context, 'auth_gate_terms_checkbox'),
+                                      style: const TextStyle(
+                                          color: AppTheme.textDim,
+                                          fontSize: 12,
+                                          height: 1.3),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.only(left: 32),
+                              child: Row(
+                                children: [
+                                  TextButton(
+                                    onPressed: () => Navigator.of(context).push(
+                                        fadeThroughRoute(
+                                            const PrivacyScreen())),
+                                    style: TextButton.styleFrom(
+                                        padding: EdgeInsets.zero,
+                                        minimumSize: Size.zero),
+                                    child: Text(
+                                        L10n.get(context, 'settings_privacy'),
+                                        style: const TextStyle(
+                                            color: AppTheme.primary,
+                                            fontSize: 12,
+                                            decoration:
+                                                TextDecoration.underline)),
+                                  ),
+                                  const SizedBox(width: AppSpacing.md),
+                                  TextButton(
+                                    onPressed: () => Navigator.of(context).push(
+                                        fadeThroughRoute(const TermsScreen())),
+                                    style: TextButton.styleFrom(
+                                        padding: EdgeInsets.zero,
+                                        minimumSize: Size.zero),
+                                    child: Text(
+                                        L10n.get(context, 'settings_terms'),
+                                        style: const TextStyle(
+                                            color: AppTheme.primary,
+                                            fontSize: 12,
+                                            decoration:
+                                                TextDecoration.underline)),
+                                  ),
+                                ],
                               ),
                             ),
                             if (_errorKey != null) ...[
                               const SizedBox(height: AppSpacing.xs),
                               Text(
                                 L10n.get(context, _errorKey!),
-                                style: const TextStyle(color: AppTheme.danger, fontSize: 12),
+                                style: const TextStyle(
+                                    color: AppTheme.danger, fontSize: 12),
                               ),
                             ],
                             const SizedBox(height: AppSpacing.md),
@@ -247,30 +360,40 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen> {
                               children: [
                                 Expanded(
                                   child: TextButton(
-                                    onPressed: _loading ? null : () => _submit(isRegister: true),
+                                    onPressed: _loading || !_acceptedTerms
+                                        ? null
+                                        : () => _submit(isRegister: true),
                                     child: _loading && _registering
                                         ? const SizedBox(
                                             width: 16,
                                             height: 16,
                                             child: CircularProgressIndicator(
-                                                strokeWidth: 2, color: Colors.white70),
+                                                strokeWidth: 2,
+                                                color: Colors.white70),
                                           )
-                                        : Text(L10n.get(context, 'account_register'),
-                                            style: const TextStyle(color: Colors.white70)),
+                                        : Text(
+                                            L10n.get(
+                                                context, 'account_register'),
+                                            style: const TextStyle(
+                                                color: Colors.white70)),
                                   ),
                                 ),
                                 const SizedBox(width: AppSpacing.md),
                                 Expanded(
                                   child: ElevatedButton(
-                                    onPressed: _loading ? null : () => _submit(isRegister: false),
+                                    onPressed: _loading
+                                        ? null
+                                        : () => _submit(isRegister: false),
                                     child: _loading && !_registering
                                         ? const SizedBox(
                                             width: 16,
                                             height: 16,
                                             child: CircularProgressIndicator(
-                                                strokeWidth: 2, color: Colors.black),
+                                                strokeWidth: 2,
+                                                color: Colors.black),
                                           )
-                                        : Text(L10n.get(context, 'account_login')),
+                                        : Text(
+                                            L10n.get(context, 'account_login')),
                                   ),
                                 ),
                               ],
@@ -279,7 +402,9 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen> {
                             Text(
                               L10n.get(context, 'account_sync_disclosure'),
                               style: TextStyle(
-                                  color: AppTheme.textDim.withAlpha(160), fontSize: 11, height: 1.3),
+                                  color: AppTheme.textDim.withAlpha(160),
+                                  fontSize: 11,
+                                  height: 1.3),
                             ),
                           ],
                         ),

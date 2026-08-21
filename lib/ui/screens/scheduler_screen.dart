@@ -825,6 +825,7 @@ class _PlanTile extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.delete_outline_rounded,
                 color: Colors.white38, size: 20),
+            tooltip: L10n.get(context, 'devices_remove'),
             onPressed: onDelete,
           ),
         ],

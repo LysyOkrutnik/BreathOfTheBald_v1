@@ -37,6 +37,11 @@ model User {
   /// request for a disabled account instead of deleting any data.
   disabledAt DateTime?
 
+  /// Set server-side at registration, never trusted from the client alone —
+  /// the request must carry `acceptedTerms: true` or registration is
+  /// rejected. Null for accounts created before this existed.
+  termsAcceptedAt DateTime?
+
   sessions                Session[]
   freedivingLogs          FreedivingLog[]
   customPresets           CustomPreset[]
@@ -57,6 +62,11 @@ model Device {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   fcmToken  String   @unique
   createdAt DateTime @default(now())
+
+  /// Short client-supplied description (e.g. "SM-A546B, Android 14") set at
+  /// registration — without this, the device-management list in Settings
+  /// would show nothing but dates. Optional since older rows predate it.
+  label String?
 }
 
 /// Mirrors the local `Sessions` Drift table. Immutable once created except

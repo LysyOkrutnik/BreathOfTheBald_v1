@@ -55,17 +55,40 @@ class SyncApiClient {
       queryParameters:
           since != null ? {'since': since.toUtc().toIso8601String()} : null,
     );
-    final response = await http.get(uri, headers: await _headers()).timeout(syncRequestTimeout);
+    final response = await http
+        .get(uri, headers: await _headers())
+        .timeout(syncRequestTimeout);
     return _decodeObject(response);
   }
 
-  Future<void> registerDevice(String fcmToken) async {
+  Future<void> registerDevice(String fcmToken, {String? label}) async {
     final response = await http
         .post(
           Uri.parse('$syncApiBaseUrl/devices/register'),
           headers: await _headers(),
-          body: jsonEncode({'fcmToken': fcmToken}),
+          body: jsonEncode(
+              {'fcmToken': fcmToken, if (label != null) 'label': label}),
         )
+        .timeout(syncRequestTimeout);
+    _checkOk(response);
+  }
+
+  /// Backs the "manage devices" list in Settings.
+  Future<List<Map<String, dynamic>>> listDevices() async {
+    final response = await http
+        .get(Uri.parse('$syncApiBaseUrl/devices'), headers: await _headers())
+        .timeout(syncRequestTimeout);
+    _checkOk(response);
+    return (jsonDecode(response.body) as List<dynamic>)
+        .cast<Map<String, dynamic>>();
+  }
+
+  /// Only stops push to that device — not the same as logging it out (see
+  /// devices.ts's own comment on why that isn't possible per-device today).
+  Future<void> deleteDevice(String id) async {
+    final response = await http
+        .delete(Uri.parse('$syncApiBaseUrl/devices/$id'),
+            headers: await _headers())
         .timeout(syncRequestTimeout);
     _checkOk(response);
   }
@@ -95,13 +118,15 @@ class SyncApiClient {
   /// into a "log in again" support ticket.
   Future<String?> refreshToken() async {
     final response = await http
-        .post(Uri.parse('$syncApiBaseUrl/auth/refresh'), headers: await _headers())
+        .post(Uri.parse('$syncApiBaseUrl/auth/refresh'),
+            headers: await _headers())
         .timeout(syncRequestTimeout);
     if (response.statusCode == 401) return null;
     if (response.statusCode != 200) {
       throw SyncApiException(response.statusCode, response.body);
     }
-    return (jsonDecode(response.body) as Map<String, dynamic>)['token'] as String?;
+    return (jsonDecode(response.body) as Map<String, dynamic>)['token']
+        as String?;
   }
 
   /// Re-checks account state that can change server-side with no way to
@@ -116,7 +141,8 @@ class SyncApiClient {
 
   Future<void> resendVerificationEmail() async {
     final response = await http
-        .post(Uri.parse('$syncApiBaseUrl/auth/resend-verification'), headers: await _headers())
+        .post(Uri.parse('$syncApiBaseUrl/auth/resend-verification'),
+            headers: await _headers())
         .timeout(syncRequestTimeout);
     _checkOk(response);
   }
@@ -134,7 +160,8 @@ class SyncApiClient {
         .post(
           Uri.parse('$syncApiBaseUrl/auth/change-password'),
           headers: await _headers(),
-          body: jsonEncode({'currentPassword': currentPassword, 'newPassword': newPassword}),
+          body: jsonEncode(
+              {'currentPassword': currentPassword, 'newPassword': newPassword}),
         )
         .timeout(syncRequestTimeout);
     _checkOk(response);
@@ -142,12 +169,34 @@ class SyncApiClient {
     await authService.updateToken(data['token'] as String);
   }
 
+  /// Unlike a password change, this doesn't re-issue a token — the server
+  /// doesn't bump tokenVersion for an email change, so the current session
+  /// stays valid. The new address starts unverified; caller should update
+  /// the locally cached email/emailVerified accordingly.
+  Future<void> changeEmail({
+    required String newEmail,
+    required String currentPassword,
+    required AuthService authService,
+  }) async {
+    final response = await http
+        .post(
+          Uri.parse('$syncApiBaseUrl/auth/change-email'),
+          headers: await _headers(),
+          body: jsonEncode(
+              {'newEmail': newEmail, 'currentPassword': currentPassword}),
+        )
+        .timeout(syncRequestTimeout);
+    _checkOk(response);
+    await authService.updateEmailAfterChange(newEmail);
+  }
+
   /// Invalidates every token issued for this account, including the one
   /// this call itself used — callers must follow up with
   /// `AuthService.logout()` to also clear local storage.
   Future<void> logoutAllDevices() async {
     final response = await http
-        .post(Uri.parse('$syncApiBaseUrl/auth/logout-all'), headers: await _headers())
+        .post(Uri.parse('$syncApiBaseUrl/auth/logout-all'),
+            headers: await _headers())
         .timeout(syncRequestTimeout);
     _checkOk(response);
   }
@@ -170,14 +219,16 @@ class SyncApiClient {
 
   Future<void> joinChallenge(String id) async {
     final response = await http
-        .post(Uri.parse('$syncApiBaseUrl/challenges/$id/join'), headers: await _headers())
+        .post(Uri.parse('$syncApiBaseUrl/challenges/$id/join'),
+            headers: await _headers())
         .timeout(syncRequestTimeout);
     _checkOk(response);
   }
 
   Future<void> leaveChallenge(String id) async {
     final response = await http
-        .delete(Uri.parse('$syncApiBaseUrl/challenges/$id/join'), headers: await _headers())
+        .delete(Uri.parse('$syncApiBaseUrl/challenges/$id/join'),
+            headers: await _headers())
         .timeout(syncRequestTimeout);
     _checkOk(response);
   }
@@ -185,19 +236,22 @@ class SyncApiClient {
   /// `{challengeId, metric, leaderboard: [{rank, userId, displayName, value}]}`.
   Future<Map<String, dynamic>> getLeaderboard(String id) async {
     final response = await http
-        .get(Uri.parse('$syncApiBaseUrl/challenges/$id/leaderboard'), headers: await _headers())
+        .get(Uri.parse('$syncApiBaseUrl/challenges/$id/leaderboard'),
+            headers: await _headers())
         .timeout(syncRequestTimeout);
     return _decodeObject(response);
   }
 
   /// The only inbox for in-app "report a problem / feedback" — reviewed
   /// from the /admin panel, there's no other channel.
-  Future<void> submitFeedback({String? category, required String message}) async {
+  Future<void> submitFeedback(
+      {String? category, required String message}) async {
     final response = await http
         .post(
           Uri.parse('$syncApiBaseUrl/feedback'),
           headers: await _headers(),
-          body: jsonEncode({if (category != null) 'category': category, 'message': message}),
+          body: jsonEncode(
+              {if (category != null) 'category': category, 'message': message}),
         )
         .timeout(syncRequestTimeout);
     _checkOk(response);
@@ -207,7 +261,8 @@ class SyncApiClient {
   /// response body, not JSON, so this bypasses `_decodeObject`.
   Future<String> exportData() async {
     final response = await http
-        .get(Uri.parse('$syncApiBaseUrl/auth/me/export'), headers: await _headers())
+        .get(Uri.parse('$syncApiBaseUrl/auth/me/export'),
+            headers: await _headers())
         .timeout(syncRequestTimeout);
     _checkOk(response);
     return response.body;

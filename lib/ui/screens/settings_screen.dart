@@ -20,6 +20,7 @@ import 'package:okrutnik_breath/logic/providers/settings_provider.dart';
 import 'package:okrutnik_breath/logic/providers/sync_providers.dart';
 import 'package:okrutnik_breath/ui/screens/auth_gate_screen.dart';
 import 'package:okrutnik_breath/ui/screens/privacy_screen.dart';
+import 'package:okrutnik_breath/ui/screens/terms_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/confirm_dialog.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
@@ -52,7 +53,8 @@ class SettingsScreen extends ConsumerWidget {
           SafeArea(
             child: Center(
               child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: context.isTablet ? 640 : 560),
+                constraints:
+                    BoxConstraints(maxWidth: context.isTablet ? 640 : 560),
                 child: Column(
                   children: [
                     ScreenHeader(title: L10n.get(context, 'settings_title')),
@@ -66,21 +68,24 @@ class SettingsScreen extends ConsumerWidget {
                             name: settings.profileName,
                             level: profile?.level ?? 1,
                             streak: profile?.dailyStreak ?? 0,
-                            onEdit: () => _editName(context, ref, settings.profileName),
+                            onEdit: () =>
+                                _editName(context, ref, settings.profileName),
                           ),
                           const SizedBox(height: AppSpacing.xl),
-
-                          SectionHeader(L10n.get(context, 'settings_section_account')),
+                          SectionHeader(
+                              L10n.get(context, 'settings_section_account')),
                           const _AccountSection(),
                           const SizedBox(height: AppSpacing.lg),
-
-                          SectionHeader(L10n.get(context, 'settings_section_reminders')),
+                          SectionHeader(
+                              L10n.get(context, 'settings_section_reminders')),
                           _Group(children: [
                             _SwitchTile(
                               icon: Icons.notifications_active_outlined,
-                              title: L10n.get(context, 'settings_daily_reminder'),
+                              title:
+                                  L10n.get(context, 'settings_daily_reminder'),
                               value: settings.dailyReminderEnabled,
-                              onChanged: (v) => _setDailyReminder(context, ref, v),
+                              onChanged: (v) =>
+                                  _setDailyReminder(context, ref, v),
                             ),
                             _Tile(
                               icon: Icons.event_available_outlined,
@@ -92,16 +97,19 @@ class SettingsScreen extends ConsumerWidget {
                           ]),
                           const SizedBox(height: AppSpacing.xs),
                           Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.sm),
                             child: Text(
                               L10n.get(context, 'settings_daily_reminder_note'),
                               style: TextStyle(
-                                  color: AppTheme.textDim.withAlpha(180), fontSize: 11, height: 1.3),
+                                  color: AppTheme.textDim.withAlpha(180),
+                                  fontSize: 11,
+                                  height: 1.3),
                             ),
                           ),
                           const SizedBox(height: AppSpacing.lg),
-
-                          SectionHeader(L10n.get(context, 'settings_section_sound')),
+                          SectionHeader(
+                              L10n.get(context, 'settings_section_sound')),
                           _Group(children: [
                             _SwitchTile(
                               icon: Icons.volume_up_rounded,
@@ -117,22 +125,24 @@ class SettingsScreen extends ConsumerWidget {
                             ),
                           ]),
                           const SizedBox(height: AppSpacing.lg),
-
-                          SectionHeader(L10n.get(context, 'settings_section_language')),
+                          SectionHeader(
+                              L10n.get(context, 'settings_section_language')),
                           _Group(children: [
                             _Tile(
                               icon: Icons.language_rounded,
-                              title: L10n.get(context, 'settings_section_language'),
+                              title: L10n.get(
+                                  context, 'settings_section_language'),
                               trailing: _LangToggle(
                                 isPl: isPl,
-                                onTap: () =>
-                                    ref.read(localeProvider.notifier).toggleLocale(),
+                                onTap: () => ref
+                                    .read(localeProvider.notifier)
+                                    .toggleLocale(),
                               ),
                             ),
                           ]),
                           const SizedBox(height: AppSpacing.lg),
-
-                          SectionHeader(L10n.get(context, 'settings_section_help')),
+                          SectionHeader(
+                              L10n.get(context, 'settings_section_help')),
                           _Group(children: [
                             _Tile(
                               icon: Icons.widgets_outlined,
@@ -157,38 +167,50 @@ class SettingsScreen extends ConsumerWidget {
                             ),
                           ]),
                           const SizedBox(height: AppSpacing.lg),
-
-                          SectionHeader(L10n.get(context, 'settings_section_about')),
+                          SectionHeader(
+                              L10n.get(context, 'settings_section_about')),
                           _Group(children: [
                             _Tile(
                               icon: Icons.privacy_tip_outlined,
                               title: L10n.get(context, 'settings_privacy'),
                               trailing: const Icon(Icons.chevron_right_rounded,
                                   color: Colors.white38),
+                              onTap: () => Navigator.of(context).push(
+                                  fadeThroughRoute(const PrivacyScreen())),
+                            ),
+                            _Tile(
+                              icon: Icons.gavel_outlined,
+                              title: L10n.get(context, 'settings_terms'),
+                              trailing: const Icon(Icons.chevron_right_rounded,
+                                  color: Colors.white38),
                               onTap: () => Navigator.of(context)
-                                  .push(fadeThroughRoute(const PrivacyScreen())),
+                                  .push(fadeThroughRoute(const TermsScreen())),
                             ),
                             _Tile(
                               icon: Icons.info_outline_rounded,
                               title: L10n.get(context, 'settings_version'),
                               trailing: Text(appVersion,
-                                  style: const TextStyle(color: AppTheme.textDim)),
+                                  style:
+                                      const TextStyle(color: AppTheme.textDim)),
                             ),
                           ]),
                           const SizedBox(height: AppSpacing.lg),
-
-                          SectionHeader(L10n.get(context, 'settings_section_danger')),
+                          SectionHeader(
+                              L10n.get(context, 'settings_section_danger')),
                           _Group(children: [
                             _Tile(
                               icon: Icons.restart_alt_rounded,
-                              title: L10n.get(context, 'settings_reset_progress'),
+                              title:
+                                  L10n.get(context, 'settings_reset_progress'),
                               color: AppTheme.danger,
                               trailing: Icon(Icons.chevron_right_rounded,
                                   color: AppTheme.danger.withAlpha(160)),
                               onTap: () => _resetProgress(context, ref),
                             ),
                           ]),
-                        ].animate(interval: 50.ms).fadeIn(duration: AppMotion.medium),
+                        ]
+                            .animate(interval: 50.ms)
+                            .fadeIn(duration: AppMotion.medium),
                       ),
                     ),
                   ],
@@ -205,7 +227,8 @@ class SettingsScreen extends ConsumerWidget {
       BuildContext context, WidgetRef ref, bool enable) async {
     final title = L10n.get(context, 'notif_reminder_title');
     final body = L10n.get(context, 'notif_reminder_body');
-    final permissionDenied = L10n.get(context, 'settings_notif_permission_denied');
+    final permissionDenied =
+        L10n.get(context, 'settings_notif_permission_denied');
     final messenger = ScaffoldMessenger.of(context);
 
     if (enable) {
@@ -229,7 +252,9 @@ class SettingsScreen extends ConsumerWidget {
       context,
       builder: (_) => _NameEditDialog(initial: current),
     );
-    if (saved != null) ref.read(settingsProvider.notifier).setProfileName(saved);
+    if (saved != null) {
+      ref.read(settingsProvider.notifier).setProfileName(saved);
+    }
   }
 
   Future<void> _contactSupport(BuildContext context) async {
@@ -242,8 +267,8 @@ class SettingsScreen extends ConsumerWidget {
     final messenger = ScaffoldMessenger.of(context);
     final launched = await launchUrl(uri);
     if (!launched && context.mounted) {
-      messenger.showSnackBar(
-          SnackBar(content: Text(L10n.get(context, 'settings_contact_failed'))));
+      messenger.showSnackBar(SnackBar(
+          content: Text(L10n.get(context, 'settings_contact_failed'))));
     }
   }
 
@@ -266,7 +291,8 @@ class SettingsScreen extends ConsumerWidget {
       builder: (dialogContext) => Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.warning_amber_rounded, color: AppTheme.danger, size: 34),
+          const Icon(Icons.warning_amber_rounded,
+              color: AppTheme.danger, size: 34),
           const SizedBox(height: AppSpacing.lg),
           Text(
             L10n.get(context, 'settings_reset_progress_confirm_title'),
@@ -282,14 +308,16 @@ class SettingsScreen extends ConsumerWidget {
           Text(
             L10n.get(context, 'settings_reset_progress_confirm_body'),
             textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.white54, fontSize: 13, height: 1.4),
+            style: const TextStyle(
+                color: Colors.white54, fontSize: 13, height: 1.4),
           ),
           if (isSyncing) ...[
             const SizedBox(height: AppSpacing.sm),
             Text(
               L10n.get(context, 'settings_reset_progress_confirm_sync_note'),
               textAlign: TextAlign.center,
-              style: const TextStyle(color: AppTheme.danger, fontSize: 12, height: 1.4),
+              style: const TextStyle(
+                  color: AppTheme.danger, fontSize: 12, height: 1.4),
             ),
           ],
           const SizedBox(height: AppSpacing.xl),
@@ -305,9 +333,11 @@ class SettingsScreen extends ConsumerWidget {
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.danger),
                   onPressed: () => Navigator.of(dialogContext).pop(true),
-                  child: Text(L10n.get(context, 'settings_reset_progress_confirm_yes'),
+                  child: Text(
+                      L10n.get(context, 'settings_reset_progress_confirm_yes'),
                       style: const TextStyle(color: Colors.white)),
                 ),
               ),
@@ -324,8 +354,8 @@ class SettingsScreen extends ConsumerWidget {
     await ref.read(wimHofRepositoryProvider).resetProgress();
 
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(L10n.get(context, 'settings_reset_progress_done'))));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(L10n.get(context, 'settings_reset_progress_done'))));
     }
   }
 
@@ -343,7 +373,9 @@ class SettingsScreen extends ConsumerWidget {
           children: [
             Text(L10n.get(context, 'feedback_dialog_title'),
                 style: const TextStyle(
-                    color: AppTheme.textLight, fontSize: 16, fontWeight: FontWeight.w600)),
+                    color: AppTheme.textLight,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600)),
             const SizedBox(height: AppSpacing.lg),
             DropdownButton<String>(
               value: category,
@@ -376,10 +408,10 @@ class SettingsScreen extends ConsumerWidget {
               decoration: InputDecoration(
                 hintText: L10n.get(context, 'feedback_message_hint'),
                 hintStyle: const TextStyle(color: AppTheme.textDim),
-                enabledBorder:
-                    const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-                focusedBorder:
-                    const UnderlineInputBorder(borderSide: BorderSide(color: AppTheme.primary)),
+                enabledBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.white24)),
+                focusedBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: AppTheme.primary)),
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
@@ -414,7 +446,9 @@ class SettingsScreen extends ConsumerWidget {
     final sentText = L10n.get(context, 'feedback_sent');
     final errorText = L10n.get(context, 'feedback_error');
     try {
-      await ref.read(syncApiClientProvider).submitFeedback(category: category, message: message);
+      await ref
+          .read(syncApiClientProvider)
+          .submitFeedback(category: category, message: message);
       messenger.showSnackBar(SnackBar(content: Text(sentText)));
     } catch (_) {
       messenger.showSnackBar(SnackBar(content: Text(errorText)));
@@ -431,12 +465,15 @@ class SettingsScreen extends ConsumerWidget {
           Text(
             L10n.get(context, 'settings_home_widget'),
             style: const TextStyle(
-                color: AppTheme.textLight, fontSize: 16, fontWeight: FontWeight.w600),
+                color: AppTheme.textLight,
+                fontSize: 16,
+                fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: AppSpacing.md),
           Text(
             L10n.get(context, 'settings_home_widget_instructions'),
-            style: const TextStyle(color: AppTheme.textDim, fontSize: 13, height: 1.5),
+            style: const TextStyle(
+                color: AppTheme.textDim, fontSize: 13, height: 1.5),
           ),
           const SizedBox(height: AppSpacing.lg),
           ElevatedButton(
@@ -479,7 +516,9 @@ class _NameEditDialogState extends State<_NameEditDialog> {
         Text(
           L10n.get(context, 'settings_profile_name'),
           style: const TextStyle(
-              color: AppTheme.textLight, fontSize: 16, fontWeight: FontWeight.w600),
+              color: AppTheme.textLight,
+              fontSize: 16,
+              fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: AppSpacing.lg),
         TextField(
@@ -512,7 +551,8 @@ class _NameEditDialogState extends State<_NameEditDialog> {
             ),
             Expanded(
               child: ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+                onPressed: () =>
+                    Navigator.of(context).pop(_controller.text.trim()),
                 child: Text(L10n.get(context, 'common_save')),
               ),
             ),
@@ -592,16 +632,19 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
       }
       if (!mounted) return;
       final messenger = ScaffoldMessenger.of(context);
-      final message = L10n.get(context, switch (result.outcome) {
-        SyncOutcome.success => 'account_sync_success',
-        SyncOutcome.authExpired => 'account_sync_auth_expired',
-        _ => 'account_sync_failed',
-      });
+      final message = L10n.get(
+          context,
+          switch (result.outcome) {
+            SyncOutcome.success => 'account_sync_success',
+            SyncOutcome.authExpired => 'account_sync_auth_expired',
+            _ => 'account_sync_failed',
+          });
       // Appending the raw detail on failure — a status code, a timeout, a
       // response body snippet — turns "sync failed" from a dead end into
       // something actually diagnosable, for the one person this app has as
       // a user right now.
-      final detail = result.outcome == SyncOutcome.success ? null : result.message;
+      final detail =
+          result.outcome == SyncOutcome.success ? null : result.message;
 
       await _refreshState();
       if (!mounted) return;
@@ -612,7 +655,8 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
             : const Duration(seconds: 12),
       ));
     } catch (e, st) {
-      developer.log('Unexpected error during sync', name: 'SettingsScreen', error: e, stackTrace: st);
+      developer.log('Unexpected error during sync',
+          name: 'SettingsScreen', error: e, stackTrace: st);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('${L10n.get(context, 'account_sync_failed')}\n$e'),
@@ -644,7 +688,8 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
       await Share.shareXFiles([XFile(file.path)]);
     } catch (_) {
       if (context.mounted) {
-        messenger.showSnackBar(SnackBar(content: Text(L10n.get(context, 'account_error_network'))));
+        messenger.showSnackBar(SnackBar(
+            content: Text(L10n.get(context, 'account_error_network'))));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -655,8 +700,8 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
   /// not just an inline "logged out" state in Settings — there is no
   /// anonymous mode to fall back into.
   void _goToAuthGate(BuildContext context) {
-    Navigator.of(context)
-        .pushAndRemoveUntil(fadeThroughRoute(const AuthGateScreen()), (route) => false);
+    Navigator.of(context).pushAndRemoveUntil(
+        fadeThroughRoute(const AuthGateScreen()), (route) => false);
   }
 
   Future<void> _logout(BuildContext context) async {
@@ -699,7 +744,8 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
     }
     if (mounted) setState(() => _resendingVerification = false);
     if (!context.mounted) return;
-    messenger.showSnackBar(SnackBar(content: Text(L10n.get(context, resultKey))));
+    messenger
+        .showSnackBar(SnackBar(content: Text(L10n.get(context, resultKey))));
   }
 
   Future<void> _showChangePasswordDialog(BuildContext context) async {
@@ -715,7 +761,9 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
           children: [
             Text(L10n.get(context, 'account_change_password_title'),
                 style: const TextStyle(
-                    color: AppTheme.textLight, fontSize: 16, fontWeight: FontWeight.w600)),
+                    color: AppTheme.textLight,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600)),
             const SizedBox(height: AppSpacing.lg),
             TextField(
               controller: currentController,
@@ -726,10 +774,10 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
               decoration: InputDecoration(
                 hintText: L10n.get(context, 'account_current_password_hint'),
                 hintStyle: const TextStyle(color: AppTheme.textDim),
-                enabledBorder:
-                    const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-                focusedBorder:
-                    const UnderlineInputBorder(borderSide: BorderSide(color: AppTheme.primary)),
+                enabledBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.white24)),
+                focusedBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: AppTheme.primary)),
               ),
             ),
             const SizedBox(height: AppSpacing.md),
@@ -741,10 +789,10 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
               decoration: InputDecoration(
                 hintText: L10n.get(context, 'account_new_password_hint'),
                 hintStyle: const TextStyle(color: AppTheme.textDim),
-                enabledBorder:
-                    const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-                focusedBorder:
-                    const UnderlineInputBorder(borderSide: BorderSide(color: AppTheme.primary)),
+                enabledBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.white24)),
+                focusedBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: AppTheme.primary)),
               ),
             ),
             if (errorKey != null) ...[
@@ -767,7 +815,8 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
                   child: ElevatedButton(
                     onPressed: () async {
                       if (newController.text.length < _minPasswordLength) {
-                        setDialogState(() => errorKey = 'account_error_password_too_short');
+                        setDialogState(() =>
+                            errorKey = 'account_error_password_too_short');
                         return;
                       }
                       try {
@@ -776,16 +825,20 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
                               newPassword: newController.text,
                               authService: ref.read(authServiceProvider),
                             );
-                        if (dialogContext.mounted) Navigator.of(dialogContext).pop(true);
+                        if (dialogContext.mounted) {
+                          Navigator.of(dialogContext).pop(true);
+                        }
                       } on SyncApiException catch (e) {
                         setDialogState(() => errorKey = e.statusCode == 401
                             ? 'account_error_invalid_credentials'
                             : 'account_error_unknown');
                       } catch (_) {
-                        setDialogState(() => errorKey = 'account_error_network');
+                        setDialogState(
+                            () => errorKey = 'account_error_network');
                       }
                     },
-                    child: Text(L10n.get(context, 'account_change_password_submit')),
+                    child: Text(
+                        L10n.get(context, 'account_change_password_submit')),
                   ),
                 ),
               ],
@@ -797,9 +850,201 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
     currentController.dispose();
     newController.dispose();
     if (changed == true && context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(L10n.get(context, 'account_change_password_success'))));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(L10n.get(context, 'account_change_password_success'))));
     }
+  }
+
+  Future<void> _showChangeEmailDialog(BuildContext context) async {
+    final emailController = TextEditingController();
+    final passwordController = TextEditingController();
+    String? errorKey;
+    final changed = await showGlassDialog<bool>(
+      context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(L10n.get(context, 'account_change_email'),
+                style: const TextStyle(
+                    color: AppTheme.textLight,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: AppSpacing.lg),
+            TextField(
+              controller: emailController,
+              autofocus: true,
+              keyboardType: TextInputType.emailAddress,
+              style: const TextStyle(color: AppTheme.textLight),
+              cursorColor: AppTheme.primary,
+              decoration: InputDecoration(
+                hintText: L10n.get(context, 'account_new_email_hint'),
+                hintStyle: const TextStyle(color: AppTheme.textDim),
+                enabledBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.white24)),
+                focusedBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: AppTheme.primary)),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: passwordController,
+              obscureText: true,
+              style: const TextStyle(color: AppTheme.textLight),
+              cursorColor: AppTheme.primary,
+              decoration: InputDecoration(
+                hintText: L10n.get(context, 'account_current_password_hint'),
+                hintStyle: const TextStyle(color: AppTheme.textDim),
+                enabledBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.white24)),
+                focusedBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: AppTheme.primary)),
+              ),
+            ),
+            if (errorKey != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(L10n.get(context, errorKey!),
+                  style: const TextStyle(color: AppTheme.danger, fontSize: 12)),
+            ],
+            const SizedBox(height: AppSpacing.lg),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(false),
+                    child: Text(L10n.get(context, 'common_cancel'),
+                        style: const TextStyle(color: Colors.white70)),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      final newEmail = emailController.text.trim();
+                      try {
+                        await ref.read(syncApiClientProvider).changeEmail(
+                              newEmail: newEmail,
+                              currentPassword: passwordController.text,
+                              authService: ref.read(authServiceProvider),
+                            );
+                        if (dialogContext.mounted) {
+                          Navigator.of(dialogContext).pop(true);
+                        }
+                      } on SyncApiException catch (e) {
+                        setDialogState(() => errorKey = switch (e.statusCode) {
+                              401 => 'account_error_invalid_credentials',
+                              409 => 'account_error_email_taken',
+                              _ => 'account_error_unknown',
+                            });
+                      } catch (_) {
+                        setDialogState(
+                            () => errorKey = 'account_error_network');
+                      }
+                    },
+                    child:
+                        Text(L10n.get(context, 'account_change_email_submit')),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+    emailController.dispose();
+    passwordController.dispose();
+    if (changed == true && context.mounted) {
+      await _refreshState();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(L10n.get(context, 'account_change_email_success'))));
+    }
+  }
+
+  Future<void> _showDevicesDialog(BuildContext context) async {
+    final networkErrorText = L10n.get(context, 'account_error_network');
+    var devices = <Map<String, dynamic>>[];
+    String? loadError;
+    try {
+      devices = await ref.read(syncApiClientProvider).listDevices();
+    } catch (_) {
+      loadError = networkErrorText;
+    }
+    if (!context.mounted) return;
+
+    await showGlassDialog<void>(
+      context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(L10n.get(context, 'devices_dialog_title'),
+                style: const TextStyle(
+                    color: AppTheme.textLight,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: AppSpacing.md),
+            if (loadError != null)
+              Text(loadError,
+                  style: const TextStyle(color: AppTheme.danger, fontSize: 12))
+            else if (devices.isEmpty)
+              Text(L10n.get(context, 'devices_empty'),
+                  style: const TextStyle(color: AppTheme.textDim, fontSize: 13))
+            else
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 320),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final device in devices)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: AppSpacing.xs),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  (device['label'] as String?) ??
+                                      device['id'] as String,
+                                  style: const TextStyle(
+                                      color: AppTheme.textLight, fontSize: 13),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () async {
+                                  try {
+                                    await ref
+                                        .read(syncApiClientProvider)
+                                        .deleteDevice(device['id'] as String);
+                                    setDialogState(
+                                        () => devices.remove(device));
+                                  } catch (_) {
+                                    // Best-effort — dialog just keeps showing the device.
+                                  }
+                                },
+                                child: Text(L10n.get(context, 'devices_remove'),
+                                    style: const TextStyle(
+                                        color: AppTheme.danger, fontSize: 12)),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            const SizedBox(height: AppSpacing.lg),
+            ElevatedButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(L10n.get(context, 'common_ok')),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _logoutAllDevices(BuildContext context) async {
@@ -824,7 +1069,8 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
     await ref.read(databaseProvider).wipeAllLocalData();
     await ref.read(syncServiceProvider).clearLastSyncedAt();
     if (!context.mounted) return;
-    messenger.showSnackBar(SnackBar(content: Text(L10n.get(context, 'account_logout_all_done'))));
+    messenger.showSnackBar(
+        SnackBar(content: Text(L10n.get(context, 'account_logout_all_done'))));
     _goToAuthGate(context);
   }
 
@@ -834,16 +1080,21 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
       builder: (dialogContext) => Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.warning_amber_rounded, color: AppTheme.danger, size: 34),
+          const Icon(Icons.warning_amber_rounded,
+              color: AppTheme.danger, size: 34),
           const SizedBox(height: AppSpacing.lg),
           Text(L10n.get(context, 'account_delete_confirm_title'),
               textAlign: TextAlign.center,
               style: const TextStyle(
-                  color: Colors.white, fontSize: 20, fontWeight: FontWeight.w300, letterSpacing: 2.0)),
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w300,
+                  letterSpacing: 2.0)),
           const SizedBox(height: AppSpacing.sm),
           Text(L10n.get(context, 'account_delete_confirm_body'),
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white54, fontSize: 13, height: 1.4)),
+              style: const TextStyle(
+                  color: Colors.white54, fontSize: 13, height: 1.4)),
           const SizedBox(height: AppSpacing.xl),
           Row(
             children: [
@@ -857,7 +1108,8 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.danger),
                   onPressed: () => Navigator.of(dialogContext).pop(true),
                   child: Text(L10n.get(context, 'account_delete_confirm_yes'),
                       style: const TextStyle(color: Colors.white)),
@@ -874,7 +1126,8 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
       await ref.read(syncApiClientProvider).deleteAccount();
     } catch (_) {
       if (context.mounted) {
-        messenger.showSnackBar(SnackBar(content: Text(L10n.get(context, 'account_error_network'))));
+        messenger.showSnackBar(SnackBar(
+            content: Text(L10n.get(context, 'account_error_network'))));
       }
       return;
     }
@@ -884,7 +1137,8 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
     await ref.read(databaseProvider).wipeAllLocalData();
     await ref.read(syncServiceProvider).clearLastSyncedAt();
     if (!context.mounted) return;
-    messenger.showSnackBar(SnackBar(content: Text(L10n.get(context, 'account_delete_done'))));
+    messenger.showSnackBar(
+        SnackBar(content: Text(L10n.get(context, 'account_delete_done'))));
     _goToAuthGate(context);
   }
 
@@ -907,17 +1161,20 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
       children: [
         if (_loggedInEmail != null)
           Padding(
-            padding: const EdgeInsets.only(left: AppSpacing.sm, bottom: AppSpacing.sm),
+            padding: const EdgeInsets.only(
+                left: AppSpacing.sm, bottom: AppSpacing.sm),
             child: Row(
               children: [
-                const Icon(Icons.account_circle_outlined, color: AppTheme.textDim, size: 16),
+                const Icon(Icons.account_circle_outlined,
+                    color: AppTheme.textDim, size: 16),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
                     _loggedInEmail!,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: AppTheme.textLight, fontSize: 13),
+                    style: const TextStyle(
+                        color: AppTheme.textLight, fontSize: 13),
                   ),
                 ),
               ],
@@ -927,20 +1184,28 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.sm),
             child: GlassCard(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md, vertical: AppSpacing.sm),
               child: Row(
                 children: [
-                  const Icon(Icons.mark_email_unread_outlined, color: AppTheme.lure, size: 16),
+                  const Icon(Icons.mark_email_unread_outlined,
+                      color: AppTheme.lure, size: 16),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Text(L10n.get(context, 'account_email_not_verified'),
-                        style: const TextStyle(color: AppTheme.textLight, fontSize: 12)),
+                        style: const TextStyle(
+                            color: AppTheme.textLight, fontSize: 12)),
                   ),
                   TextButton(
-                    onPressed: _resendingVerification ? null : () => _resendVerification(context),
-                    style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
-                    child: Text(L10n.get(context, 'account_resend_verification'),
-                        style: const TextStyle(color: AppTheme.lure, fontSize: 12)),
+                    onPressed: _resendingVerification
+                        ? null
+                        : () => _resendVerification(context),
+                    style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero, minimumSize: Size.zero),
+                    child: Text(
+                        L10n.get(context, 'account_resend_verification'),
+                        style: const TextStyle(
+                            color: AppTheme.lure, fontSize: 12)),
                   ),
                 ],
               ),
@@ -949,13 +1214,24 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
         _Group(children: [
           _Tile(
             icon: Icons.sync_rounded,
-            title: L10n.get(context, _loading ? 'account_syncing' : 'account_sync_now'),
+            title: L10n.get(
+                context, _loading ? 'account_syncing' : 'account_sync_now'),
             onTap: _loading ? null : _sync,
           ),
           _Tile(
             icon: Icons.password_rounded,
             title: L10n.get(context, 'account_change_password'),
             onTap: _loading ? null : () => _showChangePasswordDialog(context),
+          ),
+          _Tile(
+            icon: Icons.alternate_email_rounded,
+            title: L10n.get(context, 'account_change_email'),
+            onTap: _loading ? null : () => _showChangeEmailDialog(context),
+          ),
+          _Tile(
+            icon: Icons.devices_other_outlined,
+            title: L10n.get(context, 'account_manage_devices'),
+            onTap: _loading ? null : () => _showDevicesDialog(context),
           ),
           _Tile(
             icon: Icons.download_outlined,
@@ -978,7 +1254,8 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
           child: Text(
             lastSyncedLabel,
-            style: TextStyle(color: AppTheme.textDim.withAlpha(180), fontSize: 11),
+            style:
+                TextStyle(color: AppTheme.textDim.withAlpha(180), fontSize: 11),
           ),
         ),
         const SizedBox(height: AppSpacing.md),
@@ -987,7 +1264,8 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
             icon: Icons.person_remove_outlined,
             title: L10n.get(context, 'account_delete'),
             color: AppTheme.danger,
-            trailing: Icon(Icons.chevron_right_rounded, color: AppTheme.danger.withAlpha(160)),
+            trailing: Icon(Icons.chevron_right_rounded,
+                color: AppTheme.danger.withAlpha(160)),
             onTap: _loading ? null : () => _deleteAccount(context),
           ),
         ]),
@@ -1062,7 +1340,8 @@ class _ProfileHeader extends StatelessWidget {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.edit_outlined, color: AppTheme.primary, size: 20),
+            icon: const Icon(Icons.edit_outlined,
+                color: AppTheme.primary, size: 20),
             onPressed: onEdit,
           ),
         ],
@@ -1070,7 +1349,6 @@ class _ProfileHeader extends StatelessWidget {
     );
   }
 }
-
 
 class _Group extends StatelessWidget {
   const _Group({required this.children});
@@ -1160,7 +1438,8 @@ class _SwitchTile extends StatelessWidget {
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Text(title,
-                style: const TextStyle(color: AppTheme.textLight, fontSize: 14)),
+                style:
+                    const TextStyle(color: AppTheme.textLight, fontSize: 14)),
           ),
           Switch(value: value, onChanged: onChanged),
         ],
@@ -1178,8 +1457,8 @@ class _LangToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     Widget chip(String label, bool active) => AnimatedContainer(
           duration: AppMotion.fast,
-          padding:
-              const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 4),
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md, vertical: 4),
           decoration: BoxDecoration(
             color: active ? AppTheme.primary : Colors.transparent,
             borderRadius: BorderRadius.circular(AppRadius.pill),
@@ -1210,4 +1489,3 @@ class _LangToggle extends StatelessWidget {
     );
   }
 }
-

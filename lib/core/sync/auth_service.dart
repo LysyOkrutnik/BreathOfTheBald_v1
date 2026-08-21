@@ -66,12 +66,26 @@ class AuthService {
 
   /// Called by SyncApiClient after a successful `/auth/refresh` — replaces
   /// only the token, leaving the rest of the stored identity untouched.
-  Future<void> updateToken(String newToken) => _storage.write(key: _tokenKey, value: newToken);
+  Future<void> updateToken(String newToken) =>
+      _storage.write(key: _tokenKey, value: newToken);
 
-  Future<void> markEmailVerified() => _storage.write(key: _emailVerifiedKey, value: 'true');
+  Future<void> markEmailVerified() =>
+      _storage.write(key: _emailVerifiedKey, value: 'true');
 
-  Future<AuthResult> register({required String email, required String password}) =>
-      _authRequest('/auth/register', email: email, password: password);
+  /// Called after a successful `POST /auth/change-email` — the new address
+  /// starts unverified, exactly like a fresh registration.
+  Future<void> updateEmailAfterChange(String newEmail) async {
+    await _storage.write(key: _emailKey, value: newEmail);
+    await _storage.write(key: _emailVerifiedKey, value: 'false');
+  }
+
+  Future<AuthResult> register({
+    required String email,
+    required String password,
+    required bool acceptedTerms,
+  }) =>
+      _authRequest('/auth/register',
+          email: email, password: password, acceptedTerms: acceptedTerms);
 
   Future<AuthResult> login({required String email, required String password}) =>
       _authRequest('/auth/login', email: email, password: password);
@@ -113,7 +127,8 @@ class AuthService {
     }
   }
 
-  Future<AuthResult> resetPassword({required String token, required String newPassword}) async {
+  Future<AuthResult> resetPassword(
+      {required String token, required String newPassword}) async {
     try {
       final response = await http
           .post(
@@ -148,6 +163,7 @@ class AuthService {
     String path, {
     required String email,
     required String password,
+    bool? acceptedTerms,
   }) async {
     http.Response response;
     try {
@@ -155,7 +171,11 @@ class AuthService {
           .post(
             Uri.parse('$syncApiBaseUrl$path'),
             headers: const {'Content-Type': 'application/json'},
-            body: jsonEncode({'email': email, 'password': password}),
+            body: jsonEncode({
+              'email': email,
+              'password': password,
+              if (acceptedTerms != null) 'acceptedTerms': acceptedTerms,
+            }),
           )
           .timeout(syncRequestTimeout);
     } catch (_) {
@@ -168,11 +188,14 @@ class AuthService {
       await _storage.write(key: _userIdKey, value: data['userId'] as String);
       await _storage.write(key: _emailKey, value: email);
       await _storage.write(
-          key: _emailVerifiedKey, value: (data['emailVerified'] == true).toString());
+          key: _emailVerifiedKey,
+          value: (data['emailVerified'] == true).toString());
       return AuthResult.success();
     }
 
-    if (response.statusCode == 429) return AuthResult.failure(AuthErrorCode.tooManyAttempts);
+    if (response.statusCode == 429) {
+      return AuthResult.failure(AuthErrorCode.tooManyAttempts);
+    }
     return AuthResult.failure(_mapErrorCode(_tryDecodeError(response.body)));
   }
 

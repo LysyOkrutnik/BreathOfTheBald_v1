@@ -4,6 +4,7 @@ import 'package:okrutnik_breath/config/responsive.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
+import 'package:okrutnik_breath/ui/widgets/legal_section.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
 
 /// In-app privacy policy. An account is required to use the app, and
@@ -21,8 +22,9 @@ class PrivacyScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final isPl = Localizations.localeOf(context).languageCode == 'pl';
     final sections = isPl ? _pl : _en;
-    final updated = isPl ? 'Ostatnia aktualizacja: sierpień 2026'
-                         : 'Last updated: August 2026';
+    final updated = isPl
+        ? 'Ostatnia aktualizacja: sierpień 2026'
+        : 'Last updated: August 2026';
 
     return Scaffold(
       body: Stack(
@@ -31,7 +33,8 @@ class PrivacyScreen extends StatelessWidget {
           SafeArea(
             child: Center(
               child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: context.isTablet ? 720 : 560),
+                constraints:
+                    BoxConstraints(maxWidth: context.isTablet ? 720 : 560),
                 child: Column(
                   children: [
                     ScreenHeader(title: L10n.get(context, 'settings_privacy')),
@@ -49,7 +52,7 @@ class PrivacyScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: AppSpacing.lg),
                           for (final s in sections) ...[
-                            _Section(heading: s.$1, body: s.$2),
+                            LegalSection(heading: s.$1, body: s.$2),
                             const SizedBox(height: AppSpacing.md),
                           ],
                           const SizedBox(height: AppSpacing.sm),
@@ -64,7 +67,8 @@ class PrivacyScreen extends StatelessWidget {
                                   child: SelectableText(
                                     _contact,
                                     style: const TextStyle(
-                                        color: AppTheme.textLight, fontSize: 13),
+                                        color: AppTheme.textLight,
+                                        fontSize: 13),
                                   ),
                                 ),
                               ],
@@ -216,34 +220,4 @@ class PrivacyScreen extends StatelessWidget {
           'app. Questions can be sent to the address below.'
     ),
   ];
-}
-
-class _Section extends StatelessWidget {
-  const _Section({required this.heading, required this.body});
-  final String heading;
-  final String body;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          heading.toUpperCase(),
-          style: const TextStyle(
-            color: AppTheme.primary,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 1.0,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          body,
-          style: const TextStyle(
-              color: AppTheme.textDim, fontSize: 14, height: 1.55),
-        ),
-      ],
-    );
-  }
 }
