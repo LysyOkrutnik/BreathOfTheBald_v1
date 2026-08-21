@@ -45,6 +45,15 @@ class SyncService {
     return iso == null ? null : DateTime.tryParse(iso);
   }
 
+  /// Called alongside wiping local data on logout/account deletion — without
+  /// this, the next login's first pull would start from the old cursor
+  /// (whatever this device last synced *as the previous account*) instead
+  /// of pulling the new account's full history from scratch.
+  Future<void> clearLastSyncedAt() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_lastSyncKey);
+  }
+
   Future<SyncResult> syncNow() async {
     try {
       // Inside the same try as everything else below — `isLoggedIn` reads

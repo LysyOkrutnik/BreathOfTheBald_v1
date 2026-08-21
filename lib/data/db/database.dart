@@ -315,6 +315,29 @@ class AppDatabase extends _$AppDatabase {
         },
       );
 
+  /// Clears every locally-stored row — called on logout, logout-everywhere,
+  /// and account deletion. Without this, a session/preset's `syncId` is
+  /// permanent (assigned once at creation, never reused), so leftover local
+  /// rows from an account that just logged out — or was just deleted
+  /// server-side — get silently re-pushed and attributed to whichever
+  /// account logs in next on this device. Deliberately wipes everything,
+  /// not just the synced tables: a stale WimHofProgress/UserProfile left
+  /// behind would otherwise show the previous account's level/streak to
+  /// the next one for that brief window before the first sync pull lands.
+  Future<void> wipeAllLocalData() {
+    return transaction(() async {
+      await delete(sessions).go();
+      await delete(userProfile).go();
+      await delete(healthMetrics).go();
+      await delete(plannedSessions).go();
+      await delete(customPresets).go();
+      await delete(freedivingProfile).go();
+      await delete(freedivingSessionLog).go();
+      await delete(wimHofProgress).go();
+      await delete(customFreedivingPresets).go();
+    });
+  }
+
   /// One-time backfill for rows written before syncId existed — every row
   /// needs a stable identity before the first sync push, or it would look
   /// new (and get duplicated) on the server every time.

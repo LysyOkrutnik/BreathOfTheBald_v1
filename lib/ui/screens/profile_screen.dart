@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
+import 'package:okrutnik_breath/core/sync/sync_api_client.dart';
 import 'package:okrutnik_breath/logic/providers/challenges_providers.dart';
 import 'package:okrutnik_breath/ui/screens/history_screen.dart';
 import 'package:okrutnik_breath/ui/screens/instruction_screen.dart';
@@ -245,6 +246,16 @@ class _ChallengeCardState extends ConsumerState<_ChallengeCard> {
       } else {
         await actions.join(widget.challenge.id);
       }
+    } catch (e) {
+      // Previously silent — the button just snapped back with no
+      // indication anything went wrong, including on a revoked/expired
+      // token (401), which needs a re-login, not a retry of the same tap.
+      if (!mounted) return;
+      final isAuthError = e is SyncApiException && e.isAuthError;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(L10n.get(
+            context, isAuthError ? 'account_sync_auth_expired' : 'challenges_error')),
+      ));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

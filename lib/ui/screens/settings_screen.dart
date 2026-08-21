@@ -453,6 +453,7 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
   DateTime? _lastSyncedAt;
   String? _loggedInEmail;
   bool _emailVerified = true;
+  bool _resendingVerification = false;
 
   @override
   void initState() {
@@ -614,18 +615,33 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
       // Not fatal — logging out locally still happens either way.
     }
     await ref.read(authServiceProvider).logout();
+    // Every local row's syncId is permanent — left behind after logout, it
+    // would get silently re-pushed and attributed to whichever account
+    // logs in next on this device. See AppDatabase.wipeAllLocalData.
+    await ref.read(databaseProvider).wipeAllLocalData();
+    await ref.read(syncServiceProvider).clearLastSyncedAt();
     await _refreshState();
   }
 
   Future<void> _resendVerification(BuildContext context) async {
+    // The button had no debounce at all — the one account-action tile not
+    // gated by `_loading`, so rapid taps could fire unlimited verification
+    // emails before the server's own rate limit (just added) catches up.
+    if (_resendingVerification) return;
+    setState(() => _resendingVerification = true);
     final messenger = ScaffoldMessenger.of(context);
     String resultKey;
     try {
       await ref.read(syncApiClientProvider).resendVerificationEmail();
       resultKey = 'account_verification_sent';
+    } on SyncApiException catch (e) {
+      resultKey = e.statusCode == 429
+          ? 'account_error_too_many_attempts'
+          : 'account_error_network';
     } catch (_) {
       resultKey = 'account_error_network';
     }
+    if (mounted) setState(() => _resendingVerification = false);
     if (!context.mounted) return;
     messenger.showSnackBar(SnackBar(content: Text(L10n.get(context, resultKey))));
   }
@@ -808,6 +824,9 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
       // just won't have taken effect remotely.
     }
     await ref.read(authServiceProvider).logout();
+    // See _logout() — same stale-syncId leak risk applies here.
+    await ref.read(databaseProvider).wipeAllLocalData();
+    await ref.read(syncServiceProvider).clearLastSyncedAt();
     await _refreshState();
     if (!context.mounted) return;
     messenger.showSnackBar(SnackBar(content: Text(L10n.get(context, 'account_logout_all_done'))));
@@ -864,6 +883,10 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
       return;
     }
     await ref.read(authServiceProvider).logout();
+    // The account is gone server-side — definitely don't want this device
+    // silently re-uploading its history to whatever account logs in next.
+    await ref.read(databaseProvider).wipeAllLocalData();
+    await ref.read(syncServiceProvider).clearLastSyncedAt();
     await _refreshState();
     if (!context.mounted) return;
     messenger.showSnackBar(SnackBar(content: Text(L10n.get(context, 'account_delete_done'))));
@@ -1011,7 +1034,7 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
                         style: const TextStyle(color: AppTheme.textLight, fontSize: 12)),
                   ),
                   TextButton(
-                    onPressed: () => _resendVerification(context),
+                    onPressed: _resendingVerification ? null : () => _resendVerification(context),
                     style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero),
                     child: Text(L10n.get(context, 'account_resend_verification'),
                         style: const TextStyle(color: AppTheme.lure, fontSize: 12)),

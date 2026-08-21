@@ -33,6 +33,14 @@ function randomToken(): string {
   return crypto.randomBytes(32).toString('hex');
 }
 
+/// Every real token is exactly this shape (`randomToken()`'s own output —
+/// 32 random bytes as hex). Rejecting anything else *before* it ever
+/// reaches a DB lookup or an HTML response means a query-string value that
+/// isn't a real token can never contain characters that matter to HTML/JS,
+/// which is what actually closes off the XSS class of bug below — treating
+/// this as a defense mechanism, not just a shape check.
+const TOKEN_PATTERN = /^[0-9a-f]{64}$/;
+
 router.post('/register', authRateLimiter, async (req, res) => {
   const parsed = credentialsSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -119,7 +127,7 @@ background:#81C784;color:#000;font-weight:700;font-size:14px;cursor:pointer}
 /// handling required.
 router.get('/verify-email', async (req, res) => {
   const token = typeof req.query.token === 'string' ? req.query.token : '';
-  const user = token
+  const user = TOKEN_PATTERN.test(token)
     ? await prisma.user.findUnique({ where: { emailVerificationToken: token } })
     : null;
   if (!user || !user.emailVerificationExpiresAt || user.emailVerificationExpiresAt < new Date()) {
@@ -158,7 +166,7 @@ router.post('/verify-email', async (req, res) => {
   res.status(204).end();
 });
 
-router.post('/resend-verification', requireAuth, async (req: AuthedRequest, res) => {
+router.post('/resend-verification', authRateLimiter, requireAuth, async (req: AuthedRequest, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.userId! } });
   if (!user) {
     res.status(404).json({ error: 'not_found' });
@@ -215,7 +223,13 @@ router.post('/forgot-password', authRateLimiter, async (req, res) => {
 /// form-encoding middleware to add.
 router.get('/reset-password', (req, res) => {
   const token = typeof req.query.token === 'string' ? req.query.token : '';
-  if (!token) {
+  // Validated *before* it's ever interpolated into the page below — see
+  // TOKEN_PATTERN's comment. A token that fails this can never carry `<`,
+  // `>`, quotes, or `/`, closing off the injection this used to allow via
+  // a crafted ?token= value (JSON.stringify alone doesn't escape `/`, so a
+  // token containing `</script>` could break out of the inline <script>
+  // block and inject arbitrary markup).
+  if (!TOKEN_PATTERN.test(token)) {
     res.status(400).type('html').send(htmlPage('Link nieprawidłowy',
       '<h1>Link jest nieprawidłowy</h1><p>Wróć do aplikacji i wyślij prośbę o reset ponownie.</p>'));
     return;
