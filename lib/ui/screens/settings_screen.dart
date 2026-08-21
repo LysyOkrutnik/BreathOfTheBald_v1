@@ -471,7 +471,24 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
     final authService = ref.read(authServiceProvider);
     final loggedIn = await authService.isLoggedIn;
     final loggedInEmail = await authService.email;
-    final emailVerified = await authService.emailVerified;
+    var emailVerified = await authService.emailVerified;
+    // The cached flag is only ever set at login/register time — verifying
+    // via the emailed browser link (server-side, out-of-band) never told
+    // this device, so it showed "unverified" forever after a real,
+    // successful verification. Re-check with the server whenever we'd
+    // otherwise show the nag banner; best-effort, since Settings must still
+    // open fine offline.
+    if (loggedIn && !emailVerified) {
+      try {
+        final me = await ref.read(syncApiClientProvider).getMe();
+        if (me['emailVerified'] == true) {
+          await authService.markEmailVerified();
+          emailVerified = true;
+        }
+      } catch (_) {
+        // Offline or a transient error — keep showing the cached value.
+      }
+    }
     final lastSync = await ref.read(syncServiceProvider).lastSyncedAt;
     if (!mounted) return;
     setState(() {

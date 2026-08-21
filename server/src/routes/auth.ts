@@ -308,6 +308,24 @@ router.post('/change-password', requireAuth, async (req: AuthedRequest, res) => 
   res.json({ token: signToken(updated.id, updated.tokenVersion) });
 });
 
+/// Lets the client re-check account state that can change out-of-band from
+/// this device — chiefly `emailVerified`, which the GET /verify-email link
+/// above flips server-side with no way to notify a signed-in client on its
+/// own. The client's cached copy (read at login/register time) would
+/// otherwise show "unverified" forever after a real, successful
+/// verification, until the next full re-login.
+router.get('/me', requireAuth, async (req: AuthedRequest, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.userId! },
+    select: { email: true, emailVerified: true },
+  });
+  if (!user) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+  res.json({ email: user.email, emailVerified: user.emailVerified });
+});
+
 /// Sliding session: exchanges a still-valid token for a fresh one with a
 /// new 90-day expiry, so an active user is never surprised by a hard
 /// logout — only someone who stops opening the app for 90+ days is.

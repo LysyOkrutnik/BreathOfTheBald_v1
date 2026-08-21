@@ -104,6 +104,16 @@ class SyncApiClient {
     return (jsonDecode(response.body) as Map<String, dynamic>)['token'] as String?;
   }
 
+  /// Re-checks account state that can change server-side with no way to
+  /// notify this device on its own — chiefly email verification via the
+  /// browser link. `{email, emailVerified}`.
+  Future<Map<String, dynamic>> getMe() async {
+    final response = await http
+        .get(Uri.parse('$syncApiBaseUrl/auth/me'), headers: await _headers())
+        .timeout(syncRequestTimeout);
+    return _decodeObject(response);
+  }
+
   Future<void> resendVerificationEmail() async {
     final response = await http
         .post(Uri.parse('$syncApiBaseUrl/auth/resend-verification'), headers: await _headers())
