@@ -39,11 +39,18 @@ class GuidedStep {
     this.isInhale,
     this.recordAsRetention = false,
     this.cycleStepIndex,
+    this.skipOnFinalRound = false,
   });
 
   final String labelKey;
   final int durationSec;
   final GuidedStepPhase phase;
+
+  /// Skips this step only on the exercise's last round — for a rest that
+  /// belongs *between* rounds (resisted_breathing's inter-set rest) rather
+  /// than after every single one, including the last, which is what a
+  /// plain per-round repeat would otherwise produce.
+  final bool skipOnFinalRound;
 
   /// Only meaningful for [GuidedStepPhase.breath] steps — drives the orb's
   /// pulse direction. Null for a plain repetition cue with no clear
@@ -87,6 +94,16 @@ class CycleStep {
   /// Shown instead of a duration for a node that collapses several repeated
   /// engine steps into one (e.g. "×12" for packing's gulps).
   final String? countLabel;
+}
+
+/// The gulp ("top-up") count to build a packing session with, given how many
+/// packing sessions the user has already completed — GPB/PFI-style
+/// instruction starts at 2-4 gulps and builds up gradually, rather than
+/// throwing 12 at a first-timer the way the old fixed count did.
+int packingGulpCountFor(int completedSessions) {
+  if (completedSessions < 3) return 4;
+  if (completedSessions < 7) return 8;
+  return 12;
 }
 
 extension ExerciseTypeX on ExerciseType {
@@ -239,6 +256,55 @@ class LevelData {
     );
   }
 
+  /// Builds packing with a specific gulp ("top-up") count, instead of the
+  /// static `levels['freediving_packing']` entry's fixed 12 — GPB/PFI-style
+  /// packing instruction starts at 2-4 gulps and builds up over weeks, not
+  /// 12 from someone's very first session. The caller (freediving_home_
+  /// screen.dart) picks [gulpCount] from the user's own packing session
+  /// history; `levels['freediving_packing']` stays as a static fallback for
+  /// contexts that only need the level's metadata (filtering, stats
+  /// grouping), not an actual session to run.
+  factory LevelData.packing({required int gulpCount}) {
+    final gulp = List.generate(
+      gulpCount,
+      (_) => const GuidedStep(
+          labelKey: "guided_packing_gulp",
+          durationSec: 1,
+          phase: GuidedStepPhase.breath,
+          isInhale: true,
+          cycleStepIndex: 1),
+    );
+    return LevelData(
+      key: 'freediving_packing',
+      title: "exercise_packing_title",
+      subtitle: "exercise_packing_subtitle",
+      type: ExerciseType.guidedRoutine,
+      totalRounds: 1,
+      color: const Color(0xFFEF5350),
+      instructionTitleKey: "exercise_packing_title",
+      instructionDescriptionKey: "exercise_packing_subtitle",
+      instructionStepKeys: const [
+        "guide_packing_step1",
+        "guide_packing_step2",
+        "guide_packing_step3",
+        "guide_packing_step4",
+        "guide_packing_step5",
+      ],
+      cycleSteps: [
+        const CycleStep(labelKey: "guided_packing_full_inhale", durationSec: 3),
+        CycleStep(labelKey: "guided_packing_gulp", countLabel: "×$gulpCount"),
+        const CycleStep(labelKey: "guided_packing_hold", durationSec: 10),
+        const CycleStep(labelKey: "guided_packing_exhale", durationSec: 4),
+      ],
+      guidedSteps: [
+        const GuidedStep(labelKey: "guided_packing_full_inhale", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: true, cycleStepIndex: 0),
+        ...gulp,
+        const GuidedStep(labelKey: "guided_packing_hold", durationSec: 10, phase: GuidedStepPhase.hold, recordAsRetention: true, cycleStepIndex: 2),
+        const GuidedStep(labelKey: "guided_packing_exhale", durationSec: 4, phase: GuidedStepPhase.breath, isInhale: false, cycleStepIndex: 3),
+      ],
+    );
+  }
+
   /// Builds a runtime [LevelData] for a CO2 or O2 breath-hold table, generated
   /// from the user's current working PB. [pbSeconds] should be the caller's
   /// virtual PB for that table type (see FreedivingProfile).
@@ -338,7 +404,14 @@ class LevelData {
       type: ExerciseType.wimHof,
       totalRounds: 4,
       totalBreaths: 50,
-      breathPace: Duration(milliseconds: 2000),
+      // 2000ms gave beast the exact same per-round breathing-phase duration
+      // as strong (40*2500ms == 50*2000ms == 100s) — the entire difficulty
+      // step between them was just +1 round, with no distinct pace signature
+      // of its own. 2100ms keeps beast's pace strictly between strong's
+      // 2500ms and guru's 1800ms (as before) while also putting its
+      // per-round time (105s) strictly between strong's 100s and guru's
+      // 108s, so both dimensions of the ladder now increase monotonically.
+      breathPace: Duration(milliseconds: 2100),
       cycleSteps: [
         CycleStep(labelKey: "session_breathing_phase", countLabel: "×50"),
         CycleStep(labelKey: "session_hold"),
@@ -416,7 +489,12 @@ class LevelData {
       title: "level_relax",
       subtitle: "desc_sleep",
       type: ExerciseType.relax478,
-      loopCount: 32, // Approximate a 10-minute session.
+      // Dr. Weil's own protocol caps a session at 8 cycles (starting most
+      // people at 4) — 4-7-8's long breath-hold phase makes it a genuine
+      // hyperventilation/hypoventilation technique, not something to just
+      // repeat as many times as fits a "10-minute session" (the previous
+      // loopCount of 32 was 4x that ceiling).
+      loopCount: 8,
       cycleSteps: [
         CycleStep(labelKey: "session_inhale", durationSec: 4),
         CycleStep(labelKey: "session_hold", durationSec: 7),
@@ -439,7 +517,27 @@ class LevelData {
       title: "level_bhastrika",
       subtitle: "desc_fire",
       type: ExerciseType.fireBreathing,
-      totalDuration: Duration(minutes: 3),
+      // Used to be one uninterrupted 3-minute block of rapid breathing —
+      // no rounds, no hold, no rest, unlike the classic Kapalabhati/
+      // Bhastrika pattern (a short series of fast breaths, then a full
+      // inhale, a hold, an exhale, a rest, repeated). That meant a much
+      // longer uninterrupted hyperventilation exposure than the technique's
+      // own reference pattern, and no natural point to reassess before
+      // continuing. totalBreaths/breathPace here mean the same thing they
+      // do for Wim Hof: breaths per round and per-breath cadence.
+      totalRounds: 3,
+      totalBreaths: 30,
+      breathPace: Duration(milliseconds: 1400),
+      // 3 * (30*1.4s fast breathing + 3s inhale + 12s hold + 2s exhale) +
+      // 2 * 15s rest between rounds = 207s.
+      totalDuration: Duration(seconds: 207),
+      cycleSteps: [
+        CycleStep(labelKey: "session_breathing_phase", countLabel: "×30"),
+        CycleStep(labelKey: "session_inhale", durationSec: 3),
+        CycleStep(labelKey: "session_hold", durationSec: 12),
+        CycleStep(labelKey: "session_exhale", durationSec: 2),
+        CycleStep(labelKey: "session_recovery", durationSec: 15),
+      ],
       color: AppTheme.danger,
       instructionTitleKey: "intro_title_fire",
       instructionDescriptionKey: "intro_desc_fire",
@@ -519,15 +617,15 @@ class LevelData {
       ],
       guidedSteps: [
         GuidedStep(labelKey: "guided_stretch_right", durationSec: 25, phase: GuidedStepPhase.hold, cycleStepIndex: 0),
-        GuidedStep(labelKey: "guided_stretch_return", durationSec: 3, phase: GuidedStepPhase.hold, cycleStepIndex: 1),
+        GuidedStep(labelKey: "guided_stretch_return", durationSec: 4, phase: GuidedStepPhase.hold, cycleStepIndex: 1),
         GuidedStep(labelKey: "guided_stretch_left", durationSec: 25, phase: GuidedStepPhase.hold, cycleStepIndex: 2),
-        GuidedStep(labelKey: "guided_stretch_return", durationSec: 3, phase: GuidedStepPhase.hold, cycleStepIndex: 3),
+        GuidedStep(labelKey: "guided_stretch_return", durationSec: 4, phase: GuidedStepPhase.hold, cycleStepIndex: 3),
       ],
       cycleSteps: [
         CycleStep(labelKey: "guided_stretch_right", durationSec: 25),
-        CycleStep(labelKey: "guided_stretch_return", durationSec: 3),
+        CycleStep(labelKey: "guided_stretch_return", durationSec: 4),
         CycleStep(labelKey: "guided_stretch_left", durationSec: 25),
-        CycleStep(labelKey: "guided_stretch_return", durationSec: 3),
+        CycleStep(labelKey: "guided_stretch_return", durationSec: 4),
       ],
     ),
     'uddiyana_bandha': LevelData(
@@ -551,13 +649,13 @@ class LevelData {
         GuidedStep(labelKey: "guided_uddiyana_inhale", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: true, cycleStepIndex: 0),
         GuidedStep(labelKey: "guided_uddiyana_exhale", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: false, cycleStepIndex: 1),
         GuidedStep(labelKey: "guided_uddiyana_hold", durationSec: 7, phase: GuidedStepPhase.hold, recordAsRetention: true, cycleStepIndex: 2),
-        GuidedStep(labelKey: "guided_uddiyana_rest", durationSec: 5, phase: GuidedStepPhase.hold, cycleStepIndex: 3),
+        GuidedStep(labelKey: "guided_uddiyana_rest", durationSec: 8, phase: GuidedStepPhase.hold, cycleStepIndex: 3),
       ],
       cycleSteps: [
         CycleStep(labelKey: "guided_uddiyana_inhale", durationSec: 3),
         CycleStep(labelKey: "guided_uddiyana_exhale", durationSec: 3),
         CycleStep(labelKey: "guided_uddiyana_hold", durationSec: 7),
-        CycleStep(labelKey: "guided_uddiyana_rest", durationSec: 5),
+        CycleStep(labelKey: "guided_uddiyana_rest", durationSec: 8),
       ],
     ),
     'resisted_breathing': LevelData(
@@ -565,12 +663,15 @@ class LevelData {
       title: "exercise_resisted_breathing_title",
       subtitle: "exercise_resisted_breathing_subtitle",
       type: ExerciseType.guidedRoutine,
-      // A flat, single "round" spelling out all 3 sets explicitly — the
-      // generic engine repeats a round's whole guidedSteps list, which would
-      // put a 50s rest after the *last* set too if this were 3 rounds of
-      // [15 reps, rest]. Encoding the rest only *between* sets here avoids
-      // needing engine-level "skip on the final round" special-casing.
-      totalRounds: 1,
+      // 45 breaths (3 sets of 15) exceeded the clinical IMST protocol this
+      // technique is modeled on (Craighead 2021 and similar: 30 breaths/day)
+      // — reduced to 2 real rounds of 15 (30 total), now using
+      // `skipOnFinalRound` so the trailing rest only shows *between* the
+      // two rounds, not after the last one. This also fixes a real UX
+      // regression the old flattened-single-round encoding caused: with
+      // `totalRounds` always 1, the "Runda x/y" indicator was permanently
+      // hidden for this exercise even though it's fundamentally set-based.
+      totalRounds: 2,
       color: Color(0xFF42A5F5),
       instructionTitleKey: "exercise_resisted_breathing_title",
       instructionDescriptionKey: "exercise_resisted_breathing_subtitle",
@@ -580,9 +681,8 @@ class LevelData {
         "guide_resisted_breathing_step3",
         "guide_resisted_breathing_step4",
       ],
-      // The cycle diagram shows just the repeating inhale/exhale pair — not
-      // the fully flattened 45-step engine list below (15 reps x 3 sets),
-      // which would be nonsensical as a "cycle" to display.
+      // The cycle diagram shows just the repeating inhale/exhale pair, not
+      // the inter-set rest (which has no cycleStepIndex of its own).
       cycleSteps: [
         CycleStep(labelKey: "guided_resisted_inhale", durationSec: 2),
         CycleStep(labelKey: "guided_resisted_exhale", durationSec: 2),
@@ -593,18 +693,7 @@ class LevelData {
         ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
         ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
         ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
-        GuidedStep(labelKey: "guided_resisted_rest", durationSec: 50, phase: GuidedStepPhase.hold),
-        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
-        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
-        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
-        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
-        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
-        GuidedStep(labelKey: "guided_resisted_rest", durationSec: 50, phase: GuidedStepPhase.hold),
-        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
-        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
-        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
-        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
-        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
+        GuidedStep(labelKey: "guided_resisted_rest", durationSec: 50, phase: GuidedStepPhase.hold, skipOnFinalRound: true),
       ],
     ),
     'three_part_breath': LevelData(
@@ -612,7 +701,14 @@ class LevelData {
       title: "exercise_three_part_breath_title",
       subtitle: "exercise_three_part_breath_subtitle",
       type: ExerciseType.guidedRoutine,
-      totalRounds: 9,
+      // 2s/phase (16s/round * 9) was too fast to actually notice the
+      // transition between the three breathing zones — the whole point of
+      // this technique — despite the instructions promising exactly that.
+      // 3s/phase gives each zone room to register; totalRounds trimmed from
+      // 9 to 7 to keep the overall session length about the same (24s/round
+      // * 7 = 168s vs the old 144s — close enough, not worth chasing exact
+      // parity at the cost of a worse per-phase pace).
+      totalRounds: 7,
       color: Color(0xFF66BB6A),
       instructionTitleKey: "exercise_three_part_breath_title",
       instructionDescriptionKey: "exercise_three_part_breath_subtitle",
@@ -623,24 +719,62 @@ class LevelData {
         "guide_three_part_breath_step4",
       ],
       guidedSteps: [
-        GuidedStep(labelKey: "guided_threepart_belly_in", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: true, cycleStepIndex: 0),
-        GuidedStep(labelKey: "guided_threepart_ribs_in", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: true, cycleStepIndex: 1),
-        GuidedStep(labelKey: "guided_threepart_chest_in", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: true, cycleStepIndex: 2),
-        GuidedStep(labelKey: "guided_threepart_hold_full", durationSec: 2, phase: GuidedStepPhase.hold, cycleStepIndex: 3),
-        GuidedStep(labelKey: "guided_threepart_chest_out", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: false, cycleStepIndex: 4),
-        GuidedStep(labelKey: "guided_threepart_ribs_out", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: false, cycleStepIndex: 5),
-        GuidedStep(labelKey: "guided_threepart_belly_out", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: false, cycleStepIndex: 6),
-        GuidedStep(labelKey: "guided_threepart_hold_empty", durationSec: 2, phase: GuidedStepPhase.hold, cycleStepIndex: 7),
+        GuidedStep(labelKey: "guided_threepart_belly_in", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: true, cycleStepIndex: 0),
+        GuidedStep(labelKey: "guided_threepart_ribs_in", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: true, cycleStepIndex: 1),
+        GuidedStep(labelKey: "guided_threepart_chest_in", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: true, cycleStepIndex: 2),
+        GuidedStep(labelKey: "guided_threepart_hold_full", durationSec: 3, phase: GuidedStepPhase.hold, cycleStepIndex: 3),
+        GuidedStep(labelKey: "guided_threepart_chest_out", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: false, cycleStepIndex: 4),
+        GuidedStep(labelKey: "guided_threepart_ribs_out", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: false, cycleStepIndex: 5),
+        GuidedStep(labelKey: "guided_threepart_belly_out", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: false, cycleStepIndex: 6),
+        GuidedStep(labelKey: "guided_threepart_hold_empty", durationSec: 3, phase: GuidedStepPhase.hold, cycleStepIndex: 7),
       ],
       cycleSteps: [
-        CycleStep(labelKey: "guided_threepart_belly_in", durationSec: 2),
-        CycleStep(labelKey: "guided_threepart_ribs_in", durationSec: 2),
-        CycleStep(labelKey: "guided_threepart_chest_in", durationSec: 2),
-        CycleStep(labelKey: "guided_threepart_hold_full", durationSec: 2),
-        CycleStep(labelKey: "guided_threepart_chest_out", durationSec: 2),
-        CycleStep(labelKey: "guided_threepart_ribs_out", durationSec: 2),
-        CycleStep(labelKey: "guided_threepart_belly_out", durationSec: 2),
-        CycleStep(labelKey: "guided_threepart_hold_empty", durationSec: 2),
+        CycleStep(labelKey: "guided_threepart_belly_in", durationSec: 3),
+        CycleStep(labelKey: "guided_threepart_ribs_in", durationSec: 3),
+        CycleStep(labelKey: "guided_threepart_chest_in", durationSec: 3),
+        CycleStep(labelKey: "guided_threepart_hold_full", durationSec: 3),
+        CycleStep(labelKey: "guided_threepart_chest_out", durationSec: 3),
+        CycleStep(labelKey: "guided_threepart_ribs_out", durationSec: 3),
+        CycleStep(labelKey: "guided_threepart_belly_out", durationSec: 3),
+        CycleStep(labelKey: "guided_threepart_hold_empty", durationSec: 3),
+      ],
+    ),
+    // A holds-free variant of the same technique — the traditional Dirga
+    // Pranayama is a purely relaxational, flowing three-zone breath with no
+    // kumbhaka at all; three_part_breath above adds brief holds as a
+    // deliberate variant, but that's a step up from the classic form, not
+    // the form itself. This gives back the original, gentler version
+    // instead of only offering the version with holds.
+    'three_part_breath_gentle': LevelData(
+      key: 'three_part_breath_gentle',
+      title: "exercise_three_part_breath_gentle_title",
+      subtitle: "exercise_three_part_breath_gentle_subtitle",
+      type: ExerciseType.guidedRoutine,
+      totalRounds: 7,
+      color: Color(0xFF9CCC65),
+      instructionTitleKey: "exercise_three_part_breath_gentle_title",
+      instructionDescriptionKey: "exercise_three_part_breath_gentle_subtitle",
+      instructionStepKeys: [
+        "guide_three_part_breath_step1",
+        "guide_three_part_breath_step2",
+        "guide_three_part_breath_gentle_step3",
+        "guide_three_part_breath_step4",
+      ],
+      guidedSteps: [
+        GuidedStep(labelKey: "guided_threepart_belly_in", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: true, cycleStepIndex: 0),
+        GuidedStep(labelKey: "guided_threepart_ribs_in", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: true, cycleStepIndex: 1),
+        GuidedStep(labelKey: "guided_threepart_chest_in", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: true, cycleStepIndex: 2),
+        GuidedStep(labelKey: "guided_threepart_chest_out", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: false, cycleStepIndex: 3),
+        GuidedStep(labelKey: "guided_threepart_ribs_out", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: false, cycleStepIndex: 4),
+        GuidedStep(labelKey: "guided_threepart_belly_out", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: false, cycleStepIndex: 5),
+      ],
+      cycleSteps: [
+        CycleStep(labelKey: "guided_threepart_belly_in", durationSec: 3),
+        CycleStep(labelKey: "guided_threepart_ribs_in", durationSec: 3),
+        CycleStep(labelKey: "guided_threepart_chest_in", durationSec: 3),
+        CycleStep(labelKey: "guided_threepart_chest_out", durationSec: 3),
+        CycleStep(labelKey: "guided_threepart_ribs_out", durationSec: 3),
+        CycleStep(labelKey: "guided_threepart_belly_out", durationSec: 3),
       ],
     ),
     // Freediving-specific — surfaced from the Freediving section (already

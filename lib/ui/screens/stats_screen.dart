@@ -136,8 +136,72 @@ class StatsContent extends ConsumerWidget {
           title: L10n.get(context, 'stats_by_technique'),
           child: _TechniqueBreakdown(sessions: sessions),
         ),
+        const SizedBox(height: AppSpacing.lg),
+        _ChartCard(
+          title: L10n.get(context, 'stats_mastery'),
+          child: _DisciplineMastery(sessions: sessions),
+        ),
       ],
     ).animate().fadeIn(duration: AppMotion.medium);
+  }
+}
+
+/// One level/XP/streak profile covers every discipline at once — someone
+/// who's done 100 Wim Hof sessions and someone who's done 100 box-breathing
+/// sessions look identical here otherwise. A per-family session count is a
+/// light, no-new-schema way to show where practice has actually gone,
+/// reusing the same `disciplineFamilyFor` grouping the weekly XP diversity
+/// bonus (session_notifier.dart) already relies on.
+class _DisciplineMastery extends StatelessWidget {
+  const _DisciplineMastery({required this.sessions});
+  final List<Session> sessions;
+
+  static const _families = [
+    (key: 'breathing', icon: Icons.air_rounded, color: AppTheme.primary),
+    (key: 'freediving', icon: Icons.water_rounded, color: Color(0xFF4FC3F7)),
+    (key: 'mobility', icon: Icons.accessibility_new_rounded, color: Color(0xFF7E57C2)),
+    (key: 'cold', icon: Icons.ac_unit_rounded, color: Color(0xFF80D8FF)),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final counts = <String, int>{};
+    for (final s in sessions) {
+      final family = disciplineFamilyFor(s.levelKey);
+      if (family == null) continue;
+      counts[family] = (counts[family] ?? 0) + 1;
+    }
+
+    return Column(
+      children: [
+        for (final family in _families) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                Icon(family.icon, color: family.color, size: 18),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Text(
+                    L10n.get(context, 'stats_mastery_family_${family.key}'),
+                    style: const TextStyle(color: AppTheme.textLight, fontSize: 13),
+                  ),
+                ),
+                Text(
+                  '${counts[family.key] ?? 0}',
+                  style: TextStyle(
+                    color: family.color,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
   }
 }
 

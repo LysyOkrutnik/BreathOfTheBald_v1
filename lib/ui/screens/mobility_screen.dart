@@ -7,9 +7,10 @@ import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
 
 /// The "Mobilność" segment of the Trening tab: lung-mobility/diaphragm
 /// exercises — chest/intercostal stretch, Uddiyana Bandha, resisted
-/// breathing, and the three-part yogic breath. Packing lives in the
-/// Freediving segment instead (it's a freediving-specific technique,
-/// already gated behind that section's safety consent).
+/// breathing, and the three-part yogic breath (plus a holds-free "gentle"
+/// variant of the last one). Packing lives in the Freediving segment
+/// instead (it's a freediving-specific technique, already gated behind
+/// that section's safety consent).
 class MobilityScreen extends StatelessWidget {
   const MobilityScreen({super.key});
 
@@ -18,6 +19,7 @@ class MobilityScreen extends StatelessWidget {
     'uddiyana_bandha',
     'resisted_breathing',
     'three_part_breath',
+    'three_part_breath_gentle',
   ];
 
   @override

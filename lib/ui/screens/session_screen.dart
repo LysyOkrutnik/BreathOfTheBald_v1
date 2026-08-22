@@ -363,9 +363,18 @@ class _PhaseText extends StatelessWidget {
     // actual hold — freediving's inhale/exhale/rest/warm-up/cool-down phases
     // are deliberately `breathing`/`recovery`, not `retention`, specifically
     // so a tap during those moments does nothing instead of ending the table.
+    // A guided-routine hold (packing, Uddiyana) logged as a retention gets
+    // the same early-abort tap as freediving/Wim Hof retention — it carries
+    // the same "I need to breathe now" risk, even though it runs through
+    // the `recovery` phase rather than `retention` (see isAbortableGuidedHold's
+    // doc on SessionState).
+    final isAbortableGuidedHold = state.isAbortableGuidedHold &&
+        state.phase.maybeMap(recovery: (_) => true, orElse: () => false);
     final showTapHint =
-        state.phase.maybeMap(retention: (_) => true, orElse: () => false);
+        state.phase.maybeMap(retention: (_) => true, orElse: () => false) ||
+            isAbortableGuidedHold;
     final isFreedivingHold = state.customLabel == 'freediving_hold_label';
+    final showsBreathHoldTapHint = isFreedivingHold || isAbortableGuidedHold;
 
     // The warm-up and cool-down pauses expose an explicit "skip" control
     // instead of the tap-to-abort gesture.
@@ -474,7 +483,9 @@ class _PhaseText extends StatelessWidget {
         if (showTapHint) ...[
           const SizedBox(height: AppSpacing.xl),
           GestureDetector(
-            onTap: notifier.finishRetention,
+            onTap: isAbortableGuidedHold
+                ? notifier.endGuidedHoldEarly
+                : notifier.finishRetention,
             child: Container(
               padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.xl, vertical: AppSpacing.md),
@@ -485,7 +496,7 @@ class _PhaseText extends StatelessWidget {
               ),
               child: Text(
                 L10n.get(context,
-                    isFreedivingHold ? 'freediving_hold_tap_hint' : 'session_tap_to_inhale'),
+                    showsBreathHoldTapHint ? 'freediving_hold_tap_hint' : 'session_tap_to_inhale'),
                 style: const TextStyle(
                   color: AppTheme.primary,
                   letterSpacing: 1.5,

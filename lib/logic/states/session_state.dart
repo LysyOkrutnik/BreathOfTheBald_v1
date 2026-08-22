@@ -46,6 +46,13 @@ class SessionState with _$SessionState {
     // meaningful while `phase` is `retention` during a freediving table.
     @Default(0) int contractionMarkCount,
 
+    // True while the current guided-routine step is a real breath-hold
+    // logged as a retention (packing's hold, Uddiyana's vacuum-hold) — lets
+    // the UI offer the same tap-to-abort control freediving/Wim Hof holds
+    // already have, instead of a silent fixed countdown for exactly the
+    // moments carrying the most physiological risk in the whole app.
+    @Default(false) bool isAbortableGuidedHold,
+
     // The live cycle-diagram definition and current node, copied from
     // `LevelData.cycleSteps` once at session start — null for exercise
     // types with no diagram (see that field's doc for why). Kept on
@@ -73,5 +80,6 @@ class SessionState with _$SessionState {
     cycleStepIndex: null,
     awaitingRoundDecision: false,
     contractionMarkCount: 0,
+    isAbortableGuidedHold: false,
   );
 }

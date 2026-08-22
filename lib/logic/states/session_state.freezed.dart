@@ -903,6 +903,12 @@ mixin _$SessionState {
 // freediving hold — reset to 0 at the start of every round's hold. Only
 // meaningful while `phase` is `retention` during a freediving table.
   int get contractionMarkCount =>
+      throw _privateConstructorUsedError; // True while the current guided-routine step is a real breath-hold
+// logged as a retention (packing's hold, Uddiyana's vacuum-hold) — lets
+// the UI offer the same tap-to-abort control freediving/Wim Hof holds
+// already have, instead of a silent fixed countdown for exactly the
+// moments carrying the most physiological risk in the whole app.
+  bool get isAbortableGuidedHold =>
       throw _privateConstructorUsedError; // The live cycle-diagram definition and current node, copied from
 // `LevelData.cycleSteps` once at session start — null for exercise
 // types with no diagram (see that field's doc for why). Kept on
@@ -940,6 +946,7 @@ abstract class $SessionStateCopyWith<$Res> {
       bool? customIsBig,
       bool awaitingRoundDecision,
       int contractionMarkCount,
+      bool isAbortableGuidedHold,
       List<CycleStep>? cycleSteps,
       int? cycleStepIndex});
 
@@ -975,6 +982,7 @@ class _$SessionStateCopyWithImpl<$Res, $Val extends SessionState>
     Object? customIsBig = freezed,
     Object? awaitingRoundDecision = null,
     Object? contractionMarkCount = null,
+    Object? isAbortableGuidedHold = null,
     Object? cycleSteps = freezed,
     Object? cycleStepIndex = freezed,
   }) {
@@ -1035,6 +1043,10 @@ class _$SessionStateCopyWithImpl<$Res, $Val extends SessionState>
           ? _value.contractionMarkCount
           : contractionMarkCount // ignore: cast_nullable_to_non_nullable
               as int,
+      isAbortableGuidedHold: null == isAbortableGuidedHold
+          ? _value.isAbortableGuidedHold
+          : isAbortableGuidedHold // ignore: cast_nullable_to_non_nullable
+              as bool,
       cycleSteps: freezed == cycleSteps
           ? _value.cycleSteps
           : cycleSteps // ignore: cast_nullable_to_non_nullable
@@ -1080,6 +1092,7 @@ abstract class _$$SessionStateImplCopyWith<$Res>
       bool? customIsBig,
       bool awaitingRoundDecision,
       int contractionMarkCount,
+      bool isAbortableGuidedHold,
       List<CycleStep>? cycleSteps,
       int? cycleStepIndex});
 
@@ -1114,6 +1127,7 @@ class __$$SessionStateImplCopyWithImpl<$Res>
     Object? customIsBig = freezed,
     Object? awaitingRoundDecision = null,
     Object? contractionMarkCount = null,
+    Object? isAbortableGuidedHold = null,
     Object? cycleSteps = freezed,
     Object? cycleStepIndex = freezed,
   }) {
@@ -1174,6 +1188,10 @@ class __$$SessionStateImplCopyWithImpl<$Res>
           ? _value.contractionMarkCount
           : contractionMarkCount // ignore: cast_nullable_to_non_nullable
               as int,
+      isAbortableGuidedHold: null == isAbortableGuidedHold
+          ? _value.isAbortableGuidedHold
+          : isAbortableGuidedHold // ignore: cast_nullable_to_non_nullable
+              as bool,
       cycleSteps: freezed == cycleSteps
           ? _value._cycleSteps
           : cycleSteps // ignore: cast_nullable_to_non_nullable
@@ -1204,6 +1222,7 @@ class _$SessionStateImpl implements _SessionState {
       this.customIsBig,
       this.awaitingRoundDecision = false,
       this.contractionMarkCount = 0,
+      this.isAbortableGuidedHold = false,
       final List<CycleStep>? cycleSteps,
       this.cycleStepIndex})
       : _retentionLogs = retentionLogs,
@@ -1253,6 +1272,14 @@ class _$SessionStateImpl implements _SessionState {
   @override
   @JsonKey()
   final int contractionMarkCount;
+// True while the current guided-routine step is a real breath-hold
+// logged as a retention (packing's hold, Uddiyana's vacuum-hold) — lets
+// the UI offer the same tap-to-abort control freediving/Wim Hof holds
+// already have, instead of a silent fixed countdown for exactly the
+// moments carrying the most physiological risk in the whole app.
+  @override
+  @JsonKey()
+  final bool isAbortableGuidedHold;
 // The live cycle-diagram definition and current node, copied from
 // `LevelData.cycleSteps` once at session start — null for exercise
 // types with no diagram (see that field's doc for why). Kept on
@@ -1280,7 +1307,7 @@ class _$SessionStateImpl implements _SessionState {
 
   @override
   String toString() {
-    return 'SessionState(phase: $phase, currentRound: $currentRound, totalRounds: $totalRounds, totalBreathsInRound: $totalBreathsInRound, isGhostMode: $isGhostMode, isPanicMode: $isPanicMode, retentionLogs: $retentionLogs, startTime: $startTime, sessionDuration: $sessionDuration, customLabel: $customLabel, customDescription: $customDescription, customIsBig: $customIsBig, awaitingRoundDecision: $awaitingRoundDecision, contractionMarkCount: $contractionMarkCount, cycleSteps: $cycleSteps, cycleStepIndex: $cycleStepIndex)';
+    return 'SessionState(phase: $phase, currentRound: $currentRound, totalRounds: $totalRounds, totalBreathsInRound: $totalBreathsInRound, isGhostMode: $isGhostMode, isPanicMode: $isPanicMode, retentionLogs: $retentionLogs, startTime: $startTime, sessionDuration: $sessionDuration, customLabel: $customLabel, customDescription: $customDescription, customIsBig: $customIsBig, awaitingRoundDecision: $awaitingRoundDecision, contractionMarkCount: $contractionMarkCount, isAbortableGuidedHold: $isAbortableGuidedHold, cycleSteps: $cycleSteps, cycleStepIndex: $cycleStepIndex)';
   }
 
   @override
@@ -1315,6 +1342,8 @@ class _$SessionStateImpl implements _SessionState {
                 other.awaitingRoundDecision == awaitingRoundDecision) &&
             (identical(other.contractionMarkCount, contractionMarkCount) ||
                 other.contractionMarkCount == contractionMarkCount) &&
+            (identical(other.isAbortableGuidedHold, isAbortableGuidedHold) ||
+                other.isAbortableGuidedHold == isAbortableGuidedHold) &&
             const DeepCollectionEquality()
                 .equals(other._cycleSteps, _cycleSteps) &&
             (identical(other.cycleStepIndex, cycleStepIndex) ||
@@ -1338,6 +1367,7 @@ class _$SessionStateImpl implements _SessionState {
       customIsBig,
       awaitingRoundDecision,
       contractionMarkCount,
+      isAbortableGuidedHold,
       const DeepCollectionEquality().hash(_cycleSteps),
       cycleStepIndex);
 
@@ -1366,6 +1396,7 @@ abstract class _SessionState implements SessionState {
       final bool? customIsBig,
       final bool awaitingRoundDecision,
       final int contractionMarkCount,
+      final bool isAbortableGuidedHold,
       final List<CycleStep>? cycleSteps,
       final int? cycleStepIndex}) = _$SessionStateImpl;
 
@@ -1404,7 +1435,14 @@ abstract class _SessionState implements SessionState {
 // freediving hold — reset to 0 at the start of every round's hold. Only
 // meaningful while `phase` is `retention` during a freediving table.
   @override
-  int get contractionMarkCount; // The live cycle-diagram definition and current node, copied from
+  int get contractionMarkCount; // True while the current guided-routine step is a real breath-hold
+// logged as a retention (packing's hold, Uddiyana's vacuum-hold) — lets
+// the UI offer the same tap-to-abort control freediving/Wim Hof holds
+// already have, instead of a silent fixed countdown for exactly the
+// moments carrying the most physiological risk in the whole app.
+  @override
+  bool
+      get isAbortableGuidedHold; // The live cycle-diagram definition and current node, copied from
 // `LevelData.cycleSteps` once at session start — null for exercise
 // types with no diagram (see that field's doc for why). Kept on
 // `SessionState` rather than read from `LevelData` directly so

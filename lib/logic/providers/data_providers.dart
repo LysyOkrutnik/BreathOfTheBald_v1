@@ -7,6 +7,7 @@ import 'package:okrutnik_breath/data/repositories/planner_repository.dart';
 import 'package:okrutnik_breath/data/repositories/session_repository.dart';
 import 'package:okrutnik_breath/data/repositories/user_profile_repository.dart';
 import 'package:okrutnik_breath/data/repositories/wimhof_repository.dart';
+import 'package:okrutnik_breath/config/levels.dart';
 import 'package:okrutnik_breath/logic/freediving/freediving_progress.dart';
 import 'package:okrutnik_breath/logic/path/cold_shower.dart';
 import 'package:okrutnik_breath/logic/path/training_path.dart';
@@ -146,6 +147,15 @@ final weeklyHardSessionCountProvider = Provider<int>((ref) {
   return countHardSessionsInPastWeek(sessions, freedivingLogs);
 });
 
+/// How many gulps ("top-ups") today's packing session should use, based on
+/// how many packing sessions the user has already completed — see
+/// [packingGulpCountFor].
+final packingGulpCountProvider = Provider<int>((ref) {
+  final sessions = ref.watch(sessionHistoryProvider).value ?? const <Session>[];
+  final completed = sessions.where((s) => s.levelKey == 'freediving_packing').length;
+  return packingGulpCountFor(completed);
+});
+
 /// Reactive stream of every freediving table session ever logged — used for
 /// the cumulative per-type counts the guided training path needs (a
 /// recent-only window would undercount an established user).
@@ -163,8 +173,23 @@ final trainingPathProvider = Provider<PathState?>((ref) {
   final logs = ref.watch(freedivingAllLogsProvider).value;
   if (wimHof == null || profile == null || logs == null) return null;
 
-  final co2Count = logs.where((l) => l.tableType == 'co2').length;
-  final o2Count = logs.where((l) => l.tableType == 'o2').length;
+  // A lifetime cumulative count never got smaller — someone who did 5 CO2
+  // sessions two years ago and hasn't touched a table since would sail
+  // straight into "Adaptacja O2"/"Zaawansowany" on their first table this
+  // year, same as someone training every week, with no notion of
+  // deconditioning at all (unlike the Wim Hof ladder's kDetrainingDays).
+  // Counting only sessions within a rolling window gets the same
+  // regression effect for free, without needing new persisted state the
+  // way the Wim Hof ladder's rollback does: stop training a table for
+  // long enough and its count on its own drifts back under the threshold.
+  final freedivingRecencyWindow = const Duration(days: 90);
+  final recencyFloor = DateTime.now().subtract(freedivingRecencyWindow);
+  final co2Count = logs
+      .where((l) => l.tableType == 'co2' && l.timestamp.isAfter(recencyFloor))
+      .length;
+  final o2Count = logs
+      .where((l) => l.tableType == 'o2' && l.timestamp.isAfter(recencyFloor))
+      .length;
   final weeklyCap =
       ref.watch(settingsProvider).weeklyHardCapOverride ?? kWeeklyHardSessionCap;
   final weeklyCapReached = ref.watch(weeklyHardSessionCountProvider) >= weeklyCap;

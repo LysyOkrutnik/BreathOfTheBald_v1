@@ -12,8 +12,14 @@ const int kMinSessionsAtLevel = 5;
 const int kMinDaysAtLevel = 14;
 const double kMaxAvgRpeToAdvance = 6;
 
-const int kMinTrialSessions = 2;
-const double kMaxAvgRpeToConfirmTrial = 7;
+// 2 sessions / RPE<=7 was thin evidence to permanently confirm a harder
+// level on — a single good day could pass it. 3 sessions and a slightly
+// stricter RPE ceiling (matching kMaxAvgRpeToAdvance's own threshold, so
+// "eligible for a trial" and "trial confirmed" apply the same bar) reduce
+// how often a lucky trial locks in a level the user isn't actually ready
+// for yet.
+const int kMinTrialSessions = 3;
+const double kMaxAvgRpeToConfirmTrial = 6;
 
 /// No Wim Hof session (any level) in this many days rolls the ladder back
 /// one step — deconditioning is real, and re-entering at the old level risks
@@ -201,10 +207,7 @@ class WimHofProgression {
     // was set, which meant a single session right after a promotion
     // permanently disabled this safeguard for that level forever (the idle
     // clock never had anything to measure once `lastAny` moved past
-    // `since`, even if the user then went silent for months). No cascade
-    // risk from re-deriving this off the real last session: `refresh()`
-    // (wimhof_repository.dart) re-reads `progress` fresh and persists a
-    // rollback immediately, bumping `currentLevelSetAt` before any next call.
+    // `since`, even if the user then went silent for months).
     final lastAny = allWimHofSessions.isEmpty
         ? null
         : allWimHofSessions
@@ -213,7 +216,21 @@ class WimHofProgression {
     final daysSinceLastSession = lastAny != null
         ? now.difference(lastAny).inDays
         : (since != null ? now.difference(since).inDays : 0);
-    final idleSinceLevelSet = since != null && daysSinceLastSession > detrainingDays;
+    // `daysAtLevel > detrainingDays` on top of the staleness check above is
+    // what actually prevents a cascade: right after a rollback persists,
+    // `since` is bumped to now, so `daysAtLevel` resets to ~0 even though
+    // `daysSinceLastSession` alone (still measuring off the same stale
+    // `lastAny`, since no new session happened) would otherwise stay past
+    // the threshold and re-trigger on every subsequent `refresh()` call —
+    // and this is called every time the Wim Hof tab builds, so a user who
+    // just visits the tab a few times while inactive would otherwise get
+    // rolled back a level on *each visit*, not once per real idle episode.
+    // Requiring the current level to have *itself* been held for a full
+    // detraining period bounds this to one rollback step per elapsed
+    // kDetrainingDays of continued inactivity, same as the first step.
+    final idleSinceLevelSet = since != null &&
+        daysSinceLastSession > detrainingDays &&
+        daysAtLevel > detrainingDays;
     if (idleSinceLevelSet) {
       final previous = _previousLevel(current);
       if (previous != null) {
@@ -263,7 +280,16 @@ class WimHofProgression {
         .where((s) => s.levelKey == current)
         .where((s) => since == null || !s.timestamp.isBefore(since))
         .toList();
-    final avgRpe = _avgRpe(_dedupeSameDay(currentLevelSessions));
+    // A rolling window of the most recent sessions, not the whole history
+    // at this level — matches kPbCautionSessionWindow's own reasoning
+    // (_pbCautionFor, above): kMinSessionsAtLevel=5 means someone who spent
+    // months at a level accumulates a long tail of old ratings that can
+    // permanently anchor the average, so one rough first attempt right
+    // after a promotion could keep blocking the next recommendation long
+    // after the user has clearly settled in.
+    final recentAtLevel = _dedupeSameDay(currentLevelSessions)
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    final avgRpe = _avgRpe(recentAtLevel.take(kPbCautionSessionWindow).toList());
     final rpeOk = avgRpe == null || avgRpe <= maxAvgRpeToAdvance;
     final eligible = sessionsAtLevel >= kMinSessionsAtLevel &&
         daysAtLevel >= kMinDaysAtLevel &&

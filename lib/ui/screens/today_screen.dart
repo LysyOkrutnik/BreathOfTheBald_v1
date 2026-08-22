@@ -43,6 +43,7 @@ class TodayScreen extends ConsumerWidget {
       BuildContext context, WidgetRef ref, PlannedAction action) async {
     switch (action.type) {
       case PathAction.wimHof:
+      case PathAction.mobility:
         final level = LevelData.levels[action.levelKey];
         if (level != null) {
           Navigator.of(context).push(fadeThroughRoute(IntroScreen(level: level)));
@@ -79,6 +80,7 @@ class TodayScreen extends ConsumerWidget {
   String? _plannableKey(PlannedAction action) {
     switch (action.type) {
       case PathAction.wimHof:
+      case PathAction.mobility:
         return action.levelKey;
       case PathAction.pbTest:
         return 'freediving_pb_test';
@@ -210,6 +212,7 @@ class TodayScreen extends ConsumerWidget {
                           ],
                           _TodayCard(
                             actions: plan.days.first.actions,
+                            isDesignatedRest: plan.days.first.isDesignatedRest,
                             onStart: (a) => _startAction(context, ref, a),
                           ),
                           const SizedBox(height: AppSpacing.lg),
@@ -515,9 +518,18 @@ class _JourneySectionState extends State<_JourneySection> {
 }
 
 class _TodayCard extends ConsumerWidget {
-  const _TodayCard({required this.actions, required this.onStart});
+  const _TodayCard({
+    required this.actions,
+    required this.onStart,
+    this.isDesignatedRest = false,
+  });
   final List<PlannedAction> actions;
   final ValueChanged<PlannedAction> onStart;
+
+  /// True when today isn't just incidentally empty (ran out of sessions to
+  /// place) but is the week's deliberately-reserved recovery day — see
+  /// [DayPlan.isDesignatedRest].
+  final bool isDesignatedRest;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -543,7 +555,8 @@ class _TodayCard extends ConsumerWidget {
           const SizedBox(height: AppSpacing.md),
           if (trainingActions.isEmpty)
             Text(
-              L10n.get(context, 'path_rest_day_label'),
+              L10n.get(context,
+                  isDesignatedRest ? 'path_designated_rest_label' : 'path_rest_day_label'),
               style: const TextStyle(color: AppTheme.textLight, fontSize: 15),
             )
           else

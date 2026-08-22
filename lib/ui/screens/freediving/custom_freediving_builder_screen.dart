@@ -36,6 +36,14 @@ class CustomFreedivingBuilderScreen extends ConsumerStatefulWidget {
 
 class _CustomFreedivingBuilderScreenState
     extends ConsumerState<CustomFreedivingBuilderScreen> {
+  // This builder is deliberately free-form (no PB-relative cap the way the
+  // generated CO2/O2 tables have one) — but leaving it completely blind to
+  // the user's own PB meant it was easy to build a table more aggressive
+  // than anything the app would ever generate itself, with nothing on
+  // screen to notice. This is a soft heads-up, not a block: same
+  // philosophy as _InvertedProgressionHint below.
+  static const double _pbWarningRatio = 0.9;
+
   late final _nameController =
       TextEditingController(text: widget.existingPreset?.name ?? '');
   late int _startApnea = widget.existingPreset?.startApneaSec ?? 30;
@@ -78,11 +86,25 @@ class _CustomFreedivingBuilderScreenState
     );
   }
 
+  int? get _verifiedPbSec => ref.read(freedivingProfileProvider).value?.verifiedPbSec;
+
+  /// The table's peak apnea (the longer of start/end, since a soft-form
+  /// table isn't guaranteed to grow) as a fraction of the user's own last
+  /// verified PB — null when no PB is on file to compare against.
+  double? get _peakPbRatio {
+    final pb = _verifiedPbSec;
+    if (pb == null || pb <= 0) return null;
+    final peak = _startApnea > _endApnea ? _startApnea : _endApnea;
+    return peak / pb;
+  }
+
   // Unlike the generated CO2/O2 tables, a custom table has no PB-relative
   // safety cap at all — this is the one and only safety checkpoint it gets,
   // so it must never be skippable the way it was before (this screen used
   // to jump straight into SessionScreen).
   Future<void> _start() async {
+    final ratio = _peakPbRatio;
+    final approachesPb = ratio != null && ratio >= _pbWarningRatio;
     final confirmed = await showGlassDialog<bool>(
       context,
       builder: (dialogContext) => Column(
@@ -95,6 +117,16 @@ class _CustomFreedivingBuilderScreenState
             textAlign: TextAlign.center,
             style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.4),
           ),
+          if (approachesPb) ...[
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              L10n.get(context, 'custom_freediving_pb_warning')
+                  .replaceAll('{pct}', '${(ratio * 100).round()}'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  color: AppTheme.danger, fontSize: 13, height: 1.4, fontWeight: FontWeight.w600),
+            ),
+          ],
           const SizedBox(height: AppSpacing.xl),
           Row(
             children: [
@@ -251,6 +283,15 @@ class _CustomFreedivingBuilderScreenState
                             color: AppTheme.accent,
                             onChanged: (v) => setState(() => _endRest = v),
                           ),
+                          if (_peakPbRatio != null) ...[
+                            const SizedBox(height: AppSpacing.xs),
+                            _PbRatioHint(
+                              ratio: _peakPbRatio!,
+                              warningRatio: _pbWarningRatio,
+                              peakSeconds: _startApnea > _endApnea ? _startApnea : _endApnea,
+                              pbSeconds: _verifiedPbSec!,
+                            ),
+                          ],
                           if (_endApnea < _startApnea || _endRest > _startRest) ...[
                             const SizedBox(height: AppSpacing.xs),
                             _InvertedProgressionHint(
@@ -320,6 +361,50 @@ class _CustomFreedivingBuilderScreenState
                   ],
                 ),
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shows the table's peak apnea as a percentage of the user's own last
+/// verified PB, whenever one is on file — this builder has no other way to
+/// tell someone dialing in raw seconds whether they've quietly built
+/// something more aggressive than the app's own generated CO2/O2 tables
+/// would ever produce.
+class _PbRatioHint extends StatelessWidget {
+  const _PbRatioHint({
+    required this.ratio,
+    required this.warningRatio,
+    required this.peakSeconds,
+    required this.pbSeconds,
+  });
+  final double ratio;
+  final double warningRatio;
+  final int peakSeconds;
+  final int pbSeconds;
+
+  @override
+  Widget build(BuildContext context) {
+    final warning = ratio >= warningRatio;
+    final color = warning ? AppTheme.danger : AppTheme.textDim;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(warning ? Icons.warning_amber_rounded : Icons.info_outline_rounded,
+              color: color, size: 14),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              L10n.get(context, 'custom_freediving_pb_ratio_hint')
+                  .replaceAll('{peak}', '$peakSeconds')
+                  .replaceAll('{pct}', '${(ratio * 100).round()}')
+                  .replaceAll('{pb}', '$pbSeconds'),
+              style: TextStyle(color: color, fontSize: 11, height: 1.3),
             ),
           ),
         ],

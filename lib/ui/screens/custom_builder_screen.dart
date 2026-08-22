@@ -12,6 +12,7 @@ import 'package:okrutnik_breath/logic/notifiers/session_notifier.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/ui/screens/session_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
+import 'package:okrutnik_breath/ui/widgets/confirm_dialog.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
 
@@ -50,6 +51,38 @@ class _CustomBuilderScreenState extends ConsumerState<CustomBuilderScreen> {
 
   bool get _isValid => _inhale > 0 || _exhale > 0;
 
+  /// Quick-fill starting points instead of a blank formula — a new user
+  /// dialing in an arbitrary pattern from scratch has no sense of which
+  /// combinations are actually well-known techniques versus an untested
+  /// guess. Tapping one just fills the steppers below; still fully
+  /// editable afterwards, not a locked mode.
+  static const _presets = [
+    (labelKey: 'custom_preset_box', inhale: 4, holdIn: 4, exhale: 4, holdOut: 4, cycles: 8),
+    (labelKey: 'custom_preset_478', inhale: 4, holdIn: 7, exhale: 8, holdOut: 0, cycles: 4),
+    (labelKey: 'custom_preset_coherent', inhale: 5, holdIn: 0, exhale: 5, holdOut: 0, cycles: 12),
+  ];
+
+  void _applyPreset(({String labelKey, int inhale, int holdIn, int exhale, int holdOut, int cycles}) preset) {
+    setState(() {
+      _inhale = preset.inhale;
+      _holdIn = preset.holdIn;
+      _exhale = preset.exhale;
+      _holdOut = preset.holdOut;
+      _cycles = preset.cycles;
+    });
+  }
+
+  // Unlike every built-in breathing exercise, this builder has no upper
+  // bound tying repetition count to what's actually a sane single-session
+  // dose — a user could dial in far more total breath cycles than the
+  // ladder's own hardest level (guru: 5*60=300) with no dialog in the way
+  // at all, unlike the custom freediving builder's safety confirmation.
+  // Total cycles alone (not the per-phase seconds) is what drives
+  // hyperventilation risk, so that's what this checks.
+  static const int _hyperventilationWarningCycles = 100;
+  bool get _exceedsHyperventilationThreshold =>
+      _cycles * _rounds > _hyperventilationWarningCycles;
+
   String _fmt(int s) => "${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}";
 
   LevelData _buildLevel() {
@@ -65,7 +98,18 @@ class _CustomBuilderScreenState extends ConsumerState<CustomBuilderScreen> {
     );
   }
 
-  void _start() {
+  Future<void> _start() async {
+    if (_exceedsHyperventilationThreshold) {
+      final confirmed = await showGlassConfirm(
+        context,
+        title: L10n.get(context, 'custom_hyperventilation_warning_title'),
+        body: L10n.get(context, 'custom_hyperventilation_warning_body'),
+        confirmLabel: L10n.get(context, 'custom_start'),
+        cancelLabel: L10n.get(context, 'common_cancel'),
+        icon: Icons.warning_amber_rounded,
+      );
+      if (!confirmed || !mounted) return;
+    }
     ref.read(sessionProvider.notifier).startSession(_buildLevel());
     Navigator.of(context).pushReplacement(fadeThroughRoute(const SessionScreen()));
   }
@@ -152,6 +196,18 @@ class _CustomBuilderScreenState extends ConsumerState<CustomBuilderScreen> {
                                 hintStyle: const TextStyle(color: AppTheme.textDim),
                               ),
                             ),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          Wrap(
+                            spacing: AppSpacing.sm,
+                            runSpacing: AppSpacing.sm,
+                            children: [
+                              for (final preset in _presets)
+                                _PresetChip(
+                                  label: L10n.get(context, preset.labelKey),
+                                  onTap: () => _applyPreset(preset),
+                                ),
+                            ],
                           ),
                           const SizedBox(height: AppSpacing.lg),
                           _StepperRow(
@@ -322,6 +378,31 @@ class _StepperRow extends StatelessWidget {
                 size: 20,
                 color: onTap == null ? Colors.white24 : AppTheme.primary),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PresetChip extends StatelessWidget {
+  const _PresetChip({required this.label, required this.onTap});
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return PressableScale(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          border: Border.all(color: AppTheme.primary.withAlpha(120)),
+          color: AppTheme.primary.withAlpha(20),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(color: AppTheme.primary, fontSize: 12, fontWeight: FontWeight.bold),
         ),
       ),
     );

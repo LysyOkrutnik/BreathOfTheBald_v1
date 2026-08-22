@@ -11,6 +11,7 @@ import 'package:okrutnik_breath/logic/freediving/co2_o2_table_generator.dart';
 import 'package:okrutnik_breath/logic/notifiers/ramp_up_calculator.dart';
 import 'package:okrutnik_breath/logic/path/weekly_plan.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
+import 'package:okrutnik_breath/logic/services/gamification_service.dart';
 import 'package:okrutnik_breath/logic/providers/locale_provider.dart';
 import 'package:okrutnik_breath/logic/providers/settings_provider.dart';
 import 'package:okrutnik_breath/logic/states/session_state.dart';
@@ -78,6 +79,11 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
   /// Writing `state` after disposal throws, so every async continuation guards
   /// on this before touching state.
   bool get _isRunning => _isSessionActive && mounted;
+
+  /// Set by [endGuidedHoldEarly], checked once per second by the guided-hold
+  /// countdown in `_guidedStepPhase` — reset to false whenever a new hold
+  /// step starts.
+  bool _skipCurrentGuidedHold = false;
 
   SessionNotifier(this._audioManager, this._ref) : super(SessionState.initial()) {
     WidgetsBinding.instance.addObserver(this);
@@ -147,12 +153,11 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
       } catch (_) {}
     });
 
+    // Fire breathing now carries a real totalBreaths (breaths per round,
+    // same meaning as Wim Hof's) since its round restructure, so it no
+    // longer needs a special-cased estimate here.
     int totalBreaths = level.totalBreaths;
-    if (level.type == ExerciseType.fireBreathing) {
-      final duration = level.totalDuration ?? const Duration(minutes: 3);
-      // Approximate the breath count for the progress bar, assuming a ~700ms pace per phase.
-      totalBreaths = (duration.inMilliseconds / 1400).floor();
-    } else if (level.type == ExerciseType.boxBreathing) {
+    if (level.type == ExerciseType.boxBreathing) {
       totalBreaths = level.loopCount ?? 16;
     } else if (level.type == ExerciseType.relax478) {
       totalBreaths = level.loopCount ?? 32;
@@ -659,6 +664,7 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
       var breathIndex = 0;
       for (int i = 0; i < steps.length; i++) {
         final step = steps[i];
+        if (step.skipOnFinalRound && r == rounds) continue;
         if (step.phase == GuidedStepPhase.breath) breathIndex++;
         if (!await _guidedStepPhase(step, index: breathIndex)) return;
       }
@@ -688,6 +694,7 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
       if (step.durationSec > _kSignificantGuidedHoldThresholdSec) {
         try { _hapticEngine.playRetentionPeak(); _audioManager.playGong(); } catch (_) {}
       }
+      _skipCurrentGuidedHold = false;
       state = state.copyWith(
         customLabel: step.labelKey,
         customDescription: "${step.labelKey}_desc",
@@ -699,8 +706,13 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
         customIsBig: null,
         cycleStepIndex: step.cycleStepIndex,
         phase: SessionPhase.recovery(remaining: Duration(seconds: remaining)),
+        // Only a real breath-hold (packing, Uddiyana) offers the early-abort
+        // tap — a brief transitional pause ("return to center", "rest")
+        // isn't a moment anyone needs to escape early from.
+        isAbortableGuidedHold: step.recordAsRetention,
       );
-      while (remaining > 0) {
+      final holdStart = remaining;
+      while (remaining > 0 && !_skipCurrentGuidedHold) {
         if (!_isRunning) return false;
         await Future.delayed(const Duration(seconds: 1));
         remaining--;
@@ -712,9 +724,10 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
       if (_isRunning && step.recordAsRetention) {
         state = state.copyWith(retentionLogs: [
           ...state.retentionLogs,
-          Duration(seconds: step.durationSec),
+          Duration(seconds: holdStart - remaining),
         ]);
       }
+      state = state.copyWith(isAbortableGuidedHold: false);
       return _isRunning;
     }
 
@@ -826,9 +839,27 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
     _startRecovery();
   }
 
+  /// Early-abort for a guided-routine breath-hold (packing, Uddiyana) —
+  /// the counterpart to [finishRetention] for holds that run through
+  /// `_guidedStepPhase`'s `recovery`-phase countdown instead of the
+  /// `retention` phase. A no-op unless [SessionState.isAbortableGuidedHold]
+  /// is actually true, so the UI gesture that calls this is always safe to
+  /// wire up unconditionally.
+  void endGuidedHoldEarly() {
+    if (!state.isAbortableGuidedHold) return;
+    _skipCurrentGuidedHold = true;
+  }
+
   void _startRecovery() {
     try { _audioManager.playInhale(); _audioManager.unduckDrone(); } catch (_) {}
-    int sec = 15;
+    // Recovery is a fixed 15s at every level/round by classic-method design
+    // — except guru's 5th and final round, which caps 4 prior rounds of
+    // hyperventilation+retention with the most cumulative load anywhere in
+    // the ladder. A few extra seconds there specifically, not a change to
+    // the method's core rhythm everywhere else.
+    final isGuruFinalRecovery =
+        _currentLevel!.key == 'guru' && state.currentRound == 4;
+    int sec = isGuruFinalRecovery ? 25 : 15;
     state = state.copyWith(
         cycleStepIndex: 2, phase: SessionPhase.recovery(remaining: Duration(seconds: sec)));
 
@@ -847,9 +878,10 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
     });
   }
 
-  void _nextRound() {
+  Future<void> _nextRound() async {
     if (state.currentRound >= _currentLevel!.totalRounds) {
-      _finishSession();
+      await _wimHofCooldown();
+      if (_isRunning) _finishSession();
     } else {
       state = state.copyWith(
         currentRound: state.currentRound + 1,
@@ -857,6 +889,42 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
         phase: SessionPhase.breathing(breathIndex: 1, isInhaling: false, currentBreathDuration: _currentLevel!.breathPace),
       );
       Future.delayed(const Duration(milliseconds: 50), _runBreathingLoop);
+    }
+  }
+
+  /// A brief wind-down after the final round's recovery — previously the
+  /// session went straight from a full cycle of hyperventilation+retention
+  /// to the summary screen with nothing in between. A few slow, unpaced
+  /// breaths give the body an actual transition instead of an abrupt stop.
+  Future<void> _wimHofCooldown() async {
+    const cycles = 3;
+    const phaseDuration = Duration(seconds: 4);
+    for (int i = 1; i <= cycles; i++) {
+      if (!_isRunning) return;
+      _updateCustomState(
+        "session_inhale",
+        "session_cooldown_desc",
+        isBig: true,
+        isInhaling: true,
+        duration: phaseDuration,
+        index: i,
+        cycleStepIndex: null,
+      );
+      _playBreathSignal(isInhale: true, progress: 1.0);
+      await Future.delayed(phaseDuration);
+      if (!_isRunning) return;
+
+      _updateCustomState(
+        "session_exhale",
+        "session_cooldown_desc",
+        isBig: false,
+        isInhaling: false,
+        duration: phaseDuration,
+        index: i,
+        cycleStepIndex: null,
+      );
+      _playBreathSignal(isInhale: false, progress: 1.0);
+      await Future.delayed(phaseDuration);
     }
   }
 
@@ -925,57 +993,147 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
   // ==========================================================
   // 4. FIRE BREATHING (BHASTRIKA)
   // ==========================================================
-  void _startFireBreathing(LevelData level) {
-    final totalDuration = level.totalDuration ?? const Duration(minutes: 3);
-    final tickDuration = const Duration(milliseconds: 700);
+  /// Kapalabhati/Bhastrika's own reference pattern: a short series of fast
+  /// breaths, then a full inhale, a hold, an exhale, a rest — repeated for
+  /// [LevelData.totalRounds] rounds — rather than one uninterrupted block of
+  /// rapid breathing for the whole session (the previous implementation),
+  /// which meant a much longer continuous hyperventilation exposure than
+  /// the technique's own pattern and no natural point to reassess mid-way.
+  Future<void> _startFireBreathing(LevelData level) async {
+    final rounds = level.totalRounds > 0 ? level.totalRounds : 3;
+    final breathsPerRound = level.totalBreaths > 0 ? level.totalBreaths : 30;
+    final tickDuration =
+        level.breathPace > Duration.zero ? level.breathPace : const Duration(milliseconds: 1400);
+    final halfTick = tickDuration ~/ 2;
+    const holdSec = 12;
+    const restSec = 15;
 
-    final endTime = DateTime.now().add(totalDuration);
-    int cycle = 1;
-    bool isInhaling = true;
-
-    // Use Timer.periodic for a stable timeline and smooth UI updates during rapid intervals.
-    _phaseTimer?.cancel();
-    _phaseTimer = Timer.periodic(tickDuration, (timer) {
-      if (!_isRunning) {
-        timer.cancel();
-        return;
-      }
-
-      final now = DateTime.now();
-      final remaining = endTime.difference(now);
-
-      if (remaining.isNegative) {
-        timer.cancel();
-        _finishSession();
-        return;
-      }
-
+    for (int r = 1; r <= rounds; r++) {
+      if (!_isRunning) return;
       state = state.copyWith(
-        customLabel: isInhaling ? "session_inhale" : "session_exhale",
-        customDescription: isInhaling ? "session_fire_inhale_desc" : "session_fire_exhale_desc",
-        customIsBig: isInhaling,
-        phase: SessionPhase.breathing(
-            breathIndex: cycle,
-            isInhaling: isInhaling,
-            currentBreathDuration: tickDuration
-        ),
+          currentRound: r, totalRounds: rounds, totalBreathsInRound: breathsPerRound);
+
+      // The fast-breathing series. Kapalabhati/Bhastrika is exhale-active,
+      // inhale-passive (the belly pump is on the exhale) — kept as an
+      // explicit hint under the label, same as before this restructure.
+      for (int i = 1; i <= breathsPerRound; i++) {
+        if (!_isRunning) return;
+        _updateCustomState(
+          "session_inhale",
+          "session_fire_inhale_desc",
+          isBig: true,
+          isInhaling: true,
+          duration: halfTick,
+          index: i,
+          cycleStepIndex: 0,
+        );
+        try {
+          _hapticEngine.playInhalePulse(i / breathsPerRound);
+          _audioManager.playInhale();
+        } catch (_) {}
+        await Future.delayed(halfTick);
+        if (!_isRunning) return;
+
+        _updateCustomState(
+          "session_exhale",
+          "session_fire_exhale_desc",
+          isBig: false,
+          isInhaling: false,
+          duration: halfTick,
+          index: i,
+          cycleStepIndex: 0,
+        );
+        try {
+          _hapticEngine.playTick();
+          _audioManager.playExhale();
+        } catch (_) {}
+        await Future.delayed(halfTick);
+      }
+      if (!_isRunning) return;
+
+      // Full inhale before the hold.
+      _updateCustomState(
+        "session_inhale",
+        "session_fire_full_inhale_desc",
+        isBig: true,
+        isInhaling: true,
+        duration: const Duration(seconds: 3),
+        index: r,
+        cycleStepIndex: 1,
       );
+      _playBreathSignal(isInhale: true, progress: 1.0);
+      await Future.delayed(const Duration(seconds: 3));
+      if (!await _fireHold(holdSec)) return;
+      if (!_isRunning) return;
 
-      if (isInhaling) {
-        // One full breath cycle is 1400ms (two 700ms ticks), and `cycle` only
-        // advances per inhale — so the ramp denominator must match that cadence.
-        _hapticEngine.playInhalePulse(cycle / (totalDuration.inMilliseconds / 1400));
-        try { _audioManager.playInhale(); } catch (_) {}
-      } else {
-        _hapticEngine.playTick();
-        try { _audioManager.playExhale(); } catch (_) {}
-      }
+      // Exhale.
+      _updateCustomState(
+        "session_exhale",
+        "session_fire_exhale_desc",
+        isBig: false,
+        isInhaling: false,
+        duration: const Duration(seconds: 2),
+        index: r,
+        cycleStepIndex: 3,
+      );
+      _playBreathSignal(isInhale: false, progress: 1.0);
+      await Future.delayed(const Duration(seconds: 2));
 
-      isInhaling = !isInhaling;
-      if (isInhaling) {
-        cycle++;
+      // Rest before the next round — none after the last one.
+      if (r < rounds) {
+        if (!_isRunning) return;
+        var remaining = restSec;
+        state = state.copyWith(
+          customLabel: "session_recovery",
+          customDescription: null,
+          customIsBig: null,
+          cycleStepIndex: 4,
+          phase: SessionPhase.recovery(remaining: Duration(seconds: remaining)),
+        );
+        while (remaining > 0) {
+          if (!_isRunning) return;
+          await Future.delayed(const Duration(seconds: 1));
+          remaining--;
+          if (_isRunning) {
+            state = state.copyWith(
+                phase: SessionPhase.recovery(remaining: Duration(seconds: remaining)));
+          }
+        }
       }
-    });
+    }
+    if (_isRunning) _finishSession();
+  }
+
+  /// Fire breathing's post-round hold — a fixed countdown with the same
+  /// early-abort tap a real breath-hold anywhere else in the app offers,
+  /// reusing [_skipCurrentGuidedHold]/[endGuidedHoldEarly] directly rather
+  /// than a second abort mechanism just for this one caller.
+  Future<bool> _fireHold(int seconds) async {
+    _skipCurrentGuidedHold = false;
+    var remaining = seconds;
+    state = state.copyWith(
+      customLabel: "session_hold",
+      customDescription: null,
+      customIsBig: null,
+      cycleStepIndex: 2,
+      phase: SessionPhase.recovery(remaining: Duration(seconds: remaining)),
+      isAbortableGuidedHold: true,
+    );
+    try {
+      _hapticEngine.playRetentionPeak();
+      _audioManager.playGong();
+    } catch (_) {}
+    while (remaining > 0 && !_skipCurrentGuidedHold) {
+      if (!_isRunning) return false;
+      await Future.delayed(const Duration(seconds: 1));
+      remaining--;
+      if (_isRunning) {
+        state = state.copyWith(
+            phase: SessionPhase.recovery(remaining: Duration(seconds: remaining)));
+      }
+    }
+    state = state.copyWith(isAbortableGuidedHold: false);
+    return _isRunning;
   }
 
   // ==========================================================
@@ -1066,19 +1224,49 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
 
       final isFreedivingTable = level.type.isFreedivingTable;
 
+      // Weekly discipline-diversity bonus: Twoja Ścieżka's own weekly plan
+      // already deliberately interleaves Wim Hof/CO2/O2/cold shower/
+      // mobility, but XP never reflected that variety — training the same
+      // single discipline all week earned exactly as much as spreading it
+      // across several. `disciplineFamilyFor` returning null (a level this
+      // session's own family can't be placed for, which shouldn't happen
+      // for a real session) safely just contributes nothing extra.
+      final weekAgo = DateTime.now().subtract(const Duration(days: 7));
+      final recentSessions = await _ref.read(sessionRepositoryProvider).getAllSessions();
+      final familiesThisWeek = <String>{
+        for (final s in recentSessions)
+          if (s.timestamp.isAfter(weekAgo))
+            if (disciplineFamilyFor(s.levelKey) case final family?) family,
+        if (disciplineFamilyFor(level.key) case final family?) family,
+      };
+      final diversityMultiplier = diversityXpMultiplier(familiesThisWeek.length);
+
       // A CO2/O2 table's "retention" is the sum of several near-maximal
       // breath-holds and would otherwise dwarf every other exercise's XP
       // (the generic formula is retentionSeconds * 2, uncapped) — dampen the
-      // XP-calculation input for these two types only. The full, honest hold
-      // time is still stored as the session's real retentionSec below.
+      // XP-calculation input for these two types only, a little. This used
+      // to dampen by *0.3, which had the opposite effect from what was
+      // intended: a full CO2/O2 table worked out to the worst XP/second of
+      // any exercise in the app (~0.27 XP/s, against ~1.27 XP/s for a Wim
+      // Hof guru session of comparable length) despite carrying the
+      // highest real risk — the exact opposite of what the XP curve should
+      // reward. 0.9 keeps a token safety margin against a pathologically
+      // long custom table dominating XP outright, without punishing the
+      // exercise that's actually asking the most of the user. The full,
+      // honest hold time is still stored as the session's real retentionSec
+      // below regardless of this multiplier.
       final gamification = _ref.read(gamificationServiceProvider);
       // Guided routines (lung-mobility exercises + packing), box breathing,
-      // 4-7-8, and fire breathing have no meaningful `totalBreaths`/retention
-      // of their own — `levels.dart` never sets `totalBreaths` for any of
-      // them, so the generic breathCount*multiplier formula below always
-      // evaluated to a flat 0 XP, regardless of how long or how many reps
-      // were actually completed. Award flat XP scaled by real elapsed time
-      // instead (same helper cold shower already uses for a duration-less
+      // and 4-7-8 have no meaningful `totalBreaths`/retention of their own
+      // — `levels.dart` never sets `totalBreaths` for any of them, so the
+      // generic breathCount*multiplier formula below always evaluated to a
+      // flat 0 XP, regardless of how long or how many reps were actually
+      // completed. Fire breathing is grouped in here too even though it now
+      // has a real per-round `totalBreaths` (since its round restructure)
+      // — its XP is still better driven by real elapsed time than by a
+      // breath count that no longer scales with total session length the
+      // way it used to. Award flat XP scaled by real elapsed time instead
+      // (same helper cold shower already uses for a duration-less
       // activity, just with a computed amount instead of a constant).
       final noNaturalBreathCount = level.type == ExerciseType.guidedRoutine ||
           level.type == ExerciseType.boxBreathing ||
@@ -1086,7 +1274,19 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
           level.type == ExerciseType.fireBreathing;
       final xpResult = noNaturalBreathCount
           ? await gamification.awardFlatXp(
-              (duration.inSeconds * 0.5).round().clamp(1, 1000))
+              // Real recorded holds inside a guided routine (packing's
+              // hold, Uddiyana's vacuum — the ones with recordAsRetention:
+              // true) used to earn nothing beyond the flat per-second rate
+              // every step of the routine already got, even though the
+              // hold is the one part of the exercise actually carrying its
+              // own risk. Zero for box/relax/fire, which never log a
+              // retention at all, so this is additive only where it should
+              // be. `totalRetention` is already computed above.
+              (duration.inSeconds * 0.5 + totalRetention * 1.0)
+                  .round()
+                  .clamp(1, 1000),
+              bonusMultiplier: diversityMultiplier,
+            )
           : await gamification.updateXpAndLevel(
               breathCount: level.totalBreaths * totalRounds,
               // A freediving table's breathCount is always 0 above (no
@@ -1097,9 +1297,10 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
               // freediving XP, but multiplied against an always-0
               // breathCount, that branch never did anything.
               retentionSeconds: isFreedivingTable
-                  ? (totalRetention * 0.3).round()
+                  ? (totalRetention * 0.9).round()
                   : totalRetention,
               multiplier: 1.5,
+              bonusMultiplier: diversityMultiplier,
             );
       justLeveledUpTo = xpResult.leveledUp ? xpResult.newLevel : null;
       final streakResult = await gamification.updateStreak();

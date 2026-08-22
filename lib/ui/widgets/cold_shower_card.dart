@@ -33,8 +33,12 @@ class _ColdShowerCardState extends ConsumerState<ColdShowerCard> {
 
   int? _durationSec;
 
+  // A first-time default of 60s contradicted the app's own advice
+  // (coldshower_warning3/guide_coldshower_warning1: "never start cold,
+  // ease in gradually") — a brand-new user with no history yet now starts
+  // much closer to the stepper's own floor instead.
   int _durationFor(WidgetRef ref) =>
-      _durationSec ?? ref.read(lastColdShowerDurationSecProvider) ?? 60;
+      _durationSec ?? ref.read(lastColdShowerDurationSecProvider) ?? 30;
 
   void _adjust(int delta) {
     setState(() => _durationSec = (_durationFor(ref) + delta).clamp(_minSec, _maxSec));

@@ -252,7 +252,12 @@ class _FreedivingContent extends ConsumerWidget {
           // which is the only thing actually actionable for a new user.
           const _LockedTablesPlaceholder(),
         const SizedBox(height: AppSpacing.md),
-        const _PackingTile(),
+        // Packing carries the same real medical risk as the CO2/O2 tables
+        // above (barotrauma, gas embolism, blackout) — it was previously
+        // reachable with zero verified PB, less gated than the tables it
+        // sits right next to. Same PB requirement, same locked-placeholder
+        // pattern.
+        hasPb ? const _PackingTile() : const _PackingLockedPlaceholder(),
         const SizedBox(height: AppSpacing.xl),
         _CustomFreedivingSection(presets: presets),
       ],
@@ -779,6 +784,46 @@ class _LockedTablesPlaceholder extends StatelessWidget {
   }
 }
 
+/// Packing's equivalent of [_LockedTablesPlaceholder] — same visual
+/// treatment, same reasoning (a dimmed row beats a disabled full-size tile
+/// competing with the PB card above), shown until a PB exists.
+class _PackingLockedPlaceholder extends StatelessWidget {
+  const _PackingLockedPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: 0.6,
+      child: GlassCard(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Row(
+          children: [
+            const Icon(Icons.lock_outline_rounded, color: Colors.white24, size: 24),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    L10n.get(context, 'exercise_packing_title'),
+                    style: const TextStyle(
+                        color: AppTheme.textDim, fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    L10n.get(context, 'freediving_packing_locked_body'),
+                    style: TextStyle(fontSize: 12, color: AppTheme.textDim.withAlpha(190)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Packing — a real freediving technique with documented medical risk
 /// (pulmonary barotrauma, gas embolism, blackout before the dive). Already
 /// sits behind this screen's safety-consent gate; on top of that, a
@@ -786,14 +831,14 @@ class _LockedTablesPlaceholder extends StatelessWidget {
 /// SharedPreferences "shown once" pattern as the session screen's Ghost
 /// Mode hint and the scheduler's week-preferences first-visit sheet) —
 /// deliberately not a repeated gate, just a single, unmissable disclosure.
-class _PackingTile extends StatefulWidget {
+class _PackingTile extends ConsumerStatefulWidget {
   const _PackingTile();
 
   @override
-  State<_PackingTile> createState() => _PackingTileState();
+  ConsumerState<_PackingTile> createState() => _PackingTileState();
 }
 
-class _PackingTileState extends State<_PackingTile> {
+class _PackingTileState extends ConsumerState<_PackingTile> {
   static const _warningShownKey = 'packing_warning_shown';
 
   Future<void> _open(BuildContext context) async {
@@ -813,12 +858,15 @@ class _PackingTileState extends State<_PackingTile> {
       await prefs.setBool(_warningShownKey, true);
     }
     if (!context.mounted) return;
-    final level = LevelData.levels['freediving_packing']!;
+    final level = LevelData.packing(gulpCount: ref.read(packingGulpCountProvider));
     Navigator.of(context).push(fadeThroughRoute(IntroScreen(level: level)));
   }
 
   @override
   Widget build(BuildContext context) {
+    // Display-only metadata (title/subtitle/color never vary with gulp
+    // count) — the static entry is fine here; _open builds the real,
+    // gulp-count-aware level for the actual session.
     final level = LevelData.levels['freediving_packing']!;
     return PressableScale(
       onTap: () => _open(context),

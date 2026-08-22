@@ -1,6 +1,58 @@
 import 'package:drift/drift.dart';
+import 'package:okrutnik_breath/config/levels.dart';
 import 'package:okrutnik_breath/data/db/database.dart';
 import 'package:okrutnik_breath/data/repositories/user_profile_repository.dart';
+
+/// Which broad practice family a level belongs to, for the weekly diversity
+/// bonus below — coarser than [ExerciseType] (a Wim Hof session and a
+/// custom breathing pattern both count as the same "breathing" family).
+/// Null for a levelKey this can't place (defensive only — every real
+/// session's levelKey should match one of these).
+String? disciplineFamilyFor(String levelKey) {
+  // Literal 'cold_shower' rather than importing cold_shower.dart's
+  // coldShowerLevelKey constant — that file already imports
+  // data_providers.dart, which imports levels.dart, which this file also
+  // imports; importing it here too would complete a cycle for one constant.
+  if (levelKey == 'cold_shower') return 'cold';
+  // Freediving tables/PB test/packing/custom-freediving all key off this
+  // prefix (or the exact 'custom_freediving' key) regardless of whichever
+  // ExerciseType they're built with — packing in particular is
+  // ExerciseType.guidedRoutine, same as the Mobility-tab exercises, but is
+  // clearly a freediving discipline, not a mobility one.
+  if (levelKey.startsWith('freediving_') || levelKey == 'custom_freediving') {
+    return 'freediving';
+  }
+  final type = LevelData.levels[levelKey]?.type;
+  switch (type) {
+    case ExerciseType.wimHof:
+    case ExerciseType.custom:
+    case ExerciseType.boxBreathing:
+    case ExerciseType.relax478:
+    case ExerciseType.fireBreathing:
+      return 'breathing';
+    case ExerciseType.guidedRoutine:
+      return 'mobility';
+    case ExerciseType.co2Table:
+    case ExerciseType.o2Table:
+    case ExerciseType.customFreedivingTable:
+      return 'freediving';
+    case ExerciseType.coldShower:
+      return 'cold';
+    case null:
+      return null;
+  }
+}
+
+/// A small XP bonus for training multiple distinct disciplines in the same
+/// week instead of only ever rewarding volume within one — Twoja Ścieżka's
+/// weekly plan already deliberately interleaves disciplines (Wim Hof,
+/// CO2/O2, cold shower, mobility), but XP never reflected that variety at
+/// all before this.
+double diversityXpMultiplier(int distinctFamiliesThisWeek) {
+  if (distinctFamiliesThisWeek >= 4) return 1.25;
+  if (distinctFamiliesThisWeek >= 3) return 1.15;
+  return 1.0;
+}
 
 /// Cumulative XP required to advance from [level] to [level] + 1.
 ///
@@ -43,19 +95,27 @@ class GamificationService {
 
   GamificationService(this._profileRepository);
 
-  /// Applies the XP and level gains for a finished session.
+  /// Applies the XP and level gains for a finished session. [bonusMultiplier]
+  /// scales the whole computed amount (e.g. the weekly discipline-diversity
+  /// bonus — see [diversityXpMultiplier]) — unlike [multiplier], which only
+  /// scales the breath-count term, a bonus for training variety should apply
+  /// to the session's real earned XP as a whole, retention included.
   Future<XpResult> updateXpAndLevel({
     required int breathCount,
     required int retentionSeconds,
     required double multiplier,
+    double bonusMultiplier = 1.0,
   }) async {
-    final xpEarned = (breathCount * multiplier).round() + (retentionSeconds * 2);
+    final xpEarned =
+        (((breathCount * multiplier).round() + (retentionSeconds * 2)) * bonusMultiplier)
+            .round();
     return _applyXp(xpEarned);
   }
 
   /// Applies a fixed XP amount directly — for activities with no natural
   /// breath-count/duration to derive XP from (e.g. a logged cold shower).
-  Future<XpResult> awardFlatXp(int amount) => _applyXp(amount);
+  Future<XpResult> awardFlatXp(int amount, {double bonusMultiplier = 1.0}) =>
+      _applyXp((amount * bonusMultiplier).round());
 
   Future<XpResult> _applyXp(int xpEarned) async {
     final profile = await _profileRepository.getUserProfile();

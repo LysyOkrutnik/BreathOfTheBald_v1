@@ -37,17 +37,37 @@ class ColdShowerLogResult {
 /// home-screen widget) simply omit it, matching the previous always-0
 /// behavior.
 Future<ColdShowerLogResult> logColdShowerSession(WidgetRef ref, {int durationSec = 0}) async {
-  final gamification = ref.read(gamificationServiceProvider);
-  final xpResult = await gamification.awardFlatXp(coldShowerXpFor(durationSec));
-  await gamification.updateStreak();
-  final sessionId = await ref.read(sessionRepositoryProvider).addSession(
-        levelKey: coldShowerLevelKey,
-        timestamp: DateTime.now(),
-        durationSec: durationSec,
-        rounds: 1,
-        retentionSec: 0,
-        xpEarned: xpResult.xpEarned,
-      );
+  final sessionRepo = ref.read(sessionRepositoryProvider);
+  final now = DateTime.now();
+  // Nothing stopped a 0-duration quick-log from being tapped repeatedly in
+  // one day, each earning the same guaranteed floor XP and counting toward
+  // the streak — a real way to farm both with zero time actually spent
+  // under cold water. Only the day's first log earns XP/streak; later ones
+  // in the same day are still recorded (so the day's real shower count
+  // stays honest) but contribute neither.
+  final todaysLogs = (await sessionRepo.getSessionsForLevel(coldShowerLevelKey))
+      .where((s) =>
+          s.timestamp.year == now.year &&
+          s.timestamp.month == now.month &&
+          s.timestamp.day == now.day)
+      .isNotEmpty;
+
+  var xpEarned = 0;
+  if (!todaysLogs) {
+    final gamification = ref.read(gamificationServiceProvider);
+    final xpResult = await gamification.awardFlatXp(coldShowerXpFor(durationSec));
+    await gamification.updateStreak();
+    xpEarned = xpResult.xpEarned;
+  }
+
+  final sessionId = await sessionRepo.addSession(
+    levelKey: coldShowerLevelKey,
+    timestamp: now,
+    durationSec: durationSec,
+    rounds: 1,
+    retentionSec: 0,
+    xpEarned: xpEarned,
+  );
 
   return ColdShowerLogResult(sessionId: sessionId);
 }

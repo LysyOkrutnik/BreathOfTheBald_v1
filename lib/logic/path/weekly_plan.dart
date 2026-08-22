@@ -35,10 +35,22 @@ class PlannedAction {
 
 /// [dayOffset] 0 is today. An empty [actions] list is a full rest day.
 class DayPlan {
-  const DayPlan({required this.dayOffset, required this.actions});
+  const DayPlan({
+    required this.dayOffset,
+    required this.actions,
+    this.isDesignatedRest = false,
+  });
 
   final int dayOffset;
   final List<PlannedAction> actions;
+
+  /// True only for the one day [WeeklyPlanGenerator] deliberately reserved
+  /// as a rest day (see its `usableDays.removeLast()`) — an intentional,
+  /// planned-for recovery day, as opposed to a day that just happens to
+  /// have no training on it because there weren't enough sessions to fill
+  /// every available slot. UI can use this to call out an *intended* rest
+  /// day distinctly rather than treating every actions-empty day the same.
+  final bool isDesignatedRest;
 }
 
 /// A rolling 7-day plan starting today ([DayPlan.dayOffset] 0..6).
@@ -62,6 +74,20 @@ class WeeklyPlanGenerator {
   static const int wimHofPerWeek = 4;
   static const int co2PerWeek = 2;
   static const int o2PerWeek = 2;
+  static const int mobilityPerWeek = 2;
+
+  // The 4 Mobility-tab guided routines — none needs a PB or a Wim Hof
+  // level, so unlike every other discipline here they're plannable from
+  // week one. Packing is deliberately excluded: it needs a verified PB
+  // (see freediving_home_screen.dart's packing gate) and carries enough of
+  // its own risk profile that auto-scheduling it into a generic weekly
+  // rotation isn't something to do without a more deliberate design.
+  static const List<String> mobilityLevelKeys = [
+    'stretch_chest',
+    'uddiyana_bandha',
+    'resisted_breathing',
+    'three_part_breath',
+  ];
 
   static WeeklyPlan compute({
     required WimHofNextUp wimHof,
@@ -90,8 +116,9 @@ class WeeklyPlanGenerator {
             .contains(now.add(Duration(days: offset)).weekday))
           offset,
     ];
+    int? designatedRestOffset;
     if (availableWeekdays.length >= 7 && usableDays.length == 7) {
-      usableDays.removeLast();
+      designatedRestOffset = usableDays.removeLast();
     }
     // A fully-contradictory configuration (no day available at all) would
     // otherwise make every session "conflict" — fall back to the full week
@@ -111,6 +138,21 @@ class WeeklyPlanGenerator {
 
     final groups = <List<PlannedAction>>[];
 
+    // Mobility never depends on PB or Wim Hof level — plannable from week
+    // one, same as the daily cold shower below, and never "hard" (no
+    // budget interaction at all). Rotates through all 4 routines instead
+    // of always suggesting the same one, using the day of the year as a
+    // stable-but-changing-week-to-week seed rather than persisting any new
+    // state just for this.
+    final mobilityStart = now.difference(DateTime(now.year)).inDays;
+    groups.add([
+      for (var i = 0; i < mobilityPerWeek; i++)
+        PlannedAction(
+          type: PathAction.mobility,
+          levelKey: mobilityLevelKeys[(mobilityStart + i) % mobilityLevelKeys.length],
+        ),
+    ]);
+
     if (!pbVerified) {
       // Nothing to interleave with yet — but the PB test itself no longer
       // waits for Wim Hof mastery, it's scheduled as soon as the user has
@@ -121,20 +163,20 @@ class WeeklyPlanGenerator {
       }
       groups.add(List.filled(wimHofPerWeek, wimHofAction));
     } else {
-      // O2 used to be the purely elastic slot, trimmed first (down to zero)
-      // whenever the shared hard-session budget was under pressure — a
-      // Beast/Guru user whose 4 weekly Wim Hof sessions alone already fill
-      // the cap would see O2 vanish from the plan every single week,
-      // contradicting this generator's own "every discipline gets a slot
-      // every week" premise. Reserve a minimum O2 slot first and trim Wim
-      // Hof's count instead when a hard Wim Hof level would otherwise crowd
-      // it out completely.
-      const minO2Guarantee = 1;
+      // Wim Hof is the foundation of the method — under budget pressure it's
+      // O2 (the single most hypoxia-intensive exercise in the app) that
+      // gives way, never the other way around. This used to trim Wim Hof
+      // down to zero first to reserve a guaranteed O2 slot, which meant a
+      // Beast/Guru user under a tight cap could see their core practice
+      // disappear from the week entirely so the app could still schedule
+      // its riskiest table — pedagogically backwards. Wim Hof keeps at
+      // least one session/week; O2 (below) is the one that can shrink to
+      // zero instead.
+      const minWimHofGuarantee = 1;
       var wimHofCount = wimHofPerWeek;
       if (wimHofAction.isHard) {
-        while (wimHofCount > 0 &&
-            hardSessionsUsedThisWeek + wimHofCount + minO2Guarantee >
-                weeklyHardSessionCap) {
+        while (wimHofCount > minWimHofGuarantee &&
+            hardSessionsUsedThisWeek + wimHofCount > weeklyHardSessionCap) {
           wimHofCount--;
         }
       }
@@ -222,7 +264,12 @@ class WeeklyPlanGenerator {
 
     return WeeklyPlan(
       days: [
-        for (var i = 0; i < 7; i++) DayPlan(dayOffset: i, actions: days[i]),
+        for (var i = 0; i < 7; i++)
+          DayPlan(
+            dayOffset: i,
+            actions: days[i],
+            isDesignatedRest: i == designatedRestOffset,
+          ),
       ],
     );
   }
@@ -260,6 +307,10 @@ String plannedActionLabelForLocale(String languageCode, PlannedAction action) {
       return tr('path_action_o2');
     case PathAction.coldShower:
       return tr('path_action_coldshower');
+    case PathAction.mobility:
+      final level = LevelData.levels[action.levelKey];
+      final name = level == null ? '' : tr(level.title);
+      return '${tr('path_action_mobility')} $name';
     case PathAction.rest:
     case PathAction.maintain:
       return tr('path_rest_day_label');
@@ -302,6 +353,9 @@ String plannedActionChipLabelForLocale(String languageCode, PlannedAction action
       return tr('path_chip_o2');
     case PathAction.coldShower:
       return tr('path_chip_coldshower');
+    case PathAction.mobility:
+      final level = LevelData.levels[action.levelKey];
+      return level == null ? '' : tr(level.title);
     case PathAction.rest:
     case PathAction.maintain:
       return tr('path_chip_rest');

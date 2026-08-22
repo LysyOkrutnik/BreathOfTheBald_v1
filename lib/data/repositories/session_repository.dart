@@ -73,6 +73,13 @@ class SessionRepository {
   /// idempotent, so re-pushing an already-synced row is a harmless no-op).
   Future<List<Session>> getAllSessions() => _db.select(_db.sessions).get();
 
+  /// Every logged session for one [levelKey] — used to check same-day
+  /// history for an activity with no session-shape of its own (the cold
+  /// shower quick-log), without pulling every session in the database just
+  /// to filter it in memory.
+  Future<List<Session>> getSessionsForLevel(String levelKey) =>
+      (_db.select(_db.sessions)..where((t) => t.levelKey.equals(levelKey))).get();
+
   /// Applied during a sync pull: inserts a session that originated on
   /// another device (matched by [syncId]), or refreshes the one field that
   /// can change after the fact (rpeScore) if it already exists locally —

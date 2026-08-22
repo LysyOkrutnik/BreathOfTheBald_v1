@@ -337,6 +337,7 @@ class InstructionScreen extends StatelessWidget {
                         ],
                         warningKeys: [
                           "guide_three_part_breath_warning1",
+                          "guide_three_part_breath_warning2",
                         ],
                         stepKeys: [
                           "guide_three_part_breath_step1",

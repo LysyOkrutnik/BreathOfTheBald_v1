@@ -101,12 +101,29 @@ abstract final class Co2O2TableGenerator {
   static const int defaultRounds = 8;
 
   static const double co2ApneaPct = 0.60;
-  static const int co2InitialRestSec = 90;
-  static const int co2RestFloorSec = 20;
+
+  // Rest used to be two flat constants (90s -> 20s) regardless of how long
+  // the apnea itself was — fine at a moderate PB, but for a long-PB user
+  // (apnea = 60% of PB, so a 300s PB means a 180s apnea) the fixed 20s
+  // floor gave a hold:rest ratio of 9:1 in the final round, and even the
+  // *first* round's rest (90s) was already shorter than the hold itself.
+  // Scaling both bounds to the apnea keeps the relative difficulty
+  // consistent across every PB instead of only working well near the PB
+  // the numbers were originally hand-tuned for.
+  static const double co2InitialRestRatio = 1.5;
+  static const int co2InitialRestMinSec = 60;
+  static const int co2InitialRestMaxSec = 180;
+  static const double co2RestFloorRatio = 0.4;
+  static const int co2RestFloorMinSec = 20;
+  static const int co2RestFloorMaxSec = 60;
 
   static const int o2RestSec = 120;
   static const double o2StartPct = 0.55;
-  static const double o2MaxPct = 0.92;
+  // Combined with RpeProgression.maxRatioOfVerified below, the worst case
+  // this can ever ask for is o2MaxPct * maxRatioOfVerified of the last
+  // *verified* PB — keep that product comfortably under 1.0 (currently
+  // 0.85 * 1.05 = 0.8925) whenever either constant changes.
+  static const double o2MaxPct = 0.85;
 
   /// Lowest PB (seconds) treated as plausible input; below this, tables would
   /// be too short to be meaningful and likely indicate a mis-typed value.
@@ -143,13 +160,17 @@ abstract final class Co2O2TableGenerator {
     // repeated 8 times with shrinking rest.
     final safePb = pbSeconds < minPlausiblePbSec ? minPlausiblePbSec : pbSeconds;
     final apnea = _roundTo5Bounded(safePb * co2ApneaPct, min: 10, max: safePb);
-    final decrement = (co2InitialRestSec - co2RestFloorSec) / (safeRounds - 1);
+    final initialRest = (apnea * co2InitialRestRatio)
+        .clamp(co2InitialRestMinSec, co2InitialRestMaxSec);
+    final restFloor =
+        (apnea * co2RestFloorRatio).clamp(co2RestFloorMinSec, co2RestFloorMaxSec);
+    final decrement = (initialRest - restFloor) / (safeRounds - 1);
 
     return List.generate(safeRounds, (i) {
-      final raw = co2InitialRestSec - decrement * i;
+      final raw = initialRest - decrement * i;
       // Never round below the floor; round5 alone could undershoot a value
       // just above the floor down to a lower multiple of 5.
-      final rest = _roundTo5Bounded(raw, min: co2RestFloorSec, max: co2InitialRestSec);
+      final rest = _roundTo5Bounded(raw, min: restFloor, max: initialRest);
       return BreathHoldRound(index: i + 1, apneaSec: apnea, restSec: rest);
     });
   }
@@ -174,8 +195,9 @@ abstract final class Co2O2TableGenerator {
       // Bounded rounding: nearest-5 rounding on its own can push the final
       // round's target a few seconds *past* maxApnea (this is exactly the
       // rounding error in the original hand-worked spec, which listed a final
-      // round of 130s against an intended 85% ceiling of 127.5s) — round down
-      // instead whenever plain rounding would exceed the safety ceiling.
+      // round of 130s against an intended 85% (o2MaxPct) ceiling of 127.5s) —
+      // round down instead whenever plain rounding would exceed the safety
+      // ceiling.
       final apnea = _roundTo5Bounded(raw, min: startApnea, max: maxApnea);
       return BreathHoldRound(index: i + 1, apneaSec: apnea, restSec: o2RestSec);
     });
@@ -231,8 +253,10 @@ abstract final class RpeProgression {
   static const double decreaseFactor = 0.95;
 
   /// Hard ceiling: the virtual PB can never exceed this fraction of the last
-  /// verified real test, however many "too easy" ratings accumulate.
-  static const double maxRatioOfVerified = 1.15;
+  /// verified real test, however many "too easy" ratings accumulate. Kept
+  /// low enough that, combined with o2MaxPct above, a generated O2 table's
+  /// final round can never approach the user's actual last verified max.
+  static const double maxRatioOfVerified = 1.05;
 
   /// Floor to match: repeated "brutal" ratings can't spiral the working PB
   /// down into an unrealistically low, unhelpful table either.

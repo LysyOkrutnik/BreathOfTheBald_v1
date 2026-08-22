@@ -19,6 +19,8 @@ Color plannedActionColor(PlannedAction action) {
       return const Color(0xFFFF7043);
     case PathAction.coldShower:
       return const Color(0xFF80D8FF);
+    case PathAction.mobility:
+      return LevelData.levels[action.levelKey]?.color ?? AppTheme.accent;
     case PathAction.rest:
     case PathAction.maintain:
       return AppTheme.textDim;
@@ -37,6 +39,8 @@ IconData plannedActionIcon(PlannedAction action) {
       return Icons.bolt_rounded;
     case PathAction.coldShower:
       return Icons.ac_unit_rounded;
+    case PathAction.mobility:
+      return Icons.accessibility_new_rounded;
     case PathAction.rest:
     case PathAction.maintain:
       return Icons.spa_outlined;

@@ -18,7 +18,7 @@ enum PathStage {
 
 /// The single most relevant thing to do today, given where the user is on
 /// the path.
-enum PathAction { wimHof, pbTest, co2Table, o2Table, coldShower, rest, maintain }
+enum PathAction { wimHof, pbTest, co2Table, o2Table, coldShower, mobility, rest, maintain }
 
 class PathState {
   const PathState({
@@ -72,7 +72,22 @@ class TrainingPath {
     int? progressTarget;
     int? daysRemaining;
 
-    if (wimHofCurrentLevelKey == 'mild' || wimHofCurrentLevelKey == 'strong') {
+    // Whether the Wim Hof foundation (stages 1-2) is actually done. This is
+    // deliberately NOT "has the ladder promoted past strong" — promotion to
+    // beast/guru additionally requires a trial-then-confirm RPE check
+    // (WimHofProgression) that has nothing to do with freediving readiness.
+    // Gating the PB test on that extra, unrelated requirement meant a user
+    // stuck mid-trial on strong (or one who reached guru immediately) never
+    // saw "Wprowadzenie do wstrzymań" when the name promised it right after
+    // building power. What actually matters here is the same session/day
+    // minimum stage 2's own progress bar already tracks.
+    final metStrongMinimums = wimHofCurrentLevelKey != 'mild' &&
+        (wimHofCurrentLevelKey != 'strong' ||
+            (wimHof.sessionsAtLevel >= kMinSessionsAtLevel &&
+                wimHof.daysAtLevel >= kMinDaysAtLevel));
+
+    if (wimHofCurrentLevelKey == 'mild' ||
+        (wimHofCurrentLevelKey == 'strong' && !metStrongMinimums)) {
       stage = wimHofCurrentLevelKey == 'mild'
           ? PathStage.breathFoundations
           : PathStage.buildingPower;
@@ -99,13 +114,22 @@ class TrainingPath {
       // "Advanced" still spans two ladder levels (beast, guru) — surface
       // beast→guru progress the same way mild→strong is surfaced above,
       // rather than collapsing straight to a generic "maintain" the moment
-      // both freediving tables are comfortable.
+      // both freediving tables are comfortable. The `recommendedLevelKey`
+      // branch below is kept in sync with WeeklyPlanGenerator's own
+      // `recommendedLevelKey ?? currentLevelKey` — this used to fall through
+      // to "maintain" for the entire window in which a guru trial was
+      // actually eligible, while the weekly plan correctly scheduled guru
+      // sessions from the same data, showing the user two contradictory
+      // recommendations at once.
       if (wimHofCurrentLevelKey == 'beast' && wimHof.recommendedLevelKey == null) {
         action = PathAction.wimHof;
         actionLevelKey = 'beast';
         progressCurrent = wimHof.sessionsAtLevel;
         progressTarget = kMinSessionsAtLevel;
         daysRemaining = (kMinDaysAtLevel - wimHof.daysAtLevel).clamp(0, kMinDaysAtLevel);
+      } else if (wimHof.recommendedLevelKey != null) {
+        action = PathAction.wimHof;
+        actionLevelKey = wimHof.recommendedLevelKey;
       } else {
         action = PathAction.maintain;
       }
