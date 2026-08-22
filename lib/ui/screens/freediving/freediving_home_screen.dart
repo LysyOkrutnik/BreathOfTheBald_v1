@@ -427,8 +427,10 @@ class _CustomFreedivingPresetCard extends StatelessWidget {
                   const SizedBox(height: AppSpacing.xs),
                   Text(
                     '~${_estimateMinutes(preset)} min • '
-                    '${preset.startApneaSec}-${preset.endApneaSec}s apnea • '
-                    '${preset.startRestSec}-${preset.endRestSec}s rest • ${preset.rounds}×',
+                    '${preset.startApneaSec}-${preset.endApneaSec}s '
+                    '${L10n.get(context, 'freediving_custom_summary_apnea_suffix')} • '
+                    '${preset.startRestSec}-${preset.endRestSec}s '
+                    '${L10n.get(context, 'freediving_custom_summary_rest_suffix')} • ${preset.rounds}×',
                     style: TextStyle(
                         fontSize: 12, color: AppTheme.textDim.withAlpha(190)),
                   ),

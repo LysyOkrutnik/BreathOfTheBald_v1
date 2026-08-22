@@ -26,9 +26,26 @@ function fmt(d: Date | null | undefined): string {
   return d ? d.toISOString().replace('T', ' ').slice(0, 16) : '—';
 }
 
+/// Escapes a value for use inside `onsubmit="return confirm('...')"` — the
+/// string has to survive two layers at once: the browser HTML-decodes the
+/// attribute value before JS ever sees it, then the JS engine parses the
+/// single-quoted string literal. Ordinary HTML-escaping (`esc`) would
+/// entity-escape the apostrophe to `&#39;`, which decodes back to a literal
+/// `'` and breaks out of the JS string — so apostrophes are backslash-escaped
+/// for JS instead, while `&`/`<`/`>`/`"` still get the usual HTML treatment.
+function escConfirmText(value: string): string {
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 function nav(active: string): string {
   const items: [string, string][] = [
-    ['/admin', 'Dashboard'],
+    ['/admin', 'Panel główny'],
     ['/admin/users', 'Użytkownicy'],
     ['/admin/challenges', 'Wyzwania'],
     ['/admin/feedback', 'Zgłoszenia'],
@@ -182,10 +199,10 @@ router.get('/', async (req: AdminRequest, res) => {
 
   res.type('html').send(
     page(
-      'Dashboard',
+      'Panel główny',
       '/admin',
       req.adminToken!,
-      `<h1>Dashboard</h1>
+      `<h1>Panel główny</h1>
       <div style="display:flex;gap:24px;flex-wrap:wrap;margin:24px 0">
         ${stat('Użytkownicy', totalUsers)}
         ${stat('Aktywni (7 dni)', active7)}
@@ -246,7 +263,7 @@ router.get('/users', async (req: AdminRequest, res) => {
         <button type="submit">FILTRUJ</button>
       </form>
       <p class="muted">${total} użytkowników łącznie</p>
-      <table><tr><th>E-mail</th><th>Zarejestrowano</th><th>Zweryfikowany</th><th>Status</th><th></th></tr>
+      <table><tr><th>E-mail</th><th>Zarejestrowano</th><th>E-mail zweryfikowany</th><th>Status</th><th></th></tr>
         ${users
           .map(
             (u) => `<tr>
@@ -343,31 +360,42 @@ const challengeSchema = challengeObjectSchema.refine(
   },
 );
 
-function challengeForm(token: string, action: string, values?: Partial<Record<keyof typeof challengeObjectSchema.shape, string>>) {
+// Admins see these values directly (form select + table column) — always go
+// through this map instead of printing the raw enum, which reads like a
+// variable name lifted straight out of the source code.
+const METRIC_LABELS: Record<string, string> = {
+  STREAK: 'Passa (dni z rzędu)',
+  TOTAL_RETENTION_SEC: 'Łączny czas bezdechu (s)',
+  SESSION_COUNT: 'Liczba sesji',
+};
+
+function challengeForm(token: string, action: string, values?: Partial<Record<keyof typeof challengeObjectSchema.shape, string>>, isEdit = false) {
   const v = values ?? {};
-  const metrics = ['STREAK', 'TOTAL_RETENTION_SEC', 'SESSION_COUNT'];
+  const metrics = Object.keys(METRIC_LABELS);
   return `<form method="post" action="${action}">
     ${csrfField(token)}
-    <input type="text" name="key" placeholder="Klucz (np. sierpien-streak)" value="${esc(v.key ?? '')}" required>
+    <input type="text" name="key" placeholder="Klucz (np. sierpien-2026)" value="${esc(v.key ?? '')}" required>
     <input type="text" name="title" placeholder="Tytuł" value="${esc(v.title ?? '')}" required>
     <textarea name="description" placeholder="Opis" required>${esc(v.description ?? '')}</textarea>
     <select name="metric">
-      ${metrics.map((m) => `<option value="${m}" ${v.metric === m ? 'selected' : ''}>${m}</option>`).join('')}
+      ${metrics.map((m) => `<option value="${m}" ${v.metric === m ? 'selected' : ''}>${METRIC_LABELS[m]}</option>`).join('')}
     </select>
     <label class="muted">Start<input type="datetime-local" name="startsAt" value="${esc(v.startsAt ?? '')}" required></label>
     <label class="muted">Koniec<input type="datetime-local" name="endsAt" value="${esc(v.endsAt ?? '')}" required></label>
-    <button type="submit">ZAPISZ</button>
+    <button type="submit">${isEdit ? 'ZAPISZ ZMIANY' : 'DODAJ WYZWANIE'}</button>
   </form>`;
 }
 
 router.get('/challenges', async (req: AdminRequest, res) => {
   const challenges = await prisma.challenge.findMany({ orderBy: { startsAt: 'desc' } });
+  const deleteFailed = req.query.error === 'delete_failed';
   res.type('html').send(
     page(
       'Wyzwania',
       '/admin/challenges',
       req.adminToken!,
       `<h1>Wyzwania</h1>
+      ${deleteFailed ? '<p class="err">Nie udało się usunąć wyzwania. Spróbuj ponownie.</p>' : ''}
       <h2>Nowe wyzwanie</h2>
       ${challengeForm(req.adminToken!, '/admin/challenges')}
       <h2>Istniejące</h2>
@@ -375,10 +403,10 @@ router.get('/challenges', async (req: AdminRequest, res) => {
         ${challenges
           .map(
             (c) => `<tr>
-          <td>${esc(c.title)}</td><td>${c.metric}</td><td>${fmt(c.startsAt)}</td><td>${fmt(c.endsAt)}</td>
+          <td>${esc(c.title)}</td><td>${METRIC_LABELS[c.metric] ?? c.metric}</td><td>${fmt(c.startsAt)}</td><td>${fmt(c.endsAt)}</td>
           <td>
             <a href="/admin/challenges/${c.id}/edit">Edytuj</a> ·
-            <form class="inline" method="post" action="/admin/challenges/${c.id}/delete" onsubmit="return confirm('Usunąć to wyzwanie?')">
+            <form class="inline" method="post" action="/admin/challenges/${c.id}/delete" onsubmit="return confirm('Usunąć wyzwanie „${escConfirmText(c.title)}”? Uczestnicy stracą swój dotychczasowy postęp w nim.')">
               ${csrfField(req.adminToken!)}<button type="submit" class="btn danger" style="padding:4px 10px">Usuń</button>
             </form>
           </td>
@@ -393,14 +421,32 @@ router.get('/challenges', async (req: AdminRequest, res) => {
 router.post('/challenges', requireCsrf, async (req: AdminRequest, res) => {
   const parsed = challengeSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).send(esc(parsed.error.issues[0]?.message ?? 'Nieprawidłowe dane formularza.'));
+    res.status(400).type('html').send(
+      page(
+        'Wyzwania',
+        '/admin/challenges',
+        req.adminToken!,
+        `<h1>Nowe wyzwanie</h1>
+        <p class="err">${esc(parsed.error.issues[0]?.message ?? 'Nieprawidłowe dane formularza.')}</p>
+        ${challengeForm(req.adminToken!, '/admin/challenges', req.body)}`,
+      ),
+    );
     return;
   }
   const { startsAt, endsAt, ...rest } = parsed.data;
   try {
     await prisma.challenge.create({ data: { ...rest, startsAt: new Date(startsAt), endsAt: new Date(endsAt) } });
   } catch {
-    res.status(400).send('Nie udało się zapisać wyzwania — sprawdź, czy klucz jest unikalny.');
+    res.status(400).type('html').send(
+      page(
+        'Wyzwania',
+        '/admin/challenges',
+        req.adminToken!,
+        `<h1>Nowe wyzwanie</h1>
+        <p class="err">Nie udało się zapisać wyzwania — sprawdź, czy klucz jest unikalny.</p>
+        ${challengeForm(req.adminToken!, '/admin/challenges', parsed.data)}`,
+      ),
+    );
     return;
   }
   res.redirect('/admin/challenges');
@@ -418,14 +464,19 @@ router.get('/challenges/:id/edit', async (req: AdminRequest, res) => {
       '/admin/challenges',
       req.adminToken!,
       `<h1>Edytuj wyzwanie</h1>
-      ${challengeForm(req.adminToken!, `/admin/challenges/${challenge.id}`, {
-        key: challenge.key,
-        title: challenge.title,
-        description: challenge.description,
-        metric: challenge.metric,
-        startsAt: challenge.startsAt.toISOString().slice(0, 16),
-        endsAt: challenge.endsAt.toISOString().slice(0, 16),
-      })}`,
+      ${challengeForm(
+        req.adminToken!,
+        `/admin/challenges/${challenge.id}`,
+        {
+          key: challenge.key,
+          title: challenge.title,
+          description: challenge.description,
+          metric: challenge.metric,
+          startsAt: challenge.startsAt.toISOString().slice(0, 16),
+          endsAt: challenge.endsAt.toISOString().slice(0, 16),
+        },
+        true,
+      )}`,
     ),
   );
 });
@@ -433,21 +484,47 @@ router.get('/challenges/:id/edit', async (req: AdminRequest, res) => {
 router.post('/challenges/:id', requireCsrf, async (req: AdminRequest, res) => {
   const parsed = challengeSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).send(esc(parsed.error.issues[0]?.message ?? 'Nieprawidłowe dane formularza.'));
+    res.status(400).type('html').send(
+      page(
+        'Edytuj wyzwanie',
+        '/admin/challenges',
+        req.adminToken!,
+        `<h1>Edytuj wyzwanie</h1>
+        <p class="err">${esc(parsed.error.issues[0]?.message ?? 'Nieprawidłowe dane formularza.')}</p>
+        ${challengeForm(req.adminToken!, `/admin/challenges/${req.params.id}`, req.body, true)}`,
+      ),
+    );
     return;
   }
   const { startsAt, endsAt, ...rest } = parsed.data;
-  await prisma.challenge
-    .update({
+  try {
+    await prisma.challenge.update({
       where: { id: req.params.id as string },
       data: { ...rest, startsAt: new Date(startsAt), endsAt: new Date(endsAt) },
-    })
-    .catch(() => {});
+    });
+  } catch {
+    res.status(400).type('html').send(
+      page(
+        'Edytuj wyzwanie',
+        '/admin/challenges',
+        req.adminToken!,
+        `<h1>Edytuj wyzwanie</h1>
+        <p class="err">Nie udało się zapisać zmian — sprawdź, czy klucz jest unikalny.</p>
+        ${challengeForm(req.adminToken!, `/admin/challenges/${req.params.id}`, parsed.data, true)}`,
+      ),
+    );
+    return;
+  }
   res.redirect('/admin/challenges');
 });
 
 router.post('/challenges/:id/delete', requireCsrf, async (req: AdminRequest, res) => {
-  await prisma.challenge.delete({ where: { id: req.params.id as string } }).catch(() => {});
+  try {
+    await prisma.challenge.delete({ where: { id: req.params.id as string } });
+  } catch {
+    res.redirect('/admin/challenges?error=delete_failed');
+    return;
+  }
   res.redirect('/admin/challenges');
 });
 
@@ -488,6 +565,7 @@ router.get('/feedback', async (req: AdminRequest, res) => {
     ['opinion', 'Opinia'],
     ['other', 'Inne'],
   ];
+  const categoryLabels = Object.fromEntries(categoryOptions);
   res.type('html').send(
     page(
       'Zgłoszenia',
@@ -509,7 +587,7 @@ router.get('/feedback', async (req: AdminRequest, res) => {
           .map(
             (f) => `<tr>
           <td>${esc(f.user.email)}</td>
-          <td>${esc(f.category ?? '—')}</td>
+          <td>${esc((f.category && categoryLabels[f.category]) ?? f.category ?? '—')}</td>
           <td style="max-width:360px">${esc(f.message)}</td>
           <td>${fmt(f.createdAt)}</td>
           <td>${f.resolvedAt ? 'Rozwiązane ' + fmt(f.resolvedAt) : 'Otwarte'}</td>
@@ -561,6 +639,7 @@ const ANNOUNCEMENT_MIN_INTERVAL_MS = 5 * 60_000;
 router.get('/announcements', async (req: AdminRequest, res) => {
   const sent = req.query.sent === '1';
   const rateLimited = req.query.error === 'rate_limited';
+  const invalid = req.query.error === 'invalid';
   const [history, recipientCount] = await Promise.all([
     prisma.announcement.findMany({
       orderBy: { sentAt: 'desc' },
@@ -575,8 +654,9 @@ router.get('/announcements', async (req: AdminRequest, res) => {
       '/admin/announcements',
       req.adminToken!,
       `<h1>Ogłoszenia</h1>
-      ${sent ? '<p>Wysłano.</p>' : ''}
+      ${sent ? '<p>Ogłoszenie zostało wysłane.</p>' : ''}
       ${rateLimited ? '<p class="err">Poczekaj chwilę — ogłoszenie zostało wysłane bardzo niedawno.</p>' : ''}
+      ${invalid ? '<p class="err">Podaj tytuł i treść ogłoszenia (tytuł do 100 znaków, treść do 500).</p>' : ''}
       <p class="muted">Trafi do <strong>${recipientCount}</strong> zarejestrowanych urządzeń.</p>
       <form method="post" action="/admin/announcements" onsubmit="return confirm('Wysłać to ogłoszenie do ${recipientCount} urządzeń?')">
         ${csrfField(req.adminToken!)}
@@ -597,7 +677,7 @@ router.post('/announcements', requireCsrf, async (req: AdminRequest, res) => {
     .object({ title: z.string().trim().min(1).max(100), body: z.string().trim().min(1).max(500) })
     .safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).send('Nieprawidłowe dane formularza.');
+    res.redirect('/admin/announcements?error=invalid');
     return;
   }
   const lastAnnouncement = await prisma.announcement.findFirst({ orderBy: { sentAt: 'desc' } });

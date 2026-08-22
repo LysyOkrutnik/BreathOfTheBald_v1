@@ -100,7 +100,7 @@ class InstructionScreen extends StatelessWidget {
                           "guide_box_breathing_benefit3",
                           "guide_box_breathing_benefit4"
                         ],
-                        warningKeys: ["guide_box_breathing_warning1", "guide_box_breathing_warning2"],
+                        warningKeys: ["guide_box_breathing_warning1"],
                         stepKeys: [
                           "guide_box_breathing_step1",
                           "guide_box_breathing_step2",
@@ -275,6 +275,7 @@ class InstructionScreen extends StatelessWidget {
                           "guide_uddiyana_benefit1",
                           "guide_uddiyana_benefit2",
                           "guide_uddiyana_benefit3",
+                          "guide_uddiyana_benefit4",
                         ],
                         warningKeys: [
                           "guide_uddiyana_warning1",
@@ -304,6 +305,7 @@ class InstructionScreen extends StatelessWidget {
                           "guide_resisted_breathing_benefit1",
                           "guide_resisted_breathing_benefit2",
                           "guide_resisted_breathing_benefit3",
+                          "guide_resisted_breathing_benefit4",
                         ],
                         warningKeys: [
                           "guide_resisted_breathing_warning1",
@@ -331,6 +333,7 @@ class InstructionScreen extends StatelessWidget {
                           "guide_three_part_breath_benefit1",
                           "guide_three_part_breath_benefit2",
                           "guide_three_part_breath_benefit3",
+                          "guide_three_part_breath_benefit4",
                         ],
                         warningKeys: [
                           "guide_three_part_breath_warning1",

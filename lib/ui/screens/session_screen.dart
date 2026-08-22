@@ -122,11 +122,12 @@ double _blobSize(BuildContext context, BoxConstraints c) {
 
 /// The live cycle diagram (see cycle_diagram.dart), shown only for exercise
 /// types that actually define one — null/empty for freediving tables, the
-/// PB test, and fire breathing, which keep this space empty as before.
-/// Wrapped in horizontal scrolling since the wider diagrams (8 nodes for
-/// three-part breath) won't fit every phone's width at a comfortable box
-/// size, and a diagram that's readable-but-scrollable beats one shrunk down
-/// to illegibility to force-fit.
+/// PB test, and fire breathing, which keep this space empty as before. It's
+/// a narrow top-to-bottom list now (not a wide grid), so it's centered
+/// horizontally; a max-height cap plus internal vertical scrolling is a
+/// safety net for the tallest case (three-part breath's 8 steps), which
+/// won't always fit fully on a short phone alongside everything else this
+/// screen already shows.
 class _CycleDiagramSection extends StatelessWidget {
   const _CycleDiagramSection({required this.state});
   final SessionState state;
@@ -137,15 +138,16 @@ class _CycleDiagramSection extends StatelessWidget {
     if (steps == null || steps.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-          child: CycleDiagram(
-            steps: steps,
-            activeIndex: state.cycleStepIndex,
-            accentColor: AppTheme.primary,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 260),
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Center(
+            child: CycleDiagram(
+              steps: steps,
+              activeIndex: state.cycleStepIndex,
+              accentColor: AppTheme.primary,
+            ),
           ),
         ),
       ),

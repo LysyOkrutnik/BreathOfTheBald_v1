@@ -11,43 +11,10 @@ import 'package:okrutnik_breath/data/db/database.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/logic/services/gamification_service.dart';
 import 'package:okrutnik_breath/logic/wimhof/wimhof_progression.dart' show wimHofLadder;
-import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
-import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
 
-class StatsScreen extends StatelessWidget {
-  const StatsScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
-        children: [
-          const Positioned.fill(child: AppBackground()),
-          SafeArea(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: context.isTablet ? 760 : 560),
-                child: Column(
-                  children: [
-                    ScreenHeader(
-                      title: L10n.get(context, 'stats_title'),
-                    ),
-                    const Expanded(child: StatsContent()),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// The level/XP/streak summary + charts — extracted from [StatsScreen] so it
-/// can be embedded directly inside a tab (no nested Scaffold/background) as
-/// well as shown as its own pushed screen.
+/// The level/XP/streak summary + charts — embedded directly inside the
+/// "Ty" profile tab (no nested Scaffold/background of its own).
 class StatsContent extends ConsumerWidget {
   const StatsContent({super.key});
 
@@ -141,13 +108,15 @@ class StatsContent extends ConsumerWidget {
         _XpBar(level: level, progress: xpProgress, totalXp: totalXp),
         const SizedBox(height: AppSpacing.lg),
         for (final trend in [
-          (wimHofRetention, 'stats_retention_trend_wimhof'),
-          (freedivingTableRetention, 'stats_retention_trend_freediving'),
-          (guidedHoldRetention, 'stats_retention_trend_guided'),
+          (wimHofRetention, 'stats_retention_trend_wimhof', null),
+          (freedivingTableRetention, 'stats_retention_trend_freediving', null),
+          (guidedHoldRetention, 'stats_retention_trend_guided',
+              'stats_retention_trend_guided_subtitle'),
         ])
           if (trend.$1.length >= 2) ...[
             _ChartCard(
               title: L10n.get(context, trend.$2),
+              subtitle: trend.$3 == null ? null : L10n.get(context, trend.$3!),
               child: SizedBox(
                 height: 120,
                 child: CustomPaint(
@@ -305,8 +274,9 @@ class _XpBar extends StatelessWidget {
 }
 
 class _ChartCard extends StatelessWidget {
-  const _ChartCard({required this.title, required this.child});
+  const _ChartCard({required this.title, this.subtitle, required this.child});
   final String title;
+  final String? subtitle;
   final Widget child;
 
   @override
@@ -324,6 +294,13 @@ class _ChartCard extends StatelessWidget {
                 letterSpacing: 1.2,
                 fontWeight: FontWeight.w600),
           ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              subtitle!,
+              style: TextStyle(color: AppTheme.textDim.withAlpha(160), fontSize: 11),
+            ),
+          ],
           const SizedBox(height: AppSpacing.lg),
           child,
         ],

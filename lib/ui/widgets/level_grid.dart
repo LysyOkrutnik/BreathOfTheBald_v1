@@ -98,7 +98,8 @@ class LevelCard extends StatelessWidget {
 
   String _paceLabel(BuildContext context, LevelData level) {
     if (level.type == ExerciseType.wimHof) {
-      return '${(level.breathPace.inMilliseconds / 1000).toStringAsFixed(1)}s';
+      final seconds = (level.breathPace.inMilliseconds / 1000).toStringAsFixed(1);
+      return '${L10n.get(context, level.subtitle)} · ${seconds}s';
     }
     return L10n.get(context, level.subtitle);
   }
