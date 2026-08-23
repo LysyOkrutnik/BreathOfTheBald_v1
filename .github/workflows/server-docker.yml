@@ -3,9 +3,6 @@ name: Build & publish server image
 on:
   push:
     branches: [master]
-    paths:
-      - 'server/**'
-      - '.github/workflows/server-docker.yml'
   workflow_dispatch: {}
 
 env:
