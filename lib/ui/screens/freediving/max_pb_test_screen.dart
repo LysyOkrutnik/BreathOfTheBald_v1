@@ -274,8 +274,15 @@ class _MaxPbTestScreenState extends ConsumerState<MaxPbTestScreen> {
       _phase == _Phase.recovery;
 
   Future<void> _handleBack() async {
+    // `PopScope` below is permanently `canPop: false` so this handler always
+    // gets a chance to confirm mid-test — but that also means
+    // `Navigator.maybePop()` re-enters the very same gate and gets blocked
+    // again, silently re-triggering this handler instead of leaving. A
+    // direct `pop()` bypasses `PopScope.canPop` entirely (it only gates the
+    // system back gesture / `maybePop()`), so it's the one that actually
+    // closes the screen once we've decided to.
     if (!_midTest) {
-      Navigator.of(context).maybePop();
+      Navigator.of(context).pop();
       return;
     }
     final confirmed = await showGlassConfirm(
@@ -286,7 +293,7 @@ class _MaxPbTestScreenState extends ConsumerState<MaxPbTestScreen> {
       cancelLabel: L10n.get(context, 'common_cancel'),
       icon: Icons.warning_amber_rounded,
     );
-    if (confirmed && mounted) Navigator.of(context).maybePop();
+    if (confirmed && mounted) Navigator.of(context).pop();
   }
 
   @override
