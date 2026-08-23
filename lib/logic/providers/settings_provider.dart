@@ -23,6 +23,9 @@ class Settings {
     this.pbCautionRatioOverride,
     this.maxAvgRpeToAdvanceOverride,
     this.maxAvgRpeToConfirmTrialOverride,
+    this.pbRetestDaysOverride,
+    this.readinessIntermediateSecOverride,
+    this.readinessAdvancedSecOverride,
   });
 
   final String profileName;
@@ -72,6 +75,14 @@ class Settings {
   /// override at all despite both being exposed here.
   final double? maxAvgRpeToConfirmTrialOverride;
 
+  /// Overrides for the freediving-readiness thresholds (see
+  /// `pb_readiness.dart`'s matching `k*` constants) that tie the Max PB
+  /// Test to CO2/O2 unlock, the Wim Hof ladder's climb past `mild`, and the
+  /// cold-shower hint.
+  final int? pbRetestDaysOverride;
+  final int? readinessIntermediateSecOverride;
+  final int? readinessAdvancedSecOverride;
+
   Settings copyWith({
     String? profileName,
     bool? soundEnabled,
@@ -87,6 +98,9 @@ class Settings {
     double? pbCautionRatioOverride,
     double? maxAvgRpeToAdvanceOverride,
     double? maxAvgRpeToConfirmTrialOverride,
+    int? pbRetestDaysOverride,
+    int? readinessIntermediateSecOverride,
+    int? readinessAdvancedSecOverride,
   }) {
     return Settings(
       profileName: profileName ?? this.profileName,
@@ -106,6 +120,11 @@ class Settings {
           maxAvgRpeToAdvanceOverride ?? this.maxAvgRpeToAdvanceOverride,
       maxAvgRpeToConfirmTrialOverride: maxAvgRpeToConfirmTrialOverride ??
           this.maxAvgRpeToConfirmTrialOverride,
+      pbRetestDaysOverride: pbRetestDaysOverride ?? this.pbRetestDaysOverride,
+      readinessIntermediateSecOverride:
+          readinessIntermediateSecOverride ?? this.readinessIntermediateSecOverride,
+      readinessAdvancedSecOverride:
+          readinessAdvancedSecOverride ?? this.readinessAdvancedSecOverride,
     );
   }
 
@@ -119,6 +138,9 @@ class Settings {
     double? pbCautionRatioOverride,
     double? maxAvgRpeToAdvanceOverride,
     double? maxAvgRpeToConfirmTrialOverride,
+    int? pbRetestDaysOverride,
+    int? readinessIntermediateSecOverride,
+    int? readinessAdvancedSecOverride,
   }) {
     return Settings(
       profileName: profileName,
@@ -135,6 +157,9 @@ class Settings {
       pbCautionRatioOverride: pbCautionRatioOverride,
       maxAvgRpeToAdvanceOverride: maxAvgRpeToAdvanceOverride,
       maxAvgRpeToConfirmTrialOverride: maxAvgRpeToConfirmTrialOverride,
+      pbRetestDaysOverride: pbRetestDaysOverride,
+      readinessIntermediateSecOverride: readinessIntermediateSecOverride,
+      readinessAdvancedSecOverride: readinessAdvancedSecOverride,
     );
   }
 }
@@ -164,6 +189,10 @@ class SettingsNotifier extends StateNotifier<Settings> {
   static const _kMaxAvgRpeToAdvanceOverride = 'adv_max_avg_rpe_to_advance_override';
   static const _kMaxAvgRpeToConfirmTrialOverride =
       'adv_max_avg_rpe_to_confirm_trial_override';
+  static const _kPbRetestDaysOverride = 'adv_pb_retest_days_override';
+  static const _kReadinessIntermediateSecOverride =
+      'adv_readiness_intermediate_sec_override';
+  static const _kReadinessAdvancedSecOverride = 'adv_readiness_advanced_sec_override';
 
   /// Older builds had a dead 'schedule_active' flag (from a since-replaced
   /// time-picker scheduler) that was never written, so a splash-screen guard
@@ -218,6 +247,9 @@ class SettingsNotifier extends StateNotifier<Settings> {
       maxAvgRpeToAdvanceOverride: p.getDouble(_kMaxAvgRpeToAdvanceOverride),
       maxAvgRpeToConfirmTrialOverride:
           p.getDouble(_kMaxAvgRpeToConfirmTrialOverride),
+      pbRetestDaysOverride: p.getInt(_kPbRetestDaysOverride),
+      readinessIntermediateSecOverride: p.getInt(_kReadinessIntermediateSecOverride),
+      readinessAdvancedSecOverride: p.getInt(_kReadinessAdvancedSecOverride),
     );
   }
 
@@ -276,6 +308,9 @@ class SettingsNotifier extends StateNotifier<Settings> {
     double? pbCautionRatio,
     double? maxAvgRpeToAdvance,
     double? maxAvgRpeToConfirmTrial,
+    int? pbRetestDays,
+    int? readinessIntermediateSec,
+    int? readinessAdvancedSec,
   }) async {
     state = state.withAdvancedThresholds(
       detrainingDaysOverride: detrainingDays,
@@ -283,6 +318,9 @@ class SettingsNotifier extends StateNotifier<Settings> {
       pbCautionRatioOverride: pbCautionRatio,
       maxAvgRpeToAdvanceOverride: maxAvgRpeToAdvance,
       maxAvgRpeToConfirmTrialOverride: maxAvgRpeToConfirmTrial,
+      pbRetestDaysOverride: pbRetestDays,
+      readinessIntermediateSecOverride: readinessIntermediateSec,
+      readinessAdvancedSecOverride: readinessAdvancedSec,
     );
     final p = await SharedPreferences.getInstance();
     if (detrainingDays != null) {
@@ -309,6 +347,21 @@ class SettingsNotifier extends StateNotifier<Settings> {
       await p.setDouble(_kMaxAvgRpeToConfirmTrialOverride, maxAvgRpeToConfirmTrial);
     } else {
       await p.remove(_kMaxAvgRpeToConfirmTrialOverride);
+    }
+    if (pbRetestDays != null) {
+      await p.setInt(_kPbRetestDaysOverride, pbRetestDays);
+    } else {
+      await p.remove(_kPbRetestDaysOverride);
+    }
+    if (readinessIntermediateSec != null) {
+      await p.setInt(_kReadinessIntermediateSecOverride, readinessIntermediateSec);
+    } else {
+      await p.remove(_kReadinessIntermediateSecOverride);
+    }
+    if (readinessAdvancedSec != null) {
+      await p.setInt(_kReadinessAdvancedSecOverride, readinessAdvancedSec);
+    } else {
+      await p.remove(_kReadinessAdvancedSecOverride);
     }
   }
 

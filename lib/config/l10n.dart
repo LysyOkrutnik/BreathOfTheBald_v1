@@ -376,6 +376,9 @@ class L10n {
     'freediving_pb_tested_on': "Test z dnia",
     'freediving_pb_test_cta': "ZRÓB TEST MAX PB",
     'freediving_pb_retest': "POWTÓRZ TEST PB",
+    'freediving_pb_retest_expired': "TEST WYGASŁ — ZRÓB PONOWNIE",
+    'freediving_pb_expired_body':
+        "Ten wynik ma ponad 30 dni — tabele CO2/O2 i wyższe poziomy Wim Hofa są tymczasowo zablokowane do czasu odświeżenia testu.",
     'freediving_locked_tables_title': "Tabele CO2 i O2",
     'freediving_locked_no_pb': "Zrób test Max PB, aby odblokować tabele",
     'freediving_packing_locked_body': "Zrób test Max PB, aby odblokować packing",
@@ -427,8 +430,12 @@ class L10n {
     'planner_pbtest_day_warning_body': "Tego dnia zaplanowany jest Test PB — dodatkowy twardy trening może zafałszować wynik albo być zbyt obciążający. Dodać mimo to?",
     'planner_pbtest_day_warning_confirm': "DODAJ MIMO TO",
     'today_pbtest_due_title': "TEST PB",
+    'today_pbtest_expired_title': "TEST PB WYGASŁ",
     'today_pbtest_due_body_new': "Zrób swój pierwszy Test PB, żeby odblokować tabele CO2/O2.",
-    'today_pbtest_due_body_retest': "Minął tydzień — czas na powtórny Test PB.",
+    'today_pbtest_due_body_soon':
+        "Test PB wygaśnie za {n} dni — zaplanuj powtórkę, żeby nie stracić dostępu do tabel CO2/O2 i wyższych poziomów Wim Hofa.",
+    'today_pbtest_due_body_expired':
+        "Test PB wygasł {n} dni temu — tabele CO2/O2 i wyższe poziomy Wim Hofa są tymczasowo zablokowane.",
     'training_segment_classic': "KLASYCZNA",
     'training_segment_special': "SPECJALNE",
     'training_segment_freediving': "FREEDIVING",
@@ -640,6 +647,10 @@ class L10n {
     'path_stage_advanced_title': "AWANS NA ŚCIEŻCE",
     'path_week_section_title': "TWÓJ TYDZIEŃ",
     'path_week_intro': "Metody przeplatają się przez cały tydzień — trudność każdej z nich rośnie osobno, na podstawie Twoich wyników.",
+    'path_week_pb_matched': "Plan dopasowany do Twojego PB: {pb} • poziom: {tier}",
+    'readiness_tier_beginner': "początkujący",
+    'readiness_tier_intermediate': "średni",
+    'readiness_tier_advanced': "zaawansowany",
     'path_plan_week_button': "ZAPLANUJ CAŁY TYDZIEŃ",
     'path_week_planned_toast': "Cały tydzień zaplanowany. Do roboty.",
     'week_scheduling_title': "ZAPLANUJ TYDZIEŃ",
@@ -651,6 +662,10 @@ class L10n {
     'week_scheduling_overlap_warning': "Nakłada się czasowo z: {names}",
     'week_scheduling_save': "ZAPISZ TYDZIEŃ",
     'week_scheduling_nothing_saved': "Nic nie zapisano — wybierz godzinę przynajmniej jednej sesji.",
+    'week_scheduling_pb_locked_never':
+        "Tabele CO2/O2 nie pojawiają się w tym tygodniu — zrób Test PB, żeby je odblokować.",
+    'week_scheduling_pb_locked_stale':
+        "Tabele CO2/O2 nie pojawiają się w tym tygodniu — Twój Test PB wygasł, zrób go ponownie.",
     'path_configure_week_button': "Skonfiguruj tydzień",
     'path_prefs_title': "Skonfiguruj swój tydzień",
     'path_prefs_intro': "Powiedz nam, kiedy możesz trenować — reszta tygodnia dostosuje się do tego.",
@@ -681,6 +696,10 @@ class L10n {
         "Nadwrażliwość na zimno lub schorzenia naczyniowe — zacznij od kilku sekund",
     'coldshower_warning3': "Nigdy nie zaczynaj od zimnej wody — schładzaj się stopniowo",
     'coldshower_stat_month_suffix': "razy w tym miesiącu",
+    'coldshower_readiness_hint_intermediate':
+        "Twój poziom gotowości freedivingowej to średni — jeśli czujesz się gotów, możesz rozważyć nieco dłuższą ekspozycję. To tylko sugestia, słuchaj swojego ciała.",
+    'coldshower_readiness_hint_advanced':
+        "Twój poziom gotowości freedivingowej to zaawansowany — jeśli czujesz się gotów, możesz rozważyć dłuższą ekspozycję. To tylko sugestia, słuchaj swojego ciała.",
     'wimhof_next_up_title': "NASTĘPNY POZIOM",
     'wimhof_next_up_body': "Czas na kolejny poziom:",
     'wimhof_next_up_cta': "WYPRÓBUJ",
@@ -689,6 +708,11 @@ class L10n {
     'wimhof_rollback_idle_prefix': "Nieaktywność: ",
     'wimhof_rollback_idle_suffix': " dni.",
     'wimhof_pb_caution_note': "Twoje ostatnie wstrzymania zbliżają się do realnego max PB — hiperwentylacja maskuje sygnały niedotlenienia, więc może warto zostać na tym poziomie jeszcze trochę.",
+    'wimhof_pb_gate_title': "Gotowy na poziom",
+    'wimhof_pb_gate_body_never':
+        "Zrób Test PB, żeby odblokować ten poziom — dawkowanie Wim Hofa jest teraz dopasowane do tego samego testu, co tabele CO2/O2.",
+    'wimhof_pb_gate_body_stale':
+        "Twój Test PB wygasł — zrób go ponownie, żeby odblokować ten poziom.",
     'wimhof_weekly_cap_warning': "Sporo intensywnych sesji w tym tygodniu — rozważ dzień odpoczynku.",
     'wimhof_weekly_count_suffix': " sesji ciężkich w tym tygodniu",
     'wimhof_progress_title': "TWÓJ POSTĘP",
@@ -703,6 +727,9 @@ class L10n {
     'settings_advanced_pb_caution_ratio': "Próg ostrzeżenia PB (0.1–1.0)",
     'settings_advanced_max_avg_rpe': "Maks. średnie RPE do awansu (1–10)",
     'settings_advanced_max_avg_rpe_trial': "Maks. średnie RPE, by potwierdzić trial (1–10)",
+    'settings_advanced_pb_retest_days': "Ważność Testu PB (dni)",
+    'settings_advanced_readiness_intermediate_sec': "Próg poziomu 'średni' (sekundy PB)",
+    'settings_advanced_readiness_advanced_sec': "Próg poziomu 'zaawansowany' (sekundy PB)",
     'settings_advanced_reset': "Przywróć domyślne",
     'settings_advanced_saved': "Zapisano progi zaawansowane.",
     'freediving_warmup_label': "PRZYGOTUJ SIĘ",
@@ -1203,6 +1230,9 @@ class L10n {
     'freediving_pb_tested_on': "Tested on",
     'freediving_pb_test_cta': "TAKE THE MAX PB TEST",
     'freediving_pb_retest': "RETEST PB",
+    'freediving_pb_retest_expired': "TEST EXPIRED — RETEST NOW",
+    'freediving_pb_expired_body':
+        "This result is over 30 days old — the CO2/O2 tables and higher Wim Hof levels are temporarily locked until you retest.",
     'freediving_locked_tables_title': "CO2 and O2 tables",
     'freediving_locked_no_pb': "Take the Max PB test to unlock the tables",
     'freediving_packing_locked_body': "Take the Max PB test to unlock packing",
@@ -1254,8 +1284,12 @@ class L10n {
     'planner_pbtest_day_warning_body': "A PB Test is already planned that day — an extra hard session could skew the result or be too demanding. Add it anyway?",
     'planner_pbtest_day_warning_confirm': "ADD ANYWAY",
     'today_pbtest_due_title': "PB TEST",
+    'today_pbtest_expired_title': "PB TEST EXPIRED",
     'today_pbtest_due_body_new': "Take your first PB Test to unlock the CO2/O2 tables.",
-    'today_pbtest_due_body_retest': "A week has passed — time to retest your PB.",
+    'today_pbtest_due_body_soon':
+        "Your PB Test expires in {n} days — retest soon so you don't lose access to the CO2/O2 tables and higher Wim Hof levels.",
+    'today_pbtest_due_body_expired':
+        "Your PB Test expired {n} days ago — the CO2/O2 tables and higher Wim Hof levels are temporarily locked.",
     'training_segment_classic': "CLASSIC",
     'training_segment_special': "SPECIAL",
     'training_segment_freediving': "FREEDIVING",
@@ -1466,6 +1500,10 @@ class L10n {
     'path_stage_advanced_title': "PATH ADVANCED",
     'path_week_section_title': "YOUR WEEK",
     'path_week_intro': "Methods interleave across the whole week — each one's difficulty grows on its own, based on your results.",
+    'path_week_pb_matched': "Plan matched to your PB: {pb} • level: {tier}",
+    'readiness_tier_beginner': "beginner",
+    'readiness_tier_intermediate': "intermediate",
+    'readiness_tier_advanced': "advanced",
     'path_plan_week_button': "SCHEDULE WHOLE WEEK",
     'path_week_planned_toast': "Whole week scheduled. Let's go.",
     'week_scheduling_title': "SCHEDULE THE WEEK",
@@ -1477,6 +1515,10 @@ class L10n {
     'week_scheduling_overlap_warning': "Overlaps with: {names}",
     'week_scheduling_save': "SAVE THE WEEK",
     'week_scheduling_nothing_saved': "Nothing saved — pick a time for at least one session.",
+    'week_scheduling_pb_locked_never':
+        "CO2/O2 tables aren't showing up this week — take the PB Test to unlock them.",
+    'week_scheduling_pb_locked_stale':
+        "CO2/O2 tables aren't showing up this week — your PB Test expired, retest to unlock them.",
     'path_configure_week_button': "Configure week",
     'path_prefs_title': "Configure your week",
     'path_prefs_intro': "Tell us when you can train — the rest of the week adapts to that.",
@@ -1507,6 +1549,10 @@ class L10n {
         "Cold sensitivity or vascular conditions — start with just a few seconds",
     'coldshower_warning3': "Never start with cold water — cool down gradually",
     'coldshower_stat_month_suffix': "times this month",
+    'coldshower_readiness_hint_intermediate':
+        "Your freediving readiness is intermediate — if you're feeling up for it, you could consider a slightly longer exposure. Just a suggestion — listen to your body.",
+    'coldshower_readiness_hint_advanced':
+        "Your freediving readiness is advanced — if you're feeling up for it, you could consider a longer exposure. Just a suggestion — listen to your body.",
     'wimhof_next_up_title': "NEXT UP",
     'wimhof_next_up_body': "Time for the next level:",
     'wimhof_next_up_cta': "TRY IT",
@@ -1515,6 +1561,11 @@ class L10n {
     'wimhof_rollback_idle_prefix': "Inactive for: ",
     'wimhof_rollback_idle_suffix': " days.",
     'wimhof_pb_caution_note': "Your recent holds are already close to your real max PB — hyperventilation blunts hypoxia warning signs, so it may be worth staying at this level a bit longer.",
+    'wimhof_pb_gate_title': "Ready for",
+    'wimhof_pb_gate_body_never':
+        "Take the PB Test to unlock this level — Wim Hof dosing is now tied to the same test as the CO2/O2 tables.",
+    'wimhof_pb_gate_body_stale':
+        "Your PB Test expired — retest to unlock this level.",
     'wimhof_weekly_cap_warning': "That's a lot of hard sessions this week — consider a rest day.",
     'wimhof_weekly_count_suffix': " hard sessions this week",
     'wimhof_progress_title': "YOUR PROGRESS",
@@ -1529,6 +1580,9 @@ class L10n {
     'settings_advanced_pb_caution_ratio': "PB caution threshold (0.1–1.0)",
     'settings_advanced_max_avg_rpe': "Max average RPE to advance (1–10)",
     'settings_advanced_max_avg_rpe_trial': "Max average RPE to confirm a trial (1–10)",
+    'settings_advanced_pb_retest_days': "PB Test validity (days)",
+    'settings_advanced_readiness_intermediate_sec': "'Intermediate' tier threshold (PB seconds)",
+    'settings_advanced_readiness_advanced_sec': "'Advanced' tier threshold (PB seconds)",
     'settings_advanced_reset': "Reset to defaults",
     'settings_advanced_saved': "Advanced thresholds saved.",
     'freediving_warmup_label': "GET READY",

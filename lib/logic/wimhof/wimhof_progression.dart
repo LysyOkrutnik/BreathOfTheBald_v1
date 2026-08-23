@@ -1,4 +1,5 @@
 import 'package:okrutnik_breath/data/db/database.dart';
+import 'package:okrutnik_breath/logic/freediving/pb_readiness.dart';
 
 /// The classic Wim Hof ladder, in ascending order of difficulty.
 const List<String> wimHofLadder = ['mild', 'strong', 'beast', 'guru'];
@@ -50,6 +51,7 @@ class WimHofNextUp {
     this.pbCautionAdvised = false,
     this.idleDaysBeforeRollback = 0,
     this.hasNoRpeData = false,
+    this.pbGateBlockedLevelKey,
   });
 
   /// The ladder level the app currently treats as "confirmed" (the one
@@ -100,6 +102,17 @@ class WimHofNextUp {
   /// advances on session count and days alone, with the "listen to how it
   /// felt" signal never actually engaged for them. Advisory-only nudge.
   final bool hasNoRpeData;
+
+  /// Set when the user has otherwise earned a recommendation or trial
+  /// confirmation to this level — session count, days, and RPE all check
+  /// out — but it's held back purely by [PbReadiness]: without an active
+  /// (ever-done, not stale) Max PB Test, the ladder never climbs past
+  /// `mild`, and beast/guru additionally require at least an "intermediate"
+  /// readiness tier. Null means nothing is currently gate-blocked. Distinct
+  /// from [recommendedLevelKey] so the UI can tell "not eligible yet" from
+  /// "eligible, but the freediving PB gate is what's stopping this" — a
+  /// silent stall would look identical to just needing more sessions.
+  final String? pbGateBlockedLevelKey;
 }
 
 /// Pure progression logic for the Wim Hof classic ladder. The ladder itself
@@ -184,6 +197,12 @@ class WimHofProgression {
     required WimHofProgressData progress,
     required List<Session> allWimHofSessions,
     int? verifiedPbSec,
+    // Null only for call sites that predate this gate — treated as
+    // "unrestricted" rather than "blocked" so an unrelated caller that never
+    // learned about freediving readiness doesn't silently stall real users.
+    // The one real caller (WimHofRepository.refresh) always computes and
+    // passes a real value from the live freediving profile.
+    PbReadiness? freedivingReadiness,
     DateTime? now,
     int detrainingDays = kDetrainingDays,
     double pbCautionRatio = kPbCautionRetentionRatio,
@@ -191,6 +210,8 @@ class WimHofProgression {
     double maxAvgRpeToConfirmTrial = kMaxAvgRpeToConfirmTrial,
   }) {
     now ??= DateTime.now();
+    final readinessActive = freedivingReadiness?.isActive ?? true;
+    final readinessTier = freedivingReadiness?.tier ?? PbReadinessTier.advanced;
     final current = progress.currentLevelKey;
     final since = progress.currentLevelSetAt;
 
@@ -259,11 +280,30 @@ class WimHofProgression {
         .where((s) => s.levelKey == next)
         .where((s) => since == null || !s.timestamp.isBefore(since))
         .toList());
+    // Without an active Max PB Test, the ladder never climbs past `mild`;
+    // beast/guru additionally require at least an "intermediate" readiness
+    // tier — the ladder's dosage is meant to be calibrated by the same test
+    // that paces CO2/O2, not progress on session count alone forever.
+    final pbGateOk = readinessActive &&
+        (!kHardWimHofLevels.contains(next) ||
+            readinessTier != PbReadinessTier.beginner);
+
     if (trialSessions.length >= kMinTrialSessions) {
       final trialAvgRpe = _avgRpe(trialSessions);
       final tooHard = trialAvgRpe != null && trialAvgRpe > maxAvgRpeToConfirmTrial;
       if (!tooHard) {
-        return WimHofNextUp(currentLevelKey: next);
+        if (pbGateOk) {
+          return WimHofNextUp(currentLevelKey: next);
+        }
+        // Trial already earned on its own merits — held back only by the
+        // freediving PB gate. Stay put, but tell the UI what's waiting so
+        // this doesn't read as a silent, unexplained stall.
+        return WimHofNextUp(
+          currentLevelKey: current,
+          sessionsAtLevel: sessionsAtLevel,
+          daysAtLevel: daysAtLevel,
+          pbGateBlockedLevelKey: next,
+        );
       }
       // Too hard — stay put, and reset the trial window so these same
       // failed sessions don't keep failing every future recommendation.
@@ -297,10 +337,12 @@ class WimHofProgression {
 
     return WimHofNextUp(
       currentLevelKey: current,
-      recommendedLevelKey: eligible ? next : null,
+      recommendedLevelKey: (eligible && pbGateOk) ? next : null,
+      pbGateBlockedLevelKey: (eligible && !pbGateOk) ? next : null,
       sessionsAtLevel: sessionsAtLevel,
       daysAtLevel: daysAtLevel,
       pbCautionAdvised: eligible &&
+          pbGateOk &&
           _pbCautionFor(
             nextLevelKey: next,
             sessionsAtCurrentLevel: currentLevelSessions,

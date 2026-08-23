@@ -9,6 +9,7 @@ import 'package:okrutnik_breath/data/repositories/user_profile_repository.dart';
 import 'package:okrutnik_breath/data/repositories/wimhof_repository.dart';
 import 'package:okrutnik_breath/config/levels.dart';
 import 'package:okrutnik_breath/logic/freediving/freediving_progress.dart';
+import 'package:okrutnik_breath/logic/freediving/pb_readiness.dart';
 import 'package:okrutnik_breath/logic/path/cold_shower.dart';
 import 'package:okrutnik_breath/logic/path/training_path.dart';
 import 'package:okrutnik_breath/logic/path/weekly_plan.dart';
@@ -125,6 +126,25 @@ final wimHofNextUpProvider = StreamProvider<WimHofNextUp>((ref) async* {
     pbCautionRatioOverride: settings.pbCautionRatioOverride,
     maxAvgRpeToAdvanceOverride: settings.maxAvgRpeToAdvanceOverride,
     maxAvgRpeToConfirmTrialOverride: settings.maxAvgRpeToConfirmTrialOverride,
+    pbRetestDaysOverride: settings.pbRetestDaysOverride,
+    readinessIntermediateSecOverride: settings.readinessIntermediateSecOverride,
+    readinessAdvancedSecOverride: settings.readinessAdvancedSecOverride,
+  );
+});
+
+/// The single source of truth for "where does the user stand relative to
+/// the Max PB Test" — CO2/O2 unlock, the Wim Hof ladder's climb past
+/// `mild`, and the cold-shower hint all read this instead of each
+/// independently re-deriving their own notion of "has PB".
+final freedivingReadinessProvider = Provider<PbReadiness?>((ref) {
+  final profile = ref.watch(freedivingProfileProvider).value;
+  if (profile == null) return null;
+  final settings = ref.watch(settingsProvider);
+  return PbReadiness.compute(
+    profile: profile,
+    retestRequiredDays: settings.pbRetestDaysOverride ?? kPbRetestRequiredDays,
+    intermediateSec: settings.readinessIntermediateSecOverride ?? kReadinessIntermediateSec,
+    advancedSec: settings.readinessAdvancedSecOverride ?? kReadinessAdvancedSec,
   );
 });
 
@@ -194,9 +214,10 @@ final trainingPathProvider = Provider<PathState?>((ref) {
       ref.watch(settingsProvider).weeklyHardCapOverride ?? kWeeklyHardSessionCap;
   final weeklyCapReached = ref.watch(weeklyHardSessionCountProvider) >= weeklyCap;
 
+  final readiness = ref.watch(freedivingReadinessProvider);
   return TrainingPath.compute(
     wimHof: wimHof,
-    pbVerified: profile.verifiedPbSec != null,
+    pbVerified: readiness?.isActive ?? false,
     co2SessionCount: co2Count,
     o2SessionCount: o2Count,
     weeklyCapReached: weeklyCapReached,
@@ -212,9 +233,10 @@ final weeklyPlanProvider = Provider<WeeklyPlan?>((ref) {
   if (wimHof == null || profile == null) return null;
 
   final settings = ref.watch(settingsProvider);
+  final readiness = ref.watch(freedivingReadinessProvider);
   return WeeklyPlanGenerator.compute(
     wimHof: wimHof,
-    pbVerified: profile.verifiedPbSec != null,
+    pbVerified: readiness?.isActive ?? false,
     hardSessionsUsedThisWeek: ref.watch(weeklyHardSessionCountProvider),
     availableWeekdays: settings.availableWeekdays,
     allowMultiplePerDay: settings.allowMultipleSessionsPerDay,

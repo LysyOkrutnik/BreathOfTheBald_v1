@@ -6,9 +6,13 @@ import 'package:okrutnik_breath/config/responsive.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/core/notifications/notification_service.dart';
 import 'package:okrutnik_breath/data/db/database.dart';
+import 'package:okrutnik_breath/logic/freediving/pb_readiness.dart';
 import 'package:okrutnik_breath/logic/path/session_duration.dart';
+import 'package:okrutnik_breath/logic/path/training_path.dart' show PathAction;
 import 'package:okrutnik_breath/logic/path/weekly_plan.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
+import 'package:okrutnik_breath/ui/screens/freediving/max_pb_test_screen.dart';
+import 'package:okrutnik_breath/config/transitions.dart';
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
@@ -58,6 +62,7 @@ class WeekSchedulingScreen extends ConsumerStatefulWidget {
 
 class _WeekSchedulingScreenState extends ConsumerState<WeekSchedulingScreen> {
   late final List<_SchedulableSession> _sessions;
+  late final PbReadiness? _readiness;
   bool _saving = false;
 
   @override
@@ -72,15 +77,17 @@ class _WeekSchedulingScreenState extends ConsumerState<WeekSchedulingScreen> {
     final plan = ref.read(weeklyPlanProvider);
     final existingPlans = ref.read(plannedSessionsProvider).value ?? const <PlannedSession>[];
     final freedivingProfile = ref.read(freedivingProfileProvider).value;
+    _readiness = ref.read(freedivingReadinessProvider);
     _sessions = plan == null
         ? const []
-        : _buildSchedulableSessions(plan, existingPlans, freedivingProfile);
+        : _buildSchedulableSessions(plan, existingPlans, freedivingProfile, _readiness);
   }
 
   static List<_SchedulableSession> _buildSchedulableSessions(
     WeeklyPlan plan,
     List<PlannedSession> existingPlans,
     FreedivingProfileData? freedivingProfile,
+    PbReadiness? readiness,
   ) {
     final today = DateTime.now();
     final existingKeysByDate = <DateTime, Set<String>>{};
@@ -88,6 +95,11 @@ class _WeekSchedulingScreenState extends ConsumerState<WeekSchedulingScreen> {
       final day = DateTime(p.scheduledAt.year, p.scheduledAt.month, p.scheduledAt.day);
       existingKeysByDate.putIfAbsent(day, () => {}).add(p.levelKey);
     }
+    // Defense in depth: WeeklyPlanGenerator already never places a CO2/O2
+    // action unless the freediving PB readiness is active, so this should
+    // never actually trigger — but this screen shouldn't have to trust that
+    // invariant blindly to stay safe if it's ever violated.
+    final readinessActive = readiness?.isActive ?? false;
 
     final result = <_SchedulableSession>[];
     for (final day in plan.days) {
@@ -96,6 +108,10 @@ class _WeekSchedulingScreenState extends ConsumerState<WeekSchedulingScreen> {
       // card, not something anyone picks a time for — same exclusion the
       // rest of the app already applies via trainingActionsOf.
       for (final action in trainingActionsOf(day.actions)) {
+        if (!readinessActive &&
+            (action.type == PathAction.co2Table || action.type == PathAction.o2Table)) {
+          continue;
+        }
         final key = plannableStorageKeyFor(action);
         if (key == null) continue;
         if (existingKeysByDate[date]?.contains(key) ?? false) {
@@ -226,6 +242,40 @@ class _WeekSchedulingScreenState extends ConsumerState<WeekSchedulingScreen> {
                             color: AppTheme.textDim.withAlpha(200), fontSize: 13, height: 1.4),
                       ),
                     ),
+                    if (_readiness != null && !_readiness.isActive) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                        child: PressableScale(
+                          onTap: () => Navigator.of(context)
+                              .push(fadeThroughRoute(const MaxPbTestScreen())),
+                          child: GlassCard(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.lock_outline_rounded,
+                                    color: AppTheme.textDim, size: 18),
+                                const SizedBox(width: AppSpacing.sm),
+                                Expanded(
+                                  child: Text(
+                                    L10n.get(
+                                        context,
+                                        _readiness.status == PbReadinessStatus.stale
+                                            ? 'week_scheduling_pb_locked_stale'
+                                            : 'week_scheduling_pb_locked_never'),
+                                    style: const TextStyle(
+                                        color: AppTheme.textDim, fontSize: 11, height: 1.3),
+                                  ),
+                                ),
+                                const Icon(Icons.chevron_right_rounded,
+                                    color: AppTheme.textDim, size: 18),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: AppSpacing.md),
                     Expanded(
                       child: _sessions.isEmpty

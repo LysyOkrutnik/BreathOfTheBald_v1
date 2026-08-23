@@ -9,6 +9,7 @@ import 'package:okrutnik_breath/config/transitions.dart';
 import 'package:okrutnik_breath/data/db/database.dart';
 import 'package:okrutnik_breath/data/repositories/freediving_repository.dart';
 import 'package:okrutnik_breath/logic/freediving/co2_o2_table_generator.dart';
+import 'package:okrutnik_breath/logic/freediving/pb_readiness.dart';
 import 'package:okrutnik_breath/logic/path/training_path.dart';
 import 'package:okrutnik_breath/logic/path/weekly_plan.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
@@ -35,7 +36,6 @@ class TodayScreen extends ConsumerWidget {
   const TodayScreen({super.key});
 
   static const _stages = PathStage.values;
-  static const _pbTestDueAfter = Duration(days: 7);
 
   Future<void> _startAction(
       BuildContext context, WidgetRef ref, PlannedAction action) async {
@@ -58,7 +58,21 @@ class TodayScreen extends ConsumerWidget {
               : FreedivingTableType.o2,
           profile: profile,
         );
-        if (pb <= 0) return;
+        if (pb <= 0) {
+          // Was a silent no-op — tapping today's CO2/O2 card with no active
+          // PB did nothing at all, unlike the identical check in the
+          // Scheduler's start flow (scheduler_screen.dart's
+          // `_startFromPlan`), which already explains itself.
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(L10n.get(context, 'freediving_locked_no_pb')),
+            action: SnackBarAction(
+              label: L10n.get(context, 'freediving_pb_test_cta'),
+              onPressed: () =>
+                  Navigator.of(context).push(fadeThroughRoute(const MaxPbTestScreen())),
+            ),
+          ));
+          return;
+        }
         Navigator.of(context).push(fadeThroughRoute(FreedivingTableIntroScreen(
           tableType: action.type == PathAction.co2Table
               ? FreedivingTableType.co2
@@ -73,10 +87,16 @@ class TodayScreen extends ConsumerWidget {
     }
   }
 
-  bool _pbTestDue(FreedivingProfileData? profile) {
-    if (profile == null || profile.safetyAcknowledgedAt == null) return false;
-    if (profile.verifiedPbAt == null) return true;
-    return DateTime.now().difference(profile.verifiedPbAt!) >= _pbTestDueAfter;
+  /// True whenever the PB-test card is worth showing: never tested, a soft
+  /// "retest coming up" reminder window, or the harder "expired, CO2/O2 and
+  /// higher Wim Hof levels are locked" state — see [PbReadiness]. Requires
+  /// [FreedivingProfileData.safetyAcknowledgedAt] so this never nudges
+  /// someone who hasn't even opened the Freediving tab yet.
+  bool _showPbTestCard(FreedivingProfileData? profile, PbReadiness? readiness) {
+    if (profile == null || profile.safetyAcknowledgedAt == null || readiness == null) {
+      return false;
+    }
+    return !readiness.isActive || readiness.daysUntilStale != null;
   }
 
   @override
@@ -85,6 +105,7 @@ class TodayScreen extends ConsumerWidget {
     final plan = ref.watch(weeklyPlanProvider);
     final userProfile = ref.watch(userProfileProvider).value;
     final freedivingProfile = ref.watch(freedivingProfileProvider).value;
+    final readiness = ref.watch(freedivingReadinessProvider);
 
     return SafeArea(
       child: Center(
@@ -108,10 +129,8 @@ class TodayScreen extends ConsumerWidget {
                         children: [
                           _ProfileHeaderRow(profile: userProfile),
                           const SizedBox(height: AppSpacing.lg),
-                          if (_pbTestDue(freedivingProfile)) ...[
-                            _PbTestDueCard(
-                              neverTested: freedivingProfile?.verifiedPbAt == null,
-                            ),
+                          if (_showPbTestCard(freedivingProfile, readiness)) ...[
+                            _PbTestDueCard(readiness: readiness!),
                             const SizedBox(height: AppSpacing.lg),
                           ],
                           _TodayCard(
@@ -164,45 +183,65 @@ class _ProfileHeaderRow extends StatelessWidget {
 }
 
 class _PbTestDueCard extends StatelessWidget {
-  const _PbTestDueCard({required this.neverTested});
-  final bool neverTested;
+  const _PbTestDueCard({required this.readiness});
+  final PbReadiness readiness;
 
   @override
   Widget build(BuildContext context) {
+    final isExpired = readiness.status == PbReadinessStatus.stale;
+    final bodyKey = switch (readiness.status) {
+      PbReadinessStatus.notStarted => 'today_pbtest_due_body_new',
+      PbReadinessStatus.stale => 'today_pbtest_due_body_expired',
+      PbReadinessStatus.active => 'today_pbtest_due_body_soon',
+    };
+    var body = L10n.get(context, bodyKey);
+    if (readiness.daysUntilStale != null) {
+      body = body.replaceFirst('{n}', '${readiness.daysUntilStale}');
+    } else if (readiness.daysSinceStale != null) {
+      body = body.replaceFirst('{n}', '${readiness.daysSinceStale}');
+    }
     return PressableScale(
       onTap: () =>
           Navigator.of(context).push(fadeThroughRoute(const MaxPbTestScreen())),
       child: GlassCard(
-        gradient: AppTheme.cardGradient(AppTheme.primary),
+        gradient: AppTheme.cardGradient(isExpired ? AppTheme.danger : AppTheme.primary),
         child: Row(
           children: [
-            const Icon(Icons.timer_outlined, color: AppTheme.primary, size: 24),
+            Icon(Icons.timer_outlined,
+                color: isExpired ? AppTheme.danger : AppTheme.primary, size: 24),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    L10n.get(context, 'today_pbtest_due_title'),
-                    style: const TextStyle(
-                        color: AppTheme.primary, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+                    L10n.get(context,
+                        isExpired ? 'today_pbtest_expired_title' : 'today_pbtest_due_title'),
+                    style: TextStyle(
+                        color: isExpired ? AppTheme.danger : AppTheme.primary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2),
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    L10n.get(context,
-                        neverTested ? 'today_pbtest_due_body_new' : 'today_pbtest_due_body_retest'),
-                    style: const TextStyle(color: AppTheme.textLight, fontSize: 13),
-                  ),
+                  Text(body, style: const TextStyle(color: AppTheme.textLight, fontSize: 13)),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right_rounded, color: AppTheme.primary, size: 20),
+            Icon(Icons.chevron_right_rounded,
+                color: isExpired ? AppTheme.danger : AppTheme.primary, size: 20),
           ],
         ),
       ),
     ).animate().fadeIn(duration: AppMotion.medium);
   }
 }
+
+String _tierLabelKey(PbReadinessTier tier) => switch (tier) {
+      PbReadinessTier.beginner => 'readiness_tier_beginner',
+      PbReadinessTier.intermediate => 'readiness_tier_intermediate',
+      PbReadinessTier.advanced => 'readiness_tier_advanced',
+    };
 
 _StageRelation _relativeTo(PathStage stage, PathStage current) {
   if (stage.index < current.index) return _StageRelation.done;
@@ -242,6 +281,8 @@ class _WeekSectionState extends ConsumerState<_WeekSection> {
 
   @override
   Widget build(BuildContext context) {
+    final readiness = ref.watch(freedivingReadinessProvider);
+    final verifiedPbSec = ref.watch(freedivingProfileProvider).value?.verifiedPbSec;
     return GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -260,6 +301,28 @@ class _WeekSectionState extends ConsumerState<_WeekSection> {
             L10n.get(context, 'path_week_intro'),
             style: TextStyle(color: AppTheme.textDim.withAlpha(200), fontSize: 12, height: 1.4),
           ),
+          // Makes the PB↔plan link visible rather than something only the
+          // gating logic behind the scenes knows about — shown only once
+          // there's an active, real PB to point to.
+          if (readiness != null && readiness.isActive && verifiedPbSec != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              children: [
+                const Icon(Icons.link_rounded, color: AppTheme.accent, size: 14),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    L10n
+                        .get(context, 'path_week_pb_matched')
+                        .replaceFirst('{pb}',
+                            '${verifiedPbSec ~/ 60}:${(verifiedPbSec % 60).toString().padLeft(2, '0')}')
+                        .replaceFirst('{tier}', L10n.get(context, _tierLabelKey(readiness.tier))),
+                    style: TextStyle(color: AppTheme.textDim.withAlpha(190), fontSize: 11),
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: AppSpacing.lg),
           WeekPlanStrip(plan: widget.plan),
           const SizedBox(height: AppSpacing.lg),

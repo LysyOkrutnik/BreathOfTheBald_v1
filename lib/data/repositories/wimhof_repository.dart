@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 import 'package:okrutnik_breath/core/sync/profile_sync_marker.dart';
 import 'package:okrutnik_breath/data/db/database.dart';
+import 'package:okrutnik_breath/logic/freediving/pb_readiness.dart';
 import 'package:okrutnik_breath/logic/wimhof/wimhof_progression.dart';
 
 /// Persistence + re-evaluation for the Wim Hof classic-ladder progression.
@@ -69,6 +70,9 @@ class WimHofRepository {
     double? pbCautionRatioOverride,
     double? maxAvgRpeToAdvanceOverride,
     double? maxAvgRpeToConfirmTrialOverride,
+    int? pbRetestDaysOverride,
+    int? readinessIntermediateSecOverride,
+    int? readinessAdvancedSecOverride,
   }) async {
     final progress = await _getOrCreate();
     final sessions = await _allWimHofSessions();
@@ -77,10 +81,17 @@ class WimHofRepository {
     // repository-to-repository dependency would be a lot of coupling for it.
     final freedivingProfile =
         await (_db.select(_db.freedivingProfile)..limit(1)).getSingleOrNull();
+    final readiness = PbReadiness.compute(
+      profile: freedivingProfile,
+      retestRequiredDays: pbRetestDaysOverride ?? kPbRetestRequiredDays,
+      intermediateSec: readinessIntermediateSecOverride ?? kReadinessIntermediateSec,
+      advancedSec: readinessAdvancedSecOverride ?? kReadinessAdvancedSec,
+    );
     final result = WimHofProgression.compute(
       progress: progress,
       allWimHofSessions: sessions,
       verifiedPbSec: freedivingProfile?.verifiedPbSec,
+      freedivingReadiness: readiness,
       detrainingDays: detrainingDaysOverride ?? kDetrainingDays,
       pbCautionRatio: pbCautionRatioOverride ?? kPbCautionRetentionRatio,
       maxAvgRpeToAdvance: maxAvgRpeToAdvanceOverride ?? kMaxAvgRpeToAdvance,

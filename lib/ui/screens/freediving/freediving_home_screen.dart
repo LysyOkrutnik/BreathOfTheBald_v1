@@ -10,6 +10,7 @@ import 'package:okrutnik_breath/config/levels.dart';
 import 'package:okrutnik_breath/data/db/database.dart';
 import 'package:okrutnik_breath/data/repositories/freediving_repository.dart';
 import 'package:okrutnik_breath/logic/freediving/co2_o2_table_generator.dart';
+import 'package:okrutnik_breath/logic/freediving/pb_readiness.dart';
 import 'package:okrutnik_breath/logic/notifiers/session_notifier.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/logic/providers/settings_provider.dart';
@@ -206,7 +207,11 @@ class _FreedivingContent extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final hasPb = profile.verifiedPbSec != null;
+    final readiness = ref.watch(freedivingReadinessProvider);
+    // Re-locks the tables/packing once a verified test goes stale, not just
+    // once no test has ever been done — see PbReadiness for the retest
+    // window this keys off.
+    final hasPb = readiness?.isActive ?? false;
     final presets =
         ref.watch(customFreedivingPresetsProvider).value ?? const <CustomFreedivingPreset>[];
 
@@ -220,7 +225,7 @@ class _FreedivingContent extends ConsumerWidget {
           style: const TextStyle(color: AppTheme.textDim, fontSize: 13, height: 1.4),
         ),
         const SizedBox(height: AppSpacing.lg),
-        _PbCard(profile: profile),
+        _PbCard(profile: profile, readiness: readiness),
         if (hasPb) ...[
           const SizedBox(height: AppSpacing.lg),
           const _ProgressSection(),
@@ -460,20 +465,24 @@ class _CustomFreedivingPresetCard extends StatelessWidget {
 }
 
 class _PbCard extends StatelessWidget {
-  const _PbCard({required this.profile});
+  const _PbCard({required this.profile, required this.readiness});
   final FreedivingProfileData profile;
+  final PbReadiness? readiness;
 
   @override
   Widget build(BuildContext context) {
     final verified = profile.verifiedPbSec;
     final locale = Localizations.localeOf(context).toString();
+    final isStale = readiness?.status == PbReadinessStatus.stale;
 
     return GlassCard(
-      // With no PB yet, this card's CTA is the one thing actually required
-      // to unlock the rest of the tab — give it a visible accent glow so it
-      // doesn't read as just another equally-weighted card next to the
-      // (now dimmed) locked tables below it.
-      gradient: verified == null ? AppTheme.cardGradient(AppTheme.primary) : null,
+      // With no PB yet (or a stale one — see PbReadiness), this card's CTA
+      // is the one thing actually required to unlock the rest of the tab —
+      // give it a visible glow so it doesn't read as just another
+      // equally-weighted card next to the (now dimmed) locked tables below.
+      gradient: verified == null || isStale
+          ? AppTheme.cardGradient(isStale ? AppTheme.danger : AppTheme.primary)
+          : null,
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -514,6 +523,22 @@ class _PbCard extends StatelessWidget {
                 style: TextStyle(color: AppTheme.textDim.withAlpha(180), fontSize: 11),
               ),
             ],
+            if (isStale) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: AppTheme.danger, size: 16),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      L10n.get(context, 'freediving_pb_expired_body'),
+                      style: const TextStyle(color: AppTheme.danger, fontSize: 12, height: 1.3),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             if (profile.verifiedPbCo2Sec != null) ...[
               const SizedBox(height: AppSpacing.sm),
               Row(
@@ -548,16 +573,22 @@ class _PbCard extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
               decoration: BoxDecoration(
-                color: AppTheme.primary.withAlpha(30),
+                color: (isStale ? AppTheme.danger : AppTheme.primary).withAlpha(30),
                 borderRadius: BorderRadius.circular(AppRadius.md),
-                border: Border.all(color: AppTheme.primary.withAlpha(120)),
+                border:
+                    Border.all(color: (isStale ? AppTheme.danger : AppTheme.primary).withAlpha(120)),
               ),
               child: Text(
-                L10n.get(context,
-                    verified == null ? 'freediving_pb_test_cta' : 'freediving_pb_retest'),
+                L10n.get(
+                    context,
+                    verified == null
+                        ? 'freediving_pb_test_cta'
+                        : isStale
+                            ? 'freediving_pb_retest_expired'
+                            : 'freediving_pb_retest'),
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: AppTheme.primary,
+                style: TextStyle(
+                  color: isStale ? AppTheme.danger : AppTheme.primary,
                   fontWeight: FontWeight.bold,
                   fontSize: 13,
                   letterSpacing: 1.0,

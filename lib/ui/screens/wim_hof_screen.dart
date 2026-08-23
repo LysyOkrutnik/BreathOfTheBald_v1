@@ -6,9 +6,11 @@ import 'package:okrutnik_breath/config/levels.dart';
 import 'package:okrutnik_breath/config/responsive.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
+import 'package:okrutnik_breath/logic/freediving/pb_readiness.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/logic/providers/settings_provider.dart';
 import 'package:okrutnik_breath/logic/wimhof/wimhof_progression.dart';
+import 'package:okrutnik_breath/ui/screens/freediving/max_pb_test_screen.dart';
 import 'package:okrutnik_breath/ui/screens/intro_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/level_grid.dart';
@@ -28,6 +30,7 @@ class WimHofScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final columns = (context.isTablet || context.isLandscape) ? 2 : 1;
     final nextUp = ref.watch(wimHofNextUpProvider).value;
+    final readiness = ref.watch(freedivingReadinessProvider);
     final weeklyHardCount = ref.watch(weeklyHardSessionCountProvider);
     final weeklyHardCap =
         ref.watch(settingsProvider).weeklyHardCapOverride ?? kWeeklyHardSessionCap;
@@ -77,6 +80,12 @@ class WimHofScreen extends ConsumerWidget {
                         _NextUpCard(
                           levelKey: nextUp!.recommendedLevelKey!,
                           pbCautionAdvised: nextUp.pbCautionAdvised,
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                      ] else if (nextUp?.pbGateBlockedLevelKey != null) ...[
+                        _PbGateBlockedCard(
+                          levelKey: nextUp!.pbGateBlockedLevelKey!,
+                          readiness: readiness,
                         ),
                         const SizedBox(height: AppSpacing.lg),
                       ],
@@ -195,6 +204,54 @@ class _NextUpCard extends StatelessWidget {
         ),
       ),
     ).animate().fadeIn(duration: AppMotion.medium).slideY(begin: 0.08);
+  }
+}
+
+/// Shown instead of [_NextUpCard] when [WimHofNextUp.pbGateBlockedLevelKey]
+/// is set — the user has earned this promotion on session count/days/RPE
+/// alone, but it's held back by [PbReadiness] (see wimhof_progression.dart).
+/// Tapping it goes straight to the Max PB Test rather than the level intro,
+/// since that's the actual next step to unlock it.
+class _PbGateBlockedCard extends StatelessWidget {
+  const _PbGateBlockedCard({required this.levelKey, required this.readiness});
+  final String levelKey;
+  final PbReadiness? readiness;
+
+  @override
+  Widget build(BuildContext context) {
+    final level = LevelData.levels[levelKey]!;
+    final neverTested = readiness?.status != PbReadinessStatus.stale;
+    return PressableScale(
+      onTap: () =>
+          Navigator.of(context).push(fadeThroughRoute(const MaxPbTestScreen())),
+      child: GlassCard(
+        child: Row(
+          children: [
+            const Icon(Icons.lock_outline_rounded, color: AppTheme.textDim, size: 24),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "${L10n.get(context, 'wimhof_pb_gate_title')} ${L10n.get(context, level.title)}",
+                    style: const TextStyle(
+                        color: AppTheme.textLight, fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    L10n.get(context,
+                        neverTested ? 'wimhof_pb_gate_body_never' : 'wimhof_pb_gate_body_stale'),
+                    style: const TextStyle(color: AppTheme.textDim, fontSize: 11, height: 1.3),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: AppTheme.textDim, size: 20),
+          ],
+        ),
+      ),
+    ).animate().fadeIn(duration: AppMotion.medium);
   }
 }
 

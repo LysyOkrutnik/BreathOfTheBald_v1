@@ -13,6 +13,7 @@ import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
 import 'package:okrutnik_breath/core/sync/sync_api_client.dart';
 import 'package:okrutnik_breath/core/sync/sync_service.dart';
+import 'package:okrutnik_breath/logic/freediving/pb_readiness.dart';
 import 'package:okrutnik_breath/logic/providers/app_info_provider.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/logic/providers/locale_provider.dart';
@@ -485,6 +486,13 @@ class SettingsScreen extends ConsumerWidget {
     final maxRpeTrialController = TextEditingController(
         text:
             '${settings.maxAvgRpeToConfirmTrialOverride ?? kMaxAvgRpeToConfirmTrial}');
+    final pbRetestDaysController = TextEditingController(
+        text: '${settings.pbRetestDaysOverride ?? kPbRetestRequiredDays}');
+    final readinessIntermediateController = TextEditingController(
+        text:
+            '${settings.readinessIntermediateSecOverride ?? kReadinessIntermediateSec}');
+    final readinessAdvancedController = TextEditingController(
+        text: '${settings.readinessAdvancedSecOverride ?? kReadinessAdvancedSec}');
 
     Widget field(TextEditingController controller, String labelKey) {
       return Padding(
@@ -528,6 +536,10 @@ class SettingsScreen extends ConsumerWidget {
             field(pbCautionController, 'settings_advanced_pb_caution_ratio'),
             field(maxRpeController, 'settings_advanced_max_avg_rpe'),
             field(maxRpeTrialController, 'settings_advanced_max_avg_rpe_trial'),
+            field(pbRetestDaysController, 'settings_advanced_pb_retest_days'),
+            field(readinessIntermediateController,
+                'settings_advanced_readiness_intermediate_sec'),
+            field(readinessAdvancedController, 'settings_advanced_readiness_advanced_sec'),
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton(
@@ -537,6 +549,9 @@ class SettingsScreen extends ConsumerWidget {
                   pbCautionController.text = '$kPbCautionRetentionRatio';
                   maxRpeController.text = '$kMaxAvgRpeToAdvance';
                   maxRpeTrialController.text = '$kMaxAvgRpeToConfirmTrial';
+                  pbRetestDaysController.text = '$kPbRetestRequiredDays';
+                  readinessIntermediateController.text = '$kReadinessIntermediateSec';
+                  readinessAdvancedController.text = '$kReadinessAdvancedSec';
                 },
                 child: Text(L10n.get(context, 'settings_advanced_reset'),
                     style: const TextStyle(color: AppTheme.textDim)),
@@ -577,6 +592,13 @@ class SettingsScreen extends ConsumerWidget {
       final maxAvgRpe = rawMaxRpe?.clamp(1.0, 10.0).toDouble();
       final rawMaxRpeTrial = double.tryParse(maxRpeTrialController.text.trim());
       final maxAvgRpeTrial = rawMaxRpeTrial?.clamp(1.0, 10.0).toDouble();
+      final rawPbRetestDays = int.tryParse(pbRetestDaysController.text.trim());
+      final pbRetestDays = rawPbRetestDays?.clamp(3, 365);
+      final rawReadinessIntermediate =
+          int.tryParse(readinessIntermediateController.text.trim());
+      final readinessIntermediateSec = rawReadinessIntermediate?.clamp(15, 600);
+      final rawReadinessAdvanced = int.tryParse(readinessAdvancedController.text.trim());
+      final readinessAdvancedSec = rawReadinessAdvanced?.clamp(15, 900);
       await ref.read(settingsProvider.notifier).setAdvancedThresholds(
             detrainingDays: detrainingDays == kDetrainingDays ? null : detrainingDays,
             weeklyHardCap: weeklyCap == kWeeklyHardSessionCap ? null : weeklyCap,
@@ -587,6 +609,12 @@ class SettingsScreen extends ConsumerWidget {
             maxAvgRpeToConfirmTrial: maxAvgRpeTrial == kMaxAvgRpeToConfirmTrial
                 ? null
                 : maxAvgRpeTrial,
+            pbRetestDays: pbRetestDays == kPbRetestRequiredDays ? null : pbRetestDays,
+            readinessIntermediateSec: readinessIntermediateSec == kReadinessIntermediateSec
+                ? null
+                : readinessIntermediateSec,
+            readinessAdvancedSec:
+                readinessAdvancedSec == kReadinessAdvancedSec ? null : readinessAdvancedSec,
           );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -599,6 +627,9 @@ class SettingsScreen extends ConsumerWidget {
     pbCautionController.dispose();
     maxRpeController.dispose();
     maxRpeTrialController.dispose();
+    pbRetestDaysController.dispose();
+    readinessIntermediateController.dispose();
+    readinessAdvancedController.dispose();
   }
 
   void _showHomeWidgetInfo(BuildContext context) {

@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/theme.dart';
+import 'package:okrutnik_breath/logic/freediving/pb_readiness.dart';
 import 'package:okrutnik_breath/logic/path/cold_shower.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/ui/widgets/confirm_dialog.dart';
@@ -44,9 +45,26 @@ class _ColdShowerCardState extends ConsumerState<ColdShowerCard> {
     setState(() => _durationSec = (_durationFor(ref) + delta).clamp(_minSec, _maxSec));
   }
 
+  /// A readiness-tier hint, purely informational — never changes
+  /// [_durationFor]'s actual default, since cold exposure and breath-hold
+  /// tolerance are different physiological adaptations and a high freediving
+  /// PB is no basis for pushing a longer cold exposure on its own. Null when
+  /// there's no active PB reading to hint from at all (the info dialog just
+  /// omits this row, same as [monthCount] being 0).
+  String? _readinessHintKey(WidgetRef ref) {
+    final readiness = ref.read(freedivingReadinessProvider);
+    if (readiness == null || !readiness.isActive) return null;
+    return switch (readiness.tier) {
+      PbReadinessTier.beginner => null,
+      PbReadinessTier.intermediate => 'coldshower_readiness_hint_intermediate',
+      PbReadinessTier.advanced => 'coldshower_readiness_hint_advanced',
+    };
+  }
+
   void _showInfo(BuildContext context, WidgetRef ref) {
     const color = Color(0xFF80D8FF);
     final monthCount = ref.read(coldShowerMonthCountProvider);
+    final readinessHintKey = _readinessHintKey(ref);
     showGlassDialog<void>(
       context,
       builder: (dialogContext) => Column(
@@ -100,6 +118,22 @@ class _ColdShowerCardState extends ConsumerState<ColdShowerCard> {
                 ],
               ),
             ),
+          if (readinessHintKey != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.info_outline_rounded, color: color, size: 16),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    L10n.get(context, readinessHintKey),
+                    style: const TextStyle(color: AppTheme.textDim, fontSize: 12, height: 1.3),
+                  ),
+                ),
+              ],
+            ),
+          ],
           if (monthCount > 0) ...[
             const SizedBox(height: AppSpacing.md),
             Row(
