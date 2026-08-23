@@ -177,7 +177,13 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen> {
         ],
       ),
     );
-    controller.dispose();
+    // `showGlassDialog`'s Future completes as soon as Navigator.pop() runs,
+    // not once the dialog's exit transition finishes — the TextField above
+    // can still be mounted/animating out for another frame or two.
+    // Disposing the controller synchronously here has caused a
+    // `'_dependents.isEmpty': is not true` crash; deferring to the next
+    // frame lets the pop's own element teardown finish first.
+    WidgetsBinding.instance.addPostFrameCallback((_) => controller.dispose());
     if (email == null || email.isEmpty || !mounted) return;
     await ref.read(authServiceProvider).forgotPassword(email);
     if (!mounted) return;

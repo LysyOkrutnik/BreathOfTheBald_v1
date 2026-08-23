@@ -454,7 +454,14 @@ class SettingsScreen extends ConsumerWidget {
     );
 
     final message = controller.text.trim();
-    controller.dispose();
+    // `showGlassDialog`'s Future completes as soon as Navigator.pop() runs,
+    // not once the dialog's exit transition finishes — the TextField above
+    // (and its Focus/EditableText machinery) can still be mounted and
+    // animating out for another frame or two. Disposing the controller
+    // synchronously here has caused a `'_dependents.isEmpty': is not true`
+    // crash; deferring to the next frame lets the pop's own element teardown
+    // finish first.
+    WidgetsBinding.instance.addPostFrameCallback((_) => controller.dispose());
     if (submitted != true || message.isEmpty || !context.mounted) return;
 
     final messenger = ScaffoldMessenger.of(context);
@@ -622,14 +629,19 @@ class SettingsScreen extends ConsumerWidget {
       }
     }
 
-    detrainingController.dispose();
-    weeklyCapController.dispose();
-    pbCautionController.dispose();
-    maxRpeController.dispose();
-    maxRpeTrialController.dispose();
-    pbRetestDaysController.dispose();
-    readinessIntermediateController.dispose();
-    readinessAdvancedController.dispose();
+    // See the matching comment in `_reportFeedback` — disposing these
+    // synchronously right after the dialog's Future resolves can race its
+    // still-animating-out exit transition and crash the framework.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      detrainingController.dispose();
+      weeklyCapController.dispose();
+      pbCautionController.dispose();
+      maxRpeController.dispose();
+      maxRpeTrialController.dispose();
+      pbRetestDaysController.dispose();
+      readinessIntermediateController.dispose();
+      readinessAdvancedController.dispose();
+    });
   }
 
   void _showHomeWidgetInfo(BuildContext context) {
@@ -1028,8 +1040,11 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
         ),
       ),
     );
-    currentController.dispose();
-    newController.dispose();
+    // See the matching comment in `_reportFeedback`.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      currentController.dispose();
+      newController.dispose();
+    });
     if (changed == true && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(L10n.get(context, 'account_change_password_success'))));
@@ -1153,8 +1168,11 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
         ),
       ),
     );
-    emailController.dispose();
-    passwordController.dispose();
+    // See the matching comment in `_reportFeedback`.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      emailController.dispose();
+      passwordController.dispose();
+    });
     if (changed == true && context.mounted) {
       await _refreshState();
       if (!context.mounted) return;
