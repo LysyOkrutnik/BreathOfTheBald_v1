@@ -6,18 +6,16 @@ import 'package:okrutnik_breath/config/levels.dart';
 import 'package:okrutnik_breath/config/responsive.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
-import 'package:okrutnik_breath/core/notifications/notification_service.dart';
 import 'package:okrutnik_breath/data/db/database.dart';
 import 'package:okrutnik_breath/data/repositories/freediving_repository.dart';
 import 'package:okrutnik_breath/logic/freediving/co2_o2_table_generator.dart';
-import 'package:okrutnik_breath/logic/path/cold_shower.dart';
 import 'package:okrutnik_breath/logic/path/training_path.dart';
 import 'package:okrutnik_breath/logic/path/weekly_plan.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
-import 'package:okrutnik_breath/logic/providers/settings_provider.dart';
 import 'package:okrutnik_breath/ui/screens/freediving/freediving_table_intro_screen.dart';
 import 'package:okrutnik_breath/ui/screens/freediving/max_pb_test_screen.dart';
 import 'package:okrutnik_breath/ui/screens/intro_screen.dart';
+import 'package:okrutnik_breath/ui/screens/week_scheduling_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/cold_shower_card.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
@@ -75,100 +73,6 @@ class TodayScreen extends ConsumerWidget {
     }
   }
 
-  /// The plannable key for a single action, or null when it isn't a real
-  /// schedulable session.
-  String? _plannableKey(PlannedAction action) {
-    switch (action.type) {
-      case PathAction.wimHof:
-      case PathAction.mobility:
-        return action.levelKey;
-      case PathAction.pbTest:
-        return 'freediving_pb_test';
-      case PathAction.co2Table:
-        return 'freediving_co2';
-      case PathAction.o2Table:
-        return 'freediving_o2';
-      case PathAction.coldShower:
-        return coldShowerLevelKey;
-      case PathAction.rest:
-      case PathAction.maintain:
-        return null;
-    }
-  }
-
-  /// Spreads [count] sessions evenly across the user's available hour
-  /// window, so every scheduled time actually falls inside the range they
-  /// picked instead of drifting past it via fixed per-discipline offsets.
-  /// A single session lands at the start of the window; more than one are
-  /// spaced as evenly as the window allows.
-  List<int> _hoursForDay(int count, int startHour, int endHour) {
-    if (count <= 0) return const [];
-    if (count == 1) return [startHour];
-    final span = (endHour - startHour).clamp(0, 23);
-    final step = span / (count - 1);
-    return [
-      for (var i = 0; i < count; i++) (startHour + (step * i).round()).clamp(0, 23),
-    ];
-  }
-
-  Future<void> _planWeek(BuildContext context, WidgetRef ref, WeeklyPlan plan) async {
-    final languageCode = Localizations.localeOf(context).languageCode;
-    final reminderTitle = L10n.get(context, 'planner_reminder_title');
-    final messenger = ScaffoldMessenger.of(context);
-    final planner = ref.read(plannerRepositoryProvider);
-    final notifications = ref.read(notificationServiceProvider);
-    final settings = ref.read(settingsProvider);
-    final today = DateTime.now();
-
-    try {
-      for (final day in plan.days) {
-        final plannable = [
-          for (final action in day.actions)
-            if (_plannableKey(action) != null) action,
-        ];
-        final hours = _hoursForDay(
-            plannable.length, settings.availableHourStart, settings.availableHourEnd);
-        final usedHours = <int>{};
-
-        for (var i = 0; i < plannable.length; i++) {
-          final action = plannable[i];
-          final levelKey = _plannableKey(action)!;
-
-          var hour = hours[i];
-          while (usedHours.contains(hour)) {
-            hour = (hour + 1) % 24;
-          }
-          usedHours.add(hour);
-
-          final scheduledAt = DateTime(
-              today.year, today.month, today.day + day.dayOffset, hour);
-          if (scheduledAt.isBefore(DateTime.now())) continue;
-
-          final level = LevelData.levels[levelKey];
-          final levelName =
-              level != null ? L10n.getForLocale(languageCode, level.title) : levelKey;
-
-          final planId = await planner.addPlan(
-            scheduledAt: scheduledAt,
-            levelKey: levelKey,
-          );
-          await notifications.scheduleOneTime(
-            id: planId,
-            when: scheduledAt.subtract(const Duration(minutes: 5)),
-            title: reminderTitle,
-            body: levelName,
-          );
-        }
-      }
-      if (context.mounted) {
-        messenger.showSnackBar(
-            SnackBar(content: Text(L10n.get(context, 'path_week_planned_toast'))));
-      }
-    } catch (_) {
-      // Best-effort — the planner tab itself remains the reliable fallback.
-    }
-  }
-
   bool _pbTestDue(FreedivingProfileData? profile) {
     if (profile == null || profile.safetyAcknowledgedAt == null) return false;
     if (profile.verifiedPbAt == null) return true;
@@ -218,7 +122,8 @@ class TodayScreen extends ConsumerWidget {
                           const SizedBox(height: AppSpacing.lg),
                           _WeekSection(
                             plan: plan,
-                            onPlanWeek: () => _planWeek(context, ref, plan),
+                            onPlanWeek: () => Navigator.of(context)
+                                .push(fadeThroughRoute(const WeekSchedulingScreen())),
                           ),
                           const SizedBox(height: AppSpacing.lg),
                           _JourneySection(stages: _stages, currentStage: path.stage),

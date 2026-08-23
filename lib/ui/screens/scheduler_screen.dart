@@ -546,6 +546,7 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen> {
       final planId = await ref.read(plannerRepositoryProvider).addPlan(
             scheduledAt: scheduledAt,
             levelKey: level.key,
+            estimatedDurationSec: estimatedDurationSecForLevel(level),
           );
       final notifications = ref.read(notificationServiceProvider);
       await notifications.scheduleOneTime(
@@ -755,6 +756,25 @@ class _DayPanel extends StatelessWidget {
     );
   }
 
+  /// True when [plan]'s scheduled..scheduled+duration range overlaps any
+  /// *other* plan that same day — null duration on either side (a plan
+  /// saved before estimatedDurationSec existed) never counts as an overlap,
+  /// since there's nothing real to compare.
+  bool _overlapsAnother(PlannedSession plan) {
+    final duration = plan.estimatedDurationSec;
+    if (duration == null || duration <= 0) return false;
+    final start = plan.scheduledAt;
+    final end = start.add(Duration(seconds: duration));
+    return plans.any((other) {
+      if (other.id == plan.id) return false;
+      final otherDuration = other.estimatedDurationSec;
+      if (otherDuration == null || otherDuration <= 0) return false;
+      final otherStart = other.scheduledAt;
+      final otherEnd = otherStart.add(Duration(seconds: otherDuration));
+      return start.isBefore(otherEnd) && otherStart.isBefore(end);
+    });
+  }
+
   Widget _buildTimeline() {
     final timeline = SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
@@ -763,6 +783,8 @@ class _DayPanel extends StatelessWidget {
           for (final p in plans)
             TimelineItem(
               time: TimeOfDay.fromDateTime(p.scheduledAt),
+              durationSec: p.estimatedDurationSec,
+              hasOverlap: _overlapsAnother(p),
               child: _PlanTile(
                 plan: p,
                 onDelete: () => onDelete(p),

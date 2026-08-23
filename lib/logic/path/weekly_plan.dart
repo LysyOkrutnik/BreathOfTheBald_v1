@@ -289,6 +289,40 @@ class WeeklyPlanGenerator {
   }
 }
 
+/// The key a [PlannedAction] should be stored/matched under in
+/// `PlannedSessions` — null when it isn't a real schedulable session at all
+/// (rest/maintain). For action types with a real [LevelData] entry
+/// (wimHof/mobility) this is just [PlannedAction.levelKey]; the others
+/// (freediving tables, the PB test, cold shower) have no such entry, so
+/// this gives them the same synthetic key the app already uses elsewhere
+/// to refer to them (matching `_startFromPlan`'s own key checks in
+/// scheduler_screen.dart). Shared between the auto-generated weekly plan
+/// and anywhere else that needs to persist or look up one of its actions,
+/// rather than each call site re-deriving its own mapping.
+String? plannableStorageKeyFor(PlannedAction action) {
+  switch (action.type) {
+    case PathAction.wimHof:
+    case PathAction.mobility:
+      return action.levelKey;
+    case PathAction.pbTest:
+      return 'freediving_pb_test';
+    case PathAction.co2Table:
+      return 'freediving_co2';
+    case PathAction.o2Table:
+      return 'freediving_o2';
+    case PathAction.coldShower:
+      // Literal rather than importing cold_shower.dart's coldShowerLevelKey
+      // constant — that file imports data_providers.dart, which imports
+      // this one, so importing it here too would complete a cycle for one
+      // constant (same reasoning as gamification_service.dart's
+      // disciplineFamilyFor).
+      return 'cold_shower';
+    case PathAction.rest:
+    case PathAction.maintain:
+      return null;
+  }
+}
+
 /// Full-sentence label for a single planned action (e.g. in a "today" list),
 /// resolving a Wim Hof level name where relevant. Context-free so it's usable
 /// from both widgets and the daily-reminder notification body.

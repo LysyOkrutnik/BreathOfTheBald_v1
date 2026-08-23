@@ -6,6 +6,12 @@ import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/logic/providers/settings_provider.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 
+/// Weekly-plan sessions now get their hour picked individually in
+/// WeekSchedulingScreen, so this sheet no longer offers an hour range to
+/// edit — [_hourStart]/[_hourEnd] just carry the stored values through
+/// unchanged on save, since [SettingsNotifier.setWeekPreferences] still
+/// persists them (kept, unused, to avoid reshaping the sync payload).
+
 /// A reference Monday (2024-01-01 was one) used purely to format localized
 /// weekday abbreviations for weekdays 1..7 — no calendar meaning otherwise.
 DateTime _referenceMonday() => DateTime(2024, 1, 1);
@@ -31,12 +37,9 @@ class WeekPreferencesSheet extends ConsumerStatefulWidget {
 }
 
 class _WeekPreferencesSheetState extends ConsumerState<WeekPreferencesSheet> {
-  /// Below this, spreading even 2-3 sessions across the window stops meaning
-  /// anything — everything would land within minutes of each other.
-  static const _minHourSpan = 2.0;
-
   late Set<int> _weekdays;
-  late RangeValues _hourRange;
+  late int _hourStart;
+  late int _hourEnd;
   late bool _allowMultiple;
 
   @override
@@ -44,10 +47,8 @@ class _WeekPreferencesSheetState extends ConsumerState<WeekPreferencesSheet> {
     super.initState();
     final settings = ref.read(settingsProvider);
     _weekdays = Set.of(settings.availableWeekdays);
-    _hourRange = RangeValues(
-      settings.availableHourStart.toDouble(),
-      settings.availableHourEnd.toDouble(),
-    );
+    _hourStart = settings.availableHourStart;
+    _hourEnd = settings.availableHourEnd;
     _allowMultiple = settings.allowMultipleSessionsPerDay;
   }
 
@@ -61,28 +62,11 @@ class _WeekPreferencesSheetState extends ConsumerState<WeekPreferencesSheet> {
     });
   }
 
-  String _formatHour(BuildContext context, double hour) =>
-      TimeOfDay(hour: hour.round(), minute: 0).format(context);
-
-  /// Pushes the thumb that *didn't* move rather than just rejecting the drag,
-  /// so dragging one handle past the minimum span drags the other along with
-  /// it instead of appearing to freeze.
-  void _onHourRangeChanged(RangeValues v) {
-    if (v.end - v.start < _minHourSpan) {
-      if (v.start != _hourRange.start) {
-        v = RangeValues(v.start, (v.start + _minHourSpan).clamp(0, 23));
-      } else {
-        v = RangeValues((v.end - _minHourSpan).clamp(0, 23), v.end);
-      }
-    }
-    setState(() => _hourRange = v);
-  }
-
   Future<void> _save() async {
     await ref.read(settingsProvider.notifier).setWeekPreferences(
           availableWeekdays: _weekdays,
-          availableHourStart: _hourRange.start.round(),
-          availableHourEnd: _hourRange.end.round(),
+          availableHourStart: _hourStart,
+          availableHourEnd: _hourEnd,
           allowMultipleSessionsPerDay: _allowMultiple,
         );
     if (mounted) Navigator.of(context).pop();
@@ -156,48 +140,6 @@ class _WeekPreferencesSheetState extends ConsumerState<WeekPreferencesSheet> {
                 ],
               ),
               const SizedBox(height: AppSpacing.lg),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      L10n.get(context, 'path_prefs_hour_label'),
-                      style: const TextStyle(
-                          color: AppTheme.textLight, fontSize: 14),
-                    ),
-                  ),
-                  Text(
-                    '${_formatHour(context, _hourRange.start)} - ${_formatHour(context, _hourRange.end)}',
-                    style: const TextStyle(
-                        color: AppTheme.accent,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-              SliderTheme(
-                data: SliderThemeData(
-                  activeTrackColor: AppTheme.accent,
-                  inactiveTrackColor: Colors.white.withAlpha(20),
-                  thumbColor: AppTheme.accent,
-                  overlayColor: AppTheme.accent.withAlpha(40),
-                  rangeThumbShape:
-                      const RoundRangeSliderThumbShape(enabledThumbRadius: 9),
-                ),
-                child: RangeSlider(
-                  values: _hourRange,
-                  min: 0,
-                  max: 23,
-                  divisions: 23,
-                  onChanged: _onHourRangeChanged,
-                ),
-              ),
-              Text(
-                L10n.get(context, 'path_prefs_hour_min_span')
-                    .replaceFirst('{n}', _minHourSpan.round().toString()),
-                style: TextStyle(
-                    color: AppTheme.textDim.withAlpha(180), fontSize: 10),
-              ),
-              const SizedBox(height: AppSpacing.md),
               Row(
                 children: [
                   Expanded(

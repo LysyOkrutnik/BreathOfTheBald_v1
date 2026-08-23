@@ -76,6 +76,13 @@ class PlannedSessions extends Table {
 
   /// Key of the planned [LevelData] exercise.
   TextColumn get levelKey => text()();
+
+  /// Best-effort estimated length of this session, in seconds — lets the
+  /// calendar show a duration-proportional block and flag same-day overlaps
+  /// instead of every plan rendering as an identical point-in-time card.
+  /// Null for rows written before this column existed; treated the same as
+  /// "unknown" everywhere it's read, never backfilled.
+  IntColumn get estimatedDurationSec => integer().nullable()();
 }
 
 /// A user-defined breathing pattern (the custom-session builder). Durations are
@@ -225,7 +232,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -322,6 +329,12 @@ class AppDatabase extends _$AppDatabase {
           // the current (resettable) one.
           if (from < 13) {
             await m.addColumn(userProfile, userProfile.bestStreak);
+          }
+          // v13 -> v14: estimated duration on a planned session, so the
+          // calendar can show a proportional block and flag overlaps
+          // instead of every plan looking identical regardless of length.
+          if (from >= 3 && from < 14) {
+            await m.addColumn(plannedSessions, plannedSessions.estimatedDurationSec);
           }
         },
       );

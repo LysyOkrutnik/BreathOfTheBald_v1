@@ -1291,8 +1291,15 @@ class $PlannedSessionsTable extends PlannedSessions
   late final GeneratedColumn<String> levelKey = GeneratedColumn<String>(
       'level_key', aliasedName, false,
       type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _estimatedDurationSecMeta =
+      const VerificationMeta('estimatedDurationSec');
   @override
-  List<GeneratedColumn> get $columns => [id, scheduledAt, levelKey];
+  late final GeneratedColumn<int> estimatedDurationSec = GeneratedColumn<int>(
+      'estimated_duration_sec', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
+  @override
+  List<GeneratedColumn> get $columns =>
+      [id, scheduledAt, levelKey, estimatedDurationSec];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -1320,6 +1327,12 @@ class $PlannedSessionsTable extends PlannedSessions
     } else if (isInserting) {
       context.missing(_levelKeyMeta);
     }
+    if (data.containsKey('estimated_duration_sec')) {
+      context.handle(
+          _estimatedDurationSecMeta,
+          estimatedDurationSec.isAcceptableOrUnknown(
+              data['estimated_duration_sec']!, _estimatedDurationSecMeta));
+    }
     return context;
   }
 
@@ -1335,6 +1348,8 @@ class $PlannedSessionsTable extends PlannedSessions
           .read(DriftSqlType.dateTime, data['${effectivePrefix}scheduled_at'])!,
       levelKey: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}level_key'])!,
+      estimatedDurationSec: attachedDatabase.typeMapping.read(
+          DriftSqlType.int, data['${effectivePrefix}estimated_duration_sec']),
     );
   }
 
@@ -1352,14 +1367,27 @@ class PlannedSession extends DataClass implements Insertable<PlannedSession> {
 
   /// Key of the planned [LevelData] exercise.
   final String levelKey;
+
+  /// Best-effort estimated length of this session, in seconds — lets the
+  /// calendar show a duration-proportional block and flag same-day overlaps
+  /// instead of every plan rendering as an identical point-in-time card.
+  /// Null for rows written before this column existed; treated the same as
+  /// "unknown" everywhere it's read, never backfilled.
+  final int? estimatedDurationSec;
   const PlannedSession(
-      {required this.id, required this.scheduledAt, required this.levelKey});
+      {required this.id,
+      required this.scheduledAt,
+      required this.levelKey,
+      this.estimatedDurationSec});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
     map['scheduled_at'] = Variable<DateTime>(scheduledAt);
     map['level_key'] = Variable<String>(levelKey);
+    if (!nullToAbsent || estimatedDurationSec != null) {
+      map['estimated_duration_sec'] = Variable<int>(estimatedDurationSec);
+    }
     return map;
   }
 
@@ -1368,6 +1396,9 @@ class PlannedSession extends DataClass implements Insertable<PlannedSession> {
       id: Value(id),
       scheduledAt: Value(scheduledAt),
       levelKey: Value(levelKey),
+      estimatedDurationSec: estimatedDurationSec == null && nullToAbsent
+          ? const Value.absent()
+          : Value(estimatedDurationSec),
     );
   }
 
@@ -1378,6 +1409,8 @@ class PlannedSession extends DataClass implements Insertable<PlannedSession> {
       id: serializer.fromJson<int>(json['id']),
       scheduledAt: serializer.fromJson<DateTime>(json['scheduledAt']),
       levelKey: serializer.fromJson<String>(json['levelKey']),
+      estimatedDurationSec:
+          serializer.fromJson<int?>(json['estimatedDurationSec']),
     );
   }
   @override
@@ -1387,14 +1420,22 @@ class PlannedSession extends DataClass implements Insertable<PlannedSession> {
       'id': serializer.toJson<int>(id),
       'scheduledAt': serializer.toJson<DateTime>(scheduledAt),
       'levelKey': serializer.toJson<String>(levelKey),
+      'estimatedDurationSec': serializer.toJson<int?>(estimatedDurationSec),
     };
   }
 
-  PlannedSession copyWith({int? id, DateTime? scheduledAt, String? levelKey}) =>
+  PlannedSession copyWith(
+          {int? id,
+          DateTime? scheduledAt,
+          String? levelKey,
+          Value<int?> estimatedDurationSec = const Value.absent()}) =>
       PlannedSession(
         id: id ?? this.id,
         scheduledAt: scheduledAt ?? this.scheduledAt,
         levelKey: levelKey ?? this.levelKey,
+        estimatedDurationSec: estimatedDurationSec.present
+            ? estimatedDurationSec.value
+            : this.estimatedDurationSec,
       );
   PlannedSession copyWithCompanion(PlannedSessionsCompanion data) {
     return PlannedSession(
@@ -1402,6 +1443,9 @@ class PlannedSession extends DataClass implements Insertable<PlannedSession> {
       scheduledAt:
           data.scheduledAt.present ? data.scheduledAt.value : this.scheduledAt,
       levelKey: data.levelKey.present ? data.levelKey.value : this.levelKey,
+      estimatedDurationSec: data.estimatedDurationSec.present
+          ? data.estimatedDurationSec.value
+          : this.estimatedDurationSec,
     );
   }
 
@@ -1410,55 +1454,68 @@ class PlannedSession extends DataClass implements Insertable<PlannedSession> {
     return (StringBuffer('PlannedSession(')
           ..write('id: $id, ')
           ..write('scheduledAt: $scheduledAt, ')
-          ..write('levelKey: $levelKey')
+          ..write('levelKey: $levelKey, ')
+          ..write('estimatedDurationSec: $estimatedDurationSec')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, scheduledAt, levelKey);
+  int get hashCode =>
+      Object.hash(id, scheduledAt, levelKey, estimatedDurationSec);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is PlannedSession &&
           other.id == this.id &&
           other.scheduledAt == this.scheduledAt &&
-          other.levelKey == this.levelKey);
+          other.levelKey == this.levelKey &&
+          other.estimatedDurationSec == this.estimatedDurationSec);
 }
 
 class PlannedSessionsCompanion extends UpdateCompanion<PlannedSession> {
   final Value<int> id;
   final Value<DateTime> scheduledAt;
   final Value<String> levelKey;
+  final Value<int?> estimatedDurationSec;
   const PlannedSessionsCompanion({
     this.id = const Value.absent(),
     this.scheduledAt = const Value.absent(),
     this.levelKey = const Value.absent(),
+    this.estimatedDurationSec = const Value.absent(),
   });
   PlannedSessionsCompanion.insert({
     this.id = const Value.absent(),
     required DateTime scheduledAt,
     required String levelKey,
+    this.estimatedDurationSec = const Value.absent(),
   })  : scheduledAt = Value(scheduledAt),
         levelKey = Value(levelKey);
   static Insertable<PlannedSession> custom({
     Expression<int>? id,
     Expression<DateTime>? scheduledAt,
     Expression<String>? levelKey,
+    Expression<int>? estimatedDurationSec,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (scheduledAt != null) 'scheduled_at': scheduledAt,
       if (levelKey != null) 'level_key': levelKey,
+      if (estimatedDurationSec != null)
+        'estimated_duration_sec': estimatedDurationSec,
     });
   }
 
   PlannedSessionsCompanion copyWith(
-      {Value<int>? id, Value<DateTime>? scheduledAt, Value<String>? levelKey}) {
+      {Value<int>? id,
+      Value<DateTime>? scheduledAt,
+      Value<String>? levelKey,
+      Value<int?>? estimatedDurationSec}) {
     return PlannedSessionsCompanion(
       id: id ?? this.id,
       scheduledAt: scheduledAt ?? this.scheduledAt,
       levelKey: levelKey ?? this.levelKey,
+      estimatedDurationSec: estimatedDurationSec ?? this.estimatedDurationSec,
     );
   }
 
@@ -1474,6 +1531,9 @@ class PlannedSessionsCompanion extends UpdateCompanion<PlannedSession> {
     if (levelKey.present) {
       map['level_key'] = Variable<String>(levelKey.value);
     }
+    if (estimatedDurationSec.present) {
+      map['estimated_duration_sec'] = Variable<int>(estimatedDurationSec.value);
+    }
     return map;
   }
 
@@ -1482,7 +1542,8 @@ class PlannedSessionsCompanion extends UpdateCompanion<PlannedSession> {
     return (StringBuffer('PlannedSessionsCompanion(')
           ..write('id: $id, ')
           ..write('scheduledAt: $scheduledAt, ')
-          ..write('levelKey: $levelKey')
+          ..write('levelKey: $levelKey, ')
+          ..write('estimatedDurationSec: $estimatedDurationSec')
           ..write(')'))
         .toString();
   }
@@ -4615,12 +4676,14 @@ typedef $$PlannedSessionsTableCreateCompanionBuilder = PlannedSessionsCompanion
   Value<int> id,
   required DateTime scheduledAt,
   required String levelKey,
+  Value<int?> estimatedDurationSec,
 });
 typedef $$PlannedSessionsTableUpdateCompanionBuilder = PlannedSessionsCompanion
     Function({
   Value<int> id,
   Value<DateTime> scheduledAt,
   Value<String> levelKey,
+  Value<int?> estimatedDurationSec,
 });
 
 class $$PlannedSessionsTableFilterComposer
@@ -4640,6 +4703,10 @@ class $$PlannedSessionsTableFilterComposer
 
   ColumnFilters<String> get levelKey => $composableBuilder(
       column: $table.levelKey, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get estimatedDurationSec => $composableBuilder(
+      column: $table.estimatedDurationSec,
+      builder: (column) => ColumnFilters(column));
 }
 
 class $$PlannedSessionsTableOrderingComposer
@@ -4659,6 +4726,10 @@ class $$PlannedSessionsTableOrderingComposer
 
   ColumnOrderings<String> get levelKey => $composableBuilder(
       column: $table.levelKey, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get estimatedDurationSec => $composableBuilder(
+      column: $table.estimatedDurationSec,
+      builder: (column) => ColumnOrderings(column));
 }
 
 class $$PlannedSessionsTableAnnotationComposer
@@ -4678,6 +4749,9 @@ class $$PlannedSessionsTableAnnotationComposer
 
   GeneratedColumn<String> get levelKey =>
       $composableBuilder(column: $table.levelKey, builder: (column) => column);
+
+  GeneratedColumn<int> get estimatedDurationSec => $composableBuilder(
+      column: $table.estimatedDurationSec, builder: (column) => column);
 }
 
 class $$PlannedSessionsTableTableManager extends RootTableManager<
@@ -4710,21 +4784,25 @@ class $$PlannedSessionsTableTableManager extends RootTableManager<
             Value<int> id = const Value.absent(),
             Value<DateTime> scheduledAt = const Value.absent(),
             Value<String> levelKey = const Value.absent(),
+            Value<int?> estimatedDurationSec = const Value.absent(),
           }) =>
               PlannedSessionsCompanion(
             id: id,
             scheduledAt: scheduledAt,
             levelKey: levelKey,
+            estimatedDurationSec: estimatedDurationSec,
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
             required DateTime scheduledAt,
             required String levelKey,
+            Value<int?> estimatedDurationSec = const Value.absent(),
           }) =>
               PlannedSessionsCompanion.insert(
             id: id,
             scheduledAt: scheduledAt,
             levelKey: levelKey,
+            estimatedDurationSec: estimatedDurationSec,
           ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))

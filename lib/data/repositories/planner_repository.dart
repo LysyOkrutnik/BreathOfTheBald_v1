@@ -10,11 +10,13 @@ class PlannerRepository {
   Future<int> addPlan({
     required DateTime scheduledAt,
     required String levelKey,
+    int? estimatedDurationSec,
   }) {
     return _db.into(_db.plannedSessions).insert(
           PlannedSessionsCompanion.insert(
             scheduledAt: scheduledAt,
             levelKey: levelKey,
+            estimatedDurationSec: Value(estimatedDurationSec),
           ),
         );
   }

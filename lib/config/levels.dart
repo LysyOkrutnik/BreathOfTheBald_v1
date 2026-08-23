@@ -106,6 +106,65 @@ int packingGulpCountFor(int completedSessions) {
   return 12;
 }
 
+/// Best-effort length of a session, in seconds, for the exercise types with
+/// a real static [LevelData] entry — consolidates formulas that used to
+/// live only inline in level_grid.dart's card description (box/relax/fire/
+/// guidedRoutine) and custom_builder_screen.dart's own preview (custom),
+/// now shared with the calendar's duration/overlap estimate. Wim Hof has no
+/// exact answer — the retention itself is open-ended, ended by the user's
+/// own tap — so it uses a documented, deliberately rough per-round guess
+/// for the hold on top of the two components that *are* exactly known
+/// (the breathing phase, the fixed recovery).
+///
+/// Freediving tables (co2Table/o2Table) aren't handled here — they need a
+/// live PB to generate a real schedule, so a caller with access to that
+/// (see [FreedivingRepository.effectivePb]) should compute theirs directly
+/// via [Co2O2TableGenerator] instead. Test PB and cold shower are likewise
+/// open-ended/user-timed and have no LevelData entry at all to build this
+/// estimate from.
+int estimatedDurationSecForLevel(LevelData level) {
+  // Both keyed onto an existing ExerciseType purely so they can flow
+  // through generic level-based screens (IntroScreen etc.) — neither is
+  // actually that type, so each needs its own estimate before falling into
+  // the type-based switch below, which would otherwise misclassify them
+  // (freediving_pb_test's LevelData entry uses ExerciseType.co2Table as a
+  // borrowed placeholder, which the switch would otherwise read as a real,
+  // fixed-schedule CO2 table and return 0 for).
+  if (level.key == 'freediving_pb_test') {
+    return 5 * 60; // Genuinely open-ended (a max-effort hold) — rough guess.
+  }
+  if (level.key == 'cold_shower') {
+    return 60; // No fixed session shape either — rough default.
+  }
+
+  switch (level.type) {
+    case ExerciseType.wimHof:
+      const avgRetentionGuessSec = 60;
+      const recoverySec = 15;
+      final breathingSec = (level.totalBreaths * level.breathPace.inMilliseconds / 1000).round();
+      return level.totalRounds * (breathingSec + avgRetentionGuessSec + recoverySec);
+    case ExerciseType.custom:
+      return (level.inhaleSec + level.holdInSec + level.exhaleSec + level.holdOutSec) *
+          (level.loopCount ?? 0) *
+          level.totalRounds;
+    case ExerciseType.boxBreathing:
+      return (level.loopCount ?? 16) * 4 * 4;
+    case ExerciseType.relax478:
+      return (level.loopCount ?? 8) * 19;
+    case ExerciseType.fireBreathing:
+      return (level.totalDuration ?? const Duration(seconds: 207)).inSeconds;
+    case ExerciseType.guidedRoutine:
+      final perRound =
+          (level.guidedSteps ?? const []).fold<int>(0, (sum, step) => sum + step.durationSec);
+      return perRound * (level.totalRounds > 0 ? level.totalRounds : 1);
+    case ExerciseType.co2Table:
+    case ExerciseType.o2Table:
+    case ExerciseType.customFreedivingTable:
+    case ExerciseType.coldShower:
+      return 0;
+  }
+}
+
 extension ExerciseTypeX on ExerciseType {
   /// True for any freediving breath-hold table — CO2/O2 (PB-driven) or a
   /// user-defined custom table — all of which run through the same
