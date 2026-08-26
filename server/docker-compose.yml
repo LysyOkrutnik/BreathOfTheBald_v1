@@ -39,7 +39,13 @@ services:
       PORT: 8080
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
-      FIREBASE_SERVICE_ACCOUNT_PATH: ${FIREBASE_SERVICE_ACCOUNT_PATH}
+      FIREBASE_SERVICE_ACCOUNT_PATH: ${FIREBASE_SERVICE_ACCOUNT_PATH:-}
+      # Alternative to the path above when there's no way to place a file
+      # next to this compose file on the host (e.g. Portainer with no
+      # SSH/SFTP access) — paste the service-account JSON's full contents as
+      # this variable's value directly in Portainer's stack environment
+      # variables UI instead. The path takes precedence if both are set.
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-}
       NOTIFICATIONS_CRON_HOUR: ${NOTIFICATIONS_CRON_HOUR:-19}
       # Without these, env.ts's SMTP_* all read as unset and mailer.ts
       # silently falls back to logging emails to the console instead of
@@ -55,6 +61,9 @@ services:
       - postgres
     ports:
       - "${HOST_PORT:-8080}:8080"
+    # Only needed if using FIREBASE_SERVICE_ACCOUNT_PATH — remove this line
+    # entirely if you're using FIREBASE_SERVICE_ACCOUNT_JSON instead (no
+    # file needed on the host at all in that case).
     volumes:
       - ./firebase-service-account.json:/run/secrets/firebase-service-account.json:ro
     networks:

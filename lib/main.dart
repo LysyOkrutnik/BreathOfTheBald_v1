@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -19,6 +20,14 @@ import 'package:okrutnik_breath/ui/screens/splash_screen.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
 
+/// Required top-level entry point for background/terminated FCM messages —
+/// Android already auto-displays a "notification"-payload push on its own
+/// while the app isn't in the foreground, so this only needs to exist (the
+/// plugin requires *a* handler to be registered at all); there's nothing
+/// extra to do here for a plain title/body announcement.
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -35,6 +44,21 @@ void main() async {
   // provider override below.
   final notificationService = NotificationService();
   await notificationService.init();
+
+  // Without this, an FCM push (e.g. an admin announcement) arriving while
+  // the app is open in the foreground was silently dropped — Android only
+  // auto-displays a "notification"-payload push on its own while the app is
+  // backgrounded/killed; in the foreground it's delivered here instead, for
+  // the app to show manually.
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  FirebaseMessaging.onMessage.listen((message) {
+    final notification = message.notification;
+    if (notification == null) return;
+    notificationService.showNow(
+      title: notification.title ?? '',
+      body: notification.body ?? '',
+    );
+  });
 
   // Enforce immersive fullscreen to hide system UI and minimize distractions during sessions.
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);

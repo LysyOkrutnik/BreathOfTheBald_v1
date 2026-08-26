@@ -11,6 +11,11 @@ export const env = {
   databaseUrl: required('DATABASE_URL'),
   jwtSecret: required('JWT_SECRET'),
   firebaseServiceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT_PATH,
+  // Alternative to the path above for deployments with no way to place a
+  // file on the host (e.g. Portainer with no SSH/SFTP access) — paste the
+  // service-account JSON's full contents directly as this env var's value
+  // instead. Whichever is set is used; the path takes precedence if both are.
+  firebaseServiceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON,
   notificationsCronHour: Number(process.env.NOTIFICATIONS_CRON_HOUR ?? 19),
 
   // SMTP is optional — when unset, the mailer logs the email content to the

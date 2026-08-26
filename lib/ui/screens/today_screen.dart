@@ -505,6 +505,7 @@ class _TodayCard extends ConsumerWidget {
     // discipline rotation — shown via the standalone ColdShowerCard control
     // rather than mixed into the training list below.
     final trainingActions = trainingActionsOf(actions);
+    final completedKeys = ref.watch(todayCompletedActionKeysProvider);
 
     return GlassCard(
       gradient: AppTheme.cardGradient(AppTheme.accent),
@@ -531,8 +532,10 @@ class _TodayCard extends ConsumerWidget {
             for (var i = 0; i < trainingActions.length; i++) ...[
               if (i > 0) const SizedBox(height: AppSpacing.sm),
               _TodayActionRow(
-                  action: trainingActions[i],
-                  onTap: () => onStart(trainingActions[i])),
+                action: trainingActions[i],
+                onTap: () => onStart(trainingActions[i]),
+                done: completedKeys.contains(plannableStorageKeyFor(trainingActions[i])),
+              ),
             ],
           const SizedBox(height: AppSpacing.sm),
           const ColdShowerCard(),
@@ -543,35 +546,52 @@ class _TodayCard extends ConsumerWidget {
 }
 
 class _TodayActionRow extends StatelessWidget {
-  const _TodayActionRow({required this.action, required this.onTap});
+  const _TodayActionRow({required this.action, required this.onTap, this.done = false});
   final PlannedAction action;
   final VoidCallback onTap;
+
+  /// True when this exact action's storage key was already logged today
+  /// (see [todayCompletedActionKeysProvider]) — still tappable (starting an
+  /// already-done exercise again is harmless), just visually marked instead
+  /// of looking identical to a not-yet-done suggestion.
+  final bool done;
 
   @override
   Widget build(BuildContext context) {
     final languageCode = Localizations.localeOf(context).languageCode;
     final color = plannedActionColor(action);
-    return PressableScale(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-            vertical: AppSpacing.sm, horizontal: AppSpacing.md),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          color: Colors.white.withAlpha(14),
-        ),
-        child: Row(
-          children: [
-            Icon(plannedActionIcon(action), color: color, size: 20),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Text(
-                plannedActionLabelForLocale(languageCode, action),
-                style: const TextStyle(color: AppTheme.textLight, fontSize: 14),
+    return Opacity(
+      opacity: done ? 0.6 : 1.0,
+      child: PressableScale(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+              vertical: AppSpacing.sm, horizontal: AppSpacing.md),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            color: Colors.white.withAlpha(14),
+          ),
+          child: Row(
+            children: [
+              Icon(plannedActionIcon(action), color: color, size: 20),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(
+                  plannedActionLabelForLocale(languageCode, action),
+                  style: TextStyle(
+                    color: AppTheme.textLight,
+                    fontSize: 14,
+                    decoration: done ? TextDecoration.lineThrough : null,
+                    decorationColor: AppTheme.textDim,
+                  ),
+                ),
               ),
-            ),
-            Icon(Icons.chevron_right_rounded, color: color.withAlpha(200), size: 20),
-          ],
+              if (done)
+                const Icon(Icons.check_circle_rounded, color: AppTheme.primary, size: 20)
+              else
+                Icon(Icons.chevron_right_rounded, color: color.withAlpha(200), size: 20),
+            ],
+          ),
         ),
       ),
     );

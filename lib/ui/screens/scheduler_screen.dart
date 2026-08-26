@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
@@ -209,15 +210,22 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen> {
   /// levels start unchanged. (The scheduler's own add sheet excludes these
   /// from the plannable list; both branches exist because "Twoja Ścieżka"
   /// can plan them directly.)
-  Future<void> _startFromPlan(LevelData level) async {
+  Future<void> _startFromPlan(PlannedSession plan) async {
+    final level = LevelData.levels[plan.levelKey];
+    if (level == null) return;
+
     if (level.key == 'freediving_pb_test') {
-      Navigator.of(context).push(fadeThroughRoute(const MaxPbTestScreen()));
+      Navigator.of(context)
+          .push(fadeThroughRoute(MaxPbTestScreen(plannedSessionId: plan.id)));
       return;
     }
     if (level.key == coldShowerLevelKey) {
-      // No guided screen for this one either — logging it *is* "starting" it.
+      // No guided screen for this one either — logging it *is* "starting" it,
+      // so it's done the instant this returns rather than waiting on a
+      // session lifecycle that doesn't apply here.
       final messenger = ScaffoldMessenger.of(context);
       final result = await logColdShowerSession(ref);
+      unawaited(ref.read(plannerRepositoryProvider).completePlan(plan.id));
       if (mounted) {
         messenger.showSnackBar(SnackBar(
           content: Text(L10n.get(context, 'coldshower_logged_toast')),
@@ -258,7 +266,8 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen> {
       toStart = LevelData.freedivingTable(tableType: tableType, pbSeconds: pb);
     }
     if (mounted) {
-      Navigator.of(context).push(fadeThroughRoute(IntroScreen(level: toStart)));
+      Navigator.of(context).push(
+          fadeThroughRoute(IntroScreen(level: toStart, plannedSessionId: plan.id)));
     }
   }
 
@@ -676,7 +685,7 @@ class _DayPanel extends StatelessWidget {
   final bool plansLoading;
   final VoidCallback onAdd;
   final ValueChanged<PlannedSession> onDelete;
-  final ValueChanged<LevelData> onStart;
+  final ValueChanged<PlannedSession> onStart;
 
   /// When set, the timeline gets this fixed height (its own internal scroll)
   /// instead of an [Expanded] — needed wherever this panel sits inside an
@@ -810,7 +819,7 @@ class _PlanTile extends StatelessWidget {
 
   final PlannedSession plan;
   final VoidCallback onDelete;
-  final ValueChanged<LevelData> onStart;
+  final ValueChanged<PlannedSession> onStart;
 
   @override
   Widget build(BuildContext context) {
@@ -818,45 +827,61 @@ class _PlanTile extends StatelessWidget {
     final color = level?.color ?? AppTheme.primary;
     final name = level != null ? L10n.get(context, level.title) : plan.levelKey;
     final time = TimeOfDay.fromDateTime(plan.scheduledAt).format(context);
+    final done = plan.completedAt != null;
 
-    return GlassCard(
-      gradient: AppTheme.cardGradient(color),
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md, vertical: AppSpacing.sm + 2),
-      child: Row(
-        children: [
-          Text(
-            time,
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.bold,
-              fontSize: 15,
-              fontFeatures: const [FontFeature.tabularFigures()],
+    // Dimmed + a checkmark instead of the usual play button — a played plan
+    // used to look pixel-identical to an untouched one, with no way to tell
+    // "already done" from "still upcoming" on the calendar.
+    return Opacity(
+      opacity: done ? 0.55 : 1.0,
+      child: GlassCard(
+        gradient: done ? null : AppTheme.cardGradient(color),
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md, vertical: AppSpacing.sm + 2),
+        child: Row(
+          children: [
+            Text(
+              time,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
             ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Text(
-              name,
-              style: const TextStyle(
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Text(
+                name,
+                style: TextStyle(
                   color: AppTheme.textLight,
                   fontSize: 14,
-                  fontWeight: FontWeight.w500),
+                  fontWeight: FontWeight.w500,
+                  decoration: done ? TextDecoration.lineThrough : null,
+                  decorationColor: AppTheme.textDim,
+                ),
+              ),
             ),
-          ),
-          if (level != null)
+            if (done)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                child:
+                    Icon(Icons.check_circle_rounded, color: AppTheme.primary, size: 20),
+              )
+            else if (level != null)
+              IconButton(
+                icon: Icon(Icons.play_arrow_rounded, color: color),
+                tooltip: L10n.get(context, 'planner_start'),
+                onPressed: () => onStart(plan),
+              ),
             IconButton(
-              icon: Icon(Icons.play_arrow_rounded, color: color),
-              tooltip: L10n.get(context, 'planner_start'),
-              onPressed: () => onStart(level),
+              icon: const Icon(Icons.delete_outline_rounded,
+                  color: Colors.white38, size: 20),
+              tooltip: L10n.get(context, 'planner_delete_session'),
+              onPressed: onDelete,
             ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline_rounded,
-                color: Colors.white38, size: 20),
-            tooltip: L10n.get(context, 'planner_delete_session'),
-            onPressed: onDelete,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

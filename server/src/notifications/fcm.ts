@@ -4,14 +4,25 @@ import { env } from '../env';
 
 /// Lazily initialized so the server can still start (auth/sync/challenges
 /// all work) even before the user has created a Firebase project and set
-/// FIREBASE_SERVICE_ACCOUNT_PATH — only the notifications cron needs this.
+/// FIREBASE_SERVICE_ACCOUNT_PATH/FIREBASE_SERVICE_ACCOUNT_JSON — only push
+/// notifications need this.
 function messaging() {
-  if (!env.firebaseServiceAccountPath) {
-    throw new Error('FIREBASE_SERVICE_ACCOUNT_PATH is not set — push notifications are disabled');
-  }
   if (getApps().length === 0) {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const serviceAccount = require(env.firebaseServiceAccountPath);
+    let serviceAccount: object;
+    if (env.firebaseServiceAccountPath) {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      serviceAccount = require(env.firebaseServiceAccountPath);
+    } else if (env.firebaseServiceAccountJson) {
+      try {
+        serviceAccount = JSON.parse(env.firebaseServiceAccountJson);
+      } catch (err) {
+        throw new Error(`FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON: ${String(err)}`);
+      }
+    } else {
+      throw new Error(
+        'Neither FIREBASE_SERVICE_ACCOUNT_PATH nor FIREBASE_SERVICE_ACCOUNT_JSON is set — push notifications are disabled',
+      );
+    }
     initializeApp({ credential: cert(serviceAccount) });
   }
   return getMessaging();

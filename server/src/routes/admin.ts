@@ -637,7 +637,9 @@ router.post('/feedback/:id/resolve', requireCsrf, async (req: AdminRequest, res)
 const ANNOUNCEMENT_MIN_INTERVAL_MS = 5 * 60_000;
 
 router.get('/announcements', async (req: AdminRequest, res) => {
-  const sent = req.query.sent === '1';
+  const sentOk = Number(req.query.sent_ok ?? NaN);
+  const sentFail = Number(req.query.sent_fail ?? NaN);
+  const hasSentResult = Number.isFinite(sentOk) && Number.isFinite(sentFail);
   const rateLimited = req.query.error === 'rate_limited';
   const invalid = req.query.error === 'invalid';
   const [history, recipientCount] = await Promise.all([
@@ -654,7 +656,15 @@ router.get('/announcements', async (req: AdminRequest, res) => {
       '/admin/announcements',
       req.adminToken!,
       `<h1>Ogłoszenia</h1>
-      ${sent ? '<p>Ogłoszenie zostało wysłane.</p>' : ''}
+      ${
+        hasSentResult
+          ? sentFail === 0
+            ? `<p>Wysłano do ${sentOk} z ${sentOk + sentFail} urządzeń.</p>`
+            : sentOk === 0
+              ? `<p class="err">Nie udało się wysłać do żadnego z ${sentFail} urządzeń — sprawdź konfigurację Firebase (FIREBASE_SERVICE_ACCOUNT_PATH/FIREBASE_SERVICE_ACCOUNT_JSON) i logi serwera.</p>`
+              : `<p class="err">Wysłano tylko do ${sentOk} z ${sentOk + sentFail} urządzeń — sprawdź logi serwera dla szczegółów błędów.</p>`
+          : ''
+      }
       ${rateLimited ? '<p class="err">Poczekaj chwilę — ogłoszenie zostało wysłane bardzo niedawno.</p>' : ''}
       ${invalid ? '<p class="err">Podaj tytuł i treść ogłoszenia (tytuł do 100 znaków, treść do 500).</p>' : ''}
       <p class="muted">Trafi do <strong>${recipientCount}</strong> zarejestrowanych urządzeń.</p>
@@ -687,14 +697,26 @@ router.post('/announcements', requireCsrf, async (req: AdminRequest, res) => {
   }
   const { title, body } = parsed.data;
   const devices = await prisma.device.findMany({ select: { id: true, fcmToken: true } });
+  let okCount = 0;
+  let failCount = 0;
   for (const device of devices) {
     const result = await sendPushNotification(device.fcmToken, title, body);
-    if (!result.ok && result.invalidToken) {
-      await prisma.device.delete({ where: { id: device.id } }).catch(() => {});
+    if (result.ok) {
+      okCount++;
+    } else {
+      failCount++;
+      // Was completely silent — an admin had no way to tell a broadcast
+      // failed for every device (e.g. Firebase credentials missing/invalid)
+      // from one that failed for a few stale tokens, since both looked
+      // identical: a redirect to "?sent=1" regardless.
+      console.error(`[announcements] send failed for device ${device.id}:`, result.error);
+      if (result.invalidToken) {
+        await prisma.device.delete({ where: { id: device.id } }).catch(() => {});
+      }
     }
   }
   await prisma.announcement.create({ data: { title, body, sentById: req.adminUserId! } });
-  res.redirect('/admin/announcements?sent=1');
+  res.redirect(`/admin/announcements?sent_ok=${okCount}&sent_fail=${failCount}`);
 });
 
 export default router;

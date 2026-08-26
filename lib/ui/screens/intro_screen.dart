@@ -13,12 +13,18 @@ import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/glow_halo.dart';
 
 class IntroScreen extends ConsumerWidget {
-  const IntroScreen({super.key, required this.level});
+  const IntroScreen({super.key, required this.level, this.plannedSessionId});
 
   final LevelData level;
 
+  /// Set when this level was started from a saved calendar entry, so the
+  /// session notifier can mark that entry done once the session finishes.
+  final int? plannedSessionId;
+
   void _start(BuildContext context, WidgetRef ref) {
-    ref.read(sessionProvider.notifier).startSession(level);
+    ref
+        .read(sessionProvider.notifier)
+        .startSession(level, plannedSessionId: plannedSessionId);
     Navigator.of(context).pushReplacement(
       fadeThroughRoute(const SessionScreen()),
     );

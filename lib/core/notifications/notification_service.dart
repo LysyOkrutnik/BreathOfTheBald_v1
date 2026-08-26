@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -35,6 +36,18 @@ class NotificationService {
 
     await _notificationsPlugin.initialize(settings);
     tz_data.initializeTimeZones();
+    // Without this, `tz.local` silently defaults to UTC — every "10:00"
+    // daily reminder and every zonedSchedule call would fire at 10:00 UTC
+    // (e.g. noon in Poland during CEST) instead of the device's actual wall
+    // clock. Best-effort: a failure here just leaves tz.local at UTC, same
+    // as before this fix existed, rather than crashing init().
+    try {
+      final name = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(name));
+    } catch (e, st) {
+      developer.log('Could not resolve device timezone, defaulting to UTC',
+          name: 'NotificationService', error: e, stackTrace: st);
+    }
     _initialized = true;
   }
 
@@ -72,14 +85,25 @@ class NotificationService {
 
   /// Schedules a one-off reminder at [when]. Used for the "5 minutes before a
   /// planned session" notification. The [id] should be unique per plan.
-  Future<void> scheduleOneTime({
+  ///
+  /// Returns `true` when something was actually scheduled with the OS (exact
+  /// or not), `false` when it wasn't (past `when`, or the plugin call
+  /// itself failed) — used to be a `void` that swallowed every failure, so a
+  /// planned reminder could silently never fire with the app reporting
+  /// success regardless. Checking `canScheduleExactAlarms()` up front and
+  /// falling back to an inexact alarm (rather than always requesting exact
+  /// and letting the plugin throw when the permission isn't granted) means a
+  /// user who never grants "Alarms & reminders" still gets a reminder, just
+  /// a less precisely-timed one, instead of none at all.
+  Future<bool> scheduleOneTime({
     required int id,
     required DateTime when,
     required String title,
     required String body,
   }) async {
-    if (!when.isAfter(DateTime.now())) return; // never schedule in the past
+    if (!when.isAfter(DateTime.now())) return false; // never schedule in the past
     try {
+      final exactAllowed = await canScheduleExactAlarms();
       await _notificationsPlugin.zonedSchedule(
         id,
         title,
@@ -98,12 +122,52 @@ class NotificationService {
           ),
           iOS: DarwinNotificationDetails(),
         ),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        androidScheduleMode: exactAllowed
+            ? AndroidScheduleMode.exactAllowWhileIdle
+            : AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
       );
+      return true;
     } catch (e, st) {
       developer.log('Error scheduling planned reminder',
+          name: 'NotificationService', error: e, stackTrace: st);
+      return false;
+    }
+  }
+
+  /// Displays a notification immediately — used to bridge an incoming FCM
+  /// push into a visible system notification while the app is in the
+  /// foreground. Android auto-displays a "notification"-payload FCM message
+  /// on its own only while the app is backgrounded/killed; in the
+  /// foreground, FCM instead just delivers it to `FirebaseMessaging.onMessage`
+  /// for the app to show manually, which is what this is for.
+  Future<void> showNow({required String title, required String body}) async {
+    try {
+      await _notificationsPlugin.show(
+        // A push doesn't carry a stable id of its own — a random-ish one
+        // (current time mod a large range) is enough to avoid colliding
+        // with `dailyReminderId`/plan ids and to let more than one push
+        // stack instead of replacing each other.
+        DateTime.now().millisecondsSinceEpoch.remainder(1 << 31),
+        title,
+        body,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'push_channel_id',
+            'Announcements',
+            channelDescription: 'Messages sent from the app team.',
+            importance: Importance.max,
+            priority: Priority.high,
+            autoCancel: true,
+            icon: 'ic_stat_notification',
+            largeIcon: DrawableResourceAndroidBitmap('ic_notification_large'),
+          ),
+          iOS: DarwinNotificationDetails(),
+        ),
+      );
+    } catch (e, st) {
+      developer.log('Error showing push notification',
           name: 'NotificationService', error: e, stackTrace: st);
     }
   }

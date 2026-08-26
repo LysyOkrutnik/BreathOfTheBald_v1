@@ -722,15 +722,14 @@ class LevelData {
       title: "exercise_resisted_breathing_title",
       subtitle: "exercise_resisted_breathing_subtitle",
       type: ExerciseType.guidedRoutine,
-      // 45 breaths (3 sets of 15) exceeded the clinical IMST protocol this
-      // technique is modeled on (Craighead 2021 and similar: 30 breaths/day)
-      // — reduced to 2 real rounds of 15 (30 total), now using
-      // `skipOnFinalRound` so the trailing rest only shows *between* the
-      // two rounds, not after the last one. This also fixes a real UX
-      // regression the old flattened-single-round encoding caused: with
-      // `totalRounds` always 1, the "Runda x/y" indicator was permanently
-      // hidden for this exercise even though it's fundamentally set-based.
-      totalRounds: 2,
+      // One continuous 120s block — no sets, no inter-set rest, no
+      // alternating inhale/exhale cues. Previously 2 rounds of 15 timed
+      // breaths (30 total) with a 50s rest between them, modeled on the
+      // clinical IMST protocol this technique borrows from — deliberately
+      // simplified to a single sustained effort with just a live countdown
+      // and one steady cue, reusing the `hold`-phase countdown treatment
+      // (gong/haptic on entry, orb pulse) rather than a rep-by-rep cadence.
+      totalRounds: 1,
       color: Color(0xFF42A5F5),
       instructionTitleKey: "exercise_resisted_breathing_title",
       instructionDescriptionKey: "exercise_resisted_breathing_subtitle",
@@ -740,19 +739,16 @@ class LevelData {
         "guide_resisted_breathing_step3",
         "guide_resisted_breathing_step4",
       ],
-      // The cycle diagram shows just the repeating inhale/exhale pair, not
-      // the inter-set rest (which has no cycleStepIndex of its own).
       cycleSteps: [
-        CycleStep(labelKey: "guided_resisted_inhale", durationSec: 2),
-        CycleStep(labelKey: "guided_resisted_exhale", durationSec: 2),
+        CycleStep(labelKey: "guided_resisted_breathe", durationSec: 120),
       ],
       guidedSteps: [
-        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
-        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
-        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
-        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
-        ..._resistedBreathingReps, ..._resistedBreathingReps, ..._resistedBreathingReps,
-        GuidedStep(labelKey: "guided_resisted_rest", durationSec: 50, phase: GuidedStepPhase.hold, skipOnFinalRound: true),
+        GuidedStep(
+          labelKey: "guided_resisted_breathe",
+          durationSec: 120,
+          phase: GuidedStepPhase.hold,
+          cycleStepIndex: 0,
+        ),
       ],
     ),
     'three_part_breath': LevelData(
@@ -873,14 +869,6 @@ class LevelData {
       ],
     ),
   };
-
-  /// One inhale+exhale rep, spread 15× into resisted_breathing's step list —
-  /// a plain `for`-generated list can't be used inside this `const` map, so
-  /// the repetition is a `...` spread of a single const rep instead.
-  static const _resistedBreathingReps = [
-    GuidedStep(labelKey: "guided_resisted_inhale", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: true, cycleStepIndex: 0),
-    GuidedStep(labelKey: "guided_resisted_exhale", durationSec: 2, phase: GuidedStepPhase.breath, isInhale: false, cycleStepIndex: 1),
-  ];
 
   /// One small "top-up" inhale, spread 12× into freediving_packing's step
   /// list — same const-context reasoning as [_resistedBreathingReps].

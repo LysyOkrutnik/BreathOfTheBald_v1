@@ -33,6 +33,14 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
   bool _isSessionActive = false;
   Timer? _phaseTimer;
 
+  /// Set when this session was started from a saved calendar entry — the
+  /// row gets marked done (not deleted) once the session actually finishes,
+  /// so the calendar/today views can render it as completed instead of it
+  /// simply vanishing. Null for a session started any other way (a level
+  /// tapped directly from a grid, "Twoja Ścieżka"'s Dziś card, etc.), which
+  /// has no calendar row to mark.
+  int? _plannedSessionId;
+
   // --- Freediving CO2/O2 table state ---
   List<BreathHoldRound>? _freedivingRounds;
   int _freedivingRoundIndex = 0;
@@ -126,7 +134,7 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
     super.dispose();
   }
 
-  Future<void> startSession(LevelData level) async {
+  Future<void> startSession(LevelData level, {int? plannedSessionId}) async {
     // Ignore a duplicate start while a session is already running (e.g. a
     // double-tapped Start button or the widget delivering its launch twice) —
     // otherwise two breathing loops run concurrently and cues double up.
@@ -134,6 +142,7 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
 
     _isSessionActive = true;
     _currentLevel = level;
+    _plannedSessionId = plannedSessionId;
 
     // Apply the user's sound/haptics preferences for this session.
     final settings = _ref.read(settingsProvider);
@@ -1205,6 +1214,10 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
           freedivingRoundsCompleted, contractionsByRound));
     } else {
       _lastSessionIdCompleter.complete(null);
+    }
+
+    if (_plannedSessionId case final id?) {
+      unawaited(_ref.read(plannerRepositoryProvider).completePlan(id));
     }
 
     stopSession(resetState: false);

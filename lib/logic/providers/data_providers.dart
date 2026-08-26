@@ -258,6 +258,27 @@ final coldShowerDoneTodayProvider = Provider<bool>((ref) {
       s.timestamp.day == now.day);
 });
 
+/// Storage keys (see `plannableStorageKeyFor`) of every session already
+/// logged today — the Dziś tab's `_TodayCard` uses this to visually mark a
+/// suggested action as done instead of it just sitting there identical to
+/// an untouched one after the user actually completes it. Same idea as
+/// [coldShowerDoneTodayProvider], generalized: every non-cold-shower action
+/// type here logs into the same generic [Session] history under the exact
+/// key `plannableStorageKeyFor` would derive for it (confirmed for CO2/O2
+/// tables too — `LevelData.freedivingTable`'s generated level reuses the
+/// fixed `'freediving_co2'`/`'freediving_o2'` key, not a synthetic one).
+final todayCompletedActionKeysProvider = Provider<Set<String>>((ref) {
+  final sessions = ref.watch(sessionHistoryProvider).value ?? const <Session>[];
+  final now = DateTime.now();
+  return {
+    for (final s in sessions)
+      if (s.timestamp.year == now.year &&
+          s.timestamp.month == now.month &&
+          s.timestamp.day == now.day)
+        s.levelKey,
+  };
+});
+
 /// The most recently logged cold-shower duration (seconds), or null if none
 /// has ever been logged with a real duration yet (older logs, and every
 /// non-Wim-Hof-tab entry point, stored 0) — seeds the duration stepper's

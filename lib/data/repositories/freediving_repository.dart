@@ -12,6 +12,12 @@ class FreedivingRepository {
 
   final AppDatabase _db;
 
+  static DateTime? _laterOf(DateTime? a, DateTime? b) {
+    if (a == null) return b;
+    if (b == null) return a;
+    return a.isAfter(b) ? a : b;
+  }
+
   static String _typeStr(FreedivingTableType t) => switch (t) {
         FreedivingTableType.co2 => 'co2',
         FreedivingTableType.o2 => 'o2',
@@ -33,14 +39,29 @@ class FreedivingRepository {
   /// updates it.
   static const int kFreedivingDetrainingDays = 21;
 
+  /// Both table types anchor on the same inhale-hold PB
+  /// ([FreedivingProfileData.verifiedPbSec]/[FreedivingProfileData.virtualPbO2Sec])
+  /// — matching conventional freediving practice, where CO2 and O2 tables
+  /// are both built from a single static-apnea (full-lungs) baseline. This
+  /// used to anchor CO2 on the *exhale*-hold instead
+  /// ([FreedivingProfileData.verifiedPbCo2Sec]), which isolated the CO2
+  /// stimulus more purely but produced CO2 tables with much shorter, less
+  /// expected absolute round times than the inhale-based O2 table right next
+  /// to it. The exhale-hold result itself is still measured by the Max PB
+  /// Test and still shown in its results as its own metric — it just no
+  /// longer drives table pacing. [tableType] is kept as a parameter (rather
+  /// than deleting it) purely so callers don't need restructuring; both
+  /// branches now read/write the identical fields.
   static int effectivePb({
     required FreedivingTableType tableType,
     required FreedivingProfileData profile,
   }) {
-    final isCo2 = tableType == FreedivingTableType.co2;
-    final verifiedPb = isCo2 ? profile.verifiedPbCo2Sec : profile.verifiedPbSec;
-    final virtualPb = isCo2 ? profile.virtualPbCo2Sec : profile.virtualPbO2Sec;
-    final lastSessionAt = isCo2 ? profile.lastCo2SessionAt : profile.lastO2SessionAt;
+    final verifiedPb = profile.verifiedPbSec;
+    final virtualPb = profile.virtualPbO2Sec;
+    // Either table type practiced keeps the one shared PB "fresh" now, so
+    // detraining looks at whichever was practiced more recently, not just
+    // O2's own timestamp.
+    final lastSessionAt = _laterOf(profile.lastCo2SessionAt, profile.lastO2SessionAt);
     final current = virtualPb ?? verifiedPb;
     if (current == null) return 0; // No baseline at all yet.
     if (verifiedPb == null || lastSessionAt == null) return current;
@@ -188,17 +209,13 @@ class FreedivingRepository {
     }
 
     final profile = await getProfile();
-    // Each table type is safety-capped against its OWN matching real test —
-    // CO2 against the exhale-hold, O2 against the inhale-hold — not a single
-    // shared verified PB, since the two measure different physiological
-    // limits and can differ substantially.
-    final verifiedPb =
-        tableType == FreedivingTableType.co2 ? profile.verifiedPbCo2Sec : profile.verifiedPbSec;
+    // Both table types are safety-capped against the same real, verified
+    // inhale-hold test now — see effectivePb's doc comment for why this no
+    // longer splits by table type.
+    final verifiedPb = profile.verifiedPbSec;
     if (verifiedPb == null) return; // No baseline yet; nothing to adjust.
 
-    final currentVirtual = tableType == FreedivingTableType.co2
-        ? (profile.virtualPbCo2Sec ?? verifiedPb)
-        : (profile.virtualPbO2Sec ?? verifiedPb);
+    final currentVirtual = profile.virtualPbO2Sec ?? verifiedPb;
 
     final nextVirtual = RpeProgression.nextVirtualPb(
       currentVirtualPbSec: currentVirtual,
@@ -207,11 +224,16 @@ class FreedivingRepository {
     );
 
     final now = DateTime.now();
+    // The shared PB itself only lives in virtualPbO2Sec/verifiedPbSec now,
+    // but lastCo2SessionAt/lastO2SessionAt stay split per table type — still
+    // useful as "when did I last practice this specific table" on their own,
+    // and effectivePb's detraining check already looks at whichever is more
+    // recent.
     await (_db.update(_db.freedivingProfile)
           ..where((t) => t.id.equals(profile.id)))
         .write(tableType == FreedivingTableType.co2
             ? FreedivingProfileCompanion(
-                virtualPbCo2Sec: Value(nextVirtual),
+                virtualPbO2Sec: Value(nextVirtual),
                 lastCo2SessionAt: Value(now),
               )
             : FreedivingProfileCompanion(
@@ -266,12 +288,9 @@ class FreedivingRepository {
     }
 
     final profile = await getProfile();
-    final verifiedPb =
-        tableType == FreedivingTableType.co2 ? profile.verifiedPbCo2Sec : profile.verifiedPbSec;
+    final verifiedPb = profile.verifiedPbSec;
     if (verifiedPb == null) return;
-    final currentVirtual = tableType == FreedivingTableType.co2
-        ? (profile.virtualPbCo2Sec ?? verifiedPb)
-        : (profile.virtualPbO2Sec ?? verifiedPb);
+    final currentVirtual = profile.virtualPbO2Sec ?? verifiedPb;
     final nextVirtual = RpeProgression.nextVirtualPb(
       currentVirtualPbSec: currentVirtual,
       verifiedPbSec: verifiedPb,
@@ -279,9 +298,7 @@ class FreedivingRepository {
     );
     await (_db.update(_db.freedivingProfile)
           ..where((t) => t.id.equals(profile.id)))
-        .write(tableType == FreedivingTableType.co2
-            ? FreedivingProfileCompanion(virtualPbCo2Sec: Value(nextVirtual))
-            : FreedivingProfileCompanion(virtualPbO2Sec: Value(nextVirtual)));
+        .write(FreedivingProfileCompanion(virtualPbO2Sec: Value(nextVirtual)));
   }
 
   Stream<List<FreedivingSessionLogData>> watchRecentLogs({int limit = 20}) {

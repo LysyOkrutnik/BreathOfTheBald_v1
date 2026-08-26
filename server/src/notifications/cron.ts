@@ -5,8 +5,10 @@ import { pickNotificationForUser } from './rules';
 import { sendPushNotification } from './fcm';
 
 async function runDailyNotifications(): Promise<void> {
-  if (!env.firebaseServiceAccountPath) {
-    console.log('[notifications] skipped — FIREBASE_SERVICE_ACCOUNT_PATH not configured');
+  if (!env.firebaseServiceAccountPath && !env.firebaseServiceAccountJson) {
+    console.log(
+      '[notifications] skipped — neither FIREBASE_SERVICE_ACCOUNT_PATH nor FIREBASE_SERVICE_ACCOUNT_JSON is configured',
+    );
     return;
   }
 

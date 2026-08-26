@@ -83,6 +83,12 @@ class PlannedSessions extends Table {
   /// Null for rows written before this column existed; treated the same as
   /// "unknown" everywhere it's read, never backfilled.
   IntColumn get estimatedDurationSec => integer().nullable()();
+
+  /// Set once the session this plan refers to actually finishes — the row
+  /// itself is kept (not deleted) so the calendar/today views can render it
+  /// as done rather than it simply vanishing. Null means still upcoming/not
+  /// yet completed.
+  DateTimeColumn get completedAt => dateTime().nullable()();
 }
 
 /// A user-defined breathing pattern (the custom-session builder). Durations are
@@ -114,29 +120,34 @@ class CustomPresets extends Table {
 /// FreedivingRepository.recordRpeAndAdjustPb).
 ///
 /// The guided Max PB Test measures two separate breath-holds — an
-/// exhale-hold (CO2 tolerance) and an inhale-hold (O2/capacity) — since one
-/// number alone conflates two different physiological limits. `verifiedPbSec`
-/// (kept under its original name for migration simplicity) holds the
-/// inhale-hold result and anchors the O2 table; `verifiedPbCo2Sec` holds the
-/// exhale-hold result and anchors the CO2 table.
+/// exhale-hold (CO2 tolerance) and an inhale-hold (O2/capacity). Both CO2
+/// and O2 tables now anchor on the same inhale-hold result
+/// (`verifiedPbSec`/`virtualPbO2Sec`), matching conventional freediving
+/// practice — see FreedivingRepository.effectivePb's doc comment. The
+/// exhale-hold result (`verifiedPbCo2Sec`) is still measured and shown as
+/// its own metric in the Max PB Test's results, it just no longer drives
+/// table pacing.
 class FreedivingProfile extends Table {
   IntColumn get id => integer().autoIncrement()();
 
   /// The last real, guided inhale-hold test result. Null until the user
-  /// completes their first test.
+  /// completes their first test. Kept under its original name for migration
+  /// simplicity even though it now anchors both table types, not just O2.
   IntColumn get verifiedPbSec => integer().nullable()();
   DateTimeColumn get verifiedPbAt => dateTime().nullable()();
 
-  /// The last real, guided exhale-hold test result. Null until the user
+  /// The last real, guided exhale-hold test result — an informational
+  /// metric only now, not used to generate any table. Null until the user
   /// completes their first test.
   IntColumn get verifiedPbCo2Sec => integer().nullable()();
   DateTimeColumn get verifiedPbCo2At => dateTime().nullable()();
 
-  /// Working PB used to generate the next table of each type. Initialized to
-  /// the matching verified PB (CO2 from the exhale-hold, O2 from the
-  /// inhale-hold) and adjusted ±5% per RPE feedback, clamped to [50%, 115%]
-  /// of that verified value so RPE-driven drift can never exceed a safe
-  /// margin above the last real test.
+  /// Working PB used to generate the next table of either type, adjusted
+  /// ±5% per RPE feedback and clamped to [50%, 115%] of `verifiedPbSec` so
+  /// RPE-driven drift can never exceed a safe margin above the last real
+  /// test. `virtualPbCo2Sec` is written by the Max PB Test alongside
+  /// `verifiedPbCo2Sec` (kept for historical/sync symmetry) but no longer
+  /// read by anything — `virtualPbO2Sec` is the one shared working PB now.
   IntColumn get virtualPbCo2Sec => integer().nullable()();
   IntColumn get virtualPbO2Sec => integer().nullable()();
 
@@ -232,7 +243,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -335,6 +346,12 @@ class AppDatabase extends _$AppDatabase {
           // instead of every plan looking identical regardless of length.
           if (from >= 3 && from < 14) {
             await m.addColumn(plannedSessions, plannedSessions.estimatedDurationSec);
+          }
+          // v14 -> v15: mark a planned session done in place instead of it
+          // simply disappearing — the calendar/today views had no way to
+          // tell a just-finished plan from an untouched one.
+          if (from >= 3 && from < 15) {
+            await m.addColumn(plannedSessions, plannedSessions.completedAt);
           }
         },
       );

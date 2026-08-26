@@ -30,7 +30,11 @@ import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
 /// anchor on the exhale-hold result and the O2 table anchor on the
 /// inhale-hold result, instead of both sharing a single guess.
 class MaxPbTestScreen extends ConsumerStatefulWidget {
-  const MaxPbTestScreen({super.key});
+  const MaxPbTestScreen({super.key, this.plannedSessionId});
+
+  /// Set when this test was started from a saved calendar entry, so it can
+  /// be marked done once the test is actually saved.
+  final int? plannedSessionId;
 
   @override
   ConsumerState<MaxPbTestScreen> createState() => _MaxPbTestScreenState();
@@ -194,6 +198,9 @@ class _MaxPbTestScreenState extends ConsumerState<MaxPbTestScreen> {
             retentionSec: totalHoldSec,
             xpEarned: xpResult.xpEarned,
           );
+      if (widget.plannedSessionId case final id?) {
+        await ref.read(plannerRepositoryProvider).completePlan(id);
+      }
     } catch (e, st) {
       developer.log('Failed to save PB test',
           name: 'MaxPbTestScreen', error: e, stackTrace: st);
@@ -249,16 +256,33 @@ class _MaxPbTestScreenState extends ConsumerState<MaxPbTestScreen> {
     final planId = await ref
         .read(plannerRepositoryProvider)
         .addPlan(scheduledAt: scheduledAt, levelKey: 'freediving_pb_test');
-    await ref.read(notificationServiceProvider).scheduleOneTime(
-          id: planId,
-          when: scheduledAt.subtract(const Duration(minutes: 5)),
-          title: reminderTitle,
-          body: testLabel,
-        );
+    final notifications = ref.read(notificationServiceProvider);
+    await notifications.scheduleOneTime(
+      id: planId,
+      when: scheduledAt.subtract(const Duration(minutes: 5)),
+      title: reminderTitle,
+      body: testLabel,
+    );
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content:
-            Text(L10n.get(context, 'freediving_pb_test_scheduled_toast'))));
+
+    // Was the only one of the three scheduleOneTime call sites with no
+    // permission check at all — unconditionally reported "scheduled" even
+    // when the reminder had no working exact alarm behind it.
+    final canScheduleExact = await notifications.canScheduleExactAlarms();
+    if (!mounted) return;
+    if (!canScheduleExact) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(L10n.get(context, 'planner_saved_needs_permission')),
+        action: SnackBarAction(
+          label: L10n.get(context, 'planner_exact_alarm_allow'),
+          onPressed: () => notifications.requestExactAlarmsPermission(),
+        ),
+      ));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content:
+              Text(L10n.get(context, 'freediving_pb_test_scheduled_toast'))));
+    }
     Navigator.of(context).pop();
   }
 
