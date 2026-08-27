@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:okrutnik_breath/config/formatters.dart';
 import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/levels.dart';
 import 'package:okrutnik_breath/config/responsive.dart';
@@ -157,9 +158,6 @@ class _RoundRow extends StatelessWidget {
   final BreathHoldRound round;
   final Color color;
 
-  String _fmt(int seconds) =>
-      "${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}";
-
   @override
   Widget build(BuildContext context) {
     return GlassCard(
@@ -180,7 +178,7 @@ class _RoundRow extends StatelessWidget {
                 Icon(Icons.pause_circle_outline_rounded, color: color, size: 16),
                 const SizedBox(width: 6),
                 Text(
-                  _fmt(round.apneaSec),
+                  formatMmSs(round.apneaSec),
                   style: const TextStyle(
                     color: AppTheme.textLight,
                     fontWeight: FontWeight.bold,
@@ -197,7 +195,7 @@ class _RoundRow extends StatelessWidget {
                 const Icon(Icons.air_rounded, color: AppTheme.textDim, size: 16),
                 const SizedBox(width: 6),
                 Text(
-                  _fmt(round.restSec),
+                  formatMmSs(round.restSec),
                   style: const TextStyle(
                     color: AppTheme.textDim,
                     fontSize: 13,

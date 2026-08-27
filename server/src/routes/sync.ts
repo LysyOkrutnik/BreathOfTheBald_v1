@@ -73,14 +73,23 @@ const profileStateSchema = z.object({
   availableHourEnd: z.number().int().nullable().optional(),
   allowMultiplePerDay: z.boolean().nullable().optional(),
   dailyReminderEnabled: z.boolean().nullable().optional(),
+  // IANA name (e.g. "Europe/Warsaw") — see the matching schema.prisma doc
+  // comment on ProfileState.timezone for what this is used for.
+  timezone: z.string().max(64).nullable().optional(),
   clientUpdatedAt: z.string().datetime(),
 });
 
+// A push this large from one real device in one request would already be
+// unusual (offline for a very long time); the cap exists to bound how many
+// concurrent per-row DB round-trips a single request can trigger (see
+// `Promise.all` below), not because a genuine backlog this size is expected.
+const MAX_PUSH_BATCH = 1000;
+
 const pushSchema = z.object({
-  sessions: z.array(sessionSchema).default([]),
-  freedivingLogs: z.array(freedivingLogSchema).default([]),
-  customPresets: z.array(customPresetSchema).default([]),
-  customFreedivingPresets: z.array(customFreedivingPresetSchema).default([]),
+  sessions: z.array(sessionSchema).max(MAX_PUSH_BATCH).default([]),
+  freedivingLogs: z.array(freedivingLogSchema).max(MAX_PUSH_BATCH).default([]),
+  customPresets: z.array(customPresetSchema).max(MAX_PUSH_BATCH).default([]),
+  customFreedivingPresets: z.array(customFreedivingPresetSchema).max(MAX_PUSH_BATCH).default([]),
   profileState: profileStateSchema.nullable().optional(),
 });
 
@@ -177,77 +186,81 @@ router.post('/', async (req: AuthedRequest, res) => {
   const userId = req.userId!;
   const body = parsed.data;
 
-  const sessionResults = await Promise.all(
-    body.sessions.map((row) =>
-      upsertAppendOnly(
-        prisma.session,
-        userId,
-        row,
-        (r) => ({
-          levelKey: r.levelKey,
-          timestamp: new Date(r.timestamp),
-          durationSec: r.durationSec,
-          rounds: r.rounds,
-          retentionSec: r.retentionSec,
-          rpeScore: r.rpeScore ?? null,
-          xpEarned: r.xpEarned,
-        }),
-        (r) => ({ rpeScore: r.rpeScore ?? null }),
+  // These 4 batches touch different tables with no data dependency between
+  // them — an outer Promise.all lets them run concurrently instead of one
+  // fully finishing before the next starts, so a routine push (a frequent
+  // operation) pays roughly 1 round-trip's worth of latency instead of 4.
+  const [sessionResults, freedivingResults, customPresetResults, customFreedivingPresetResults] =
+    await Promise.all([
+      Promise.all(
+        body.sessions.map((row) =>
+          upsertAppendOnly(
+            prisma.session,
+            userId,
+            row,
+            (r) => ({
+              levelKey: r.levelKey,
+              timestamp: new Date(r.timestamp),
+              durationSec: r.durationSec,
+              rounds: r.rounds,
+              retentionSec: r.retentionSec,
+              rpeScore: r.rpeScore ?? null,
+              xpEarned: r.xpEarned,
+            }),
+            (r) => ({ rpeScore: r.rpeScore ?? null }),
+          ),
+        ),
       ),
-    ),
-  );
-
-  const freedivingResults = await Promise.all(
-    body.freedivingLogs.map((row) =>
-      upsertAppendOnly(
-        prisma.freedivingLog,
-        userId,
-        row,
-        (r) => ({
-          tableType: r.tableType,
-          pbUsedSec: r.pbUsedSec,
-          roundsJson: r.roundsJson,
-          roundsCompleted: r.roundsCompleted,
-          durationSec: r.durationSec,
-          timestamp: new Date(r.timestamp),
-          rpeScore: r.rpeScore ?? null,
-          symptomTag: r.symptomTag ?? null,
-        }),
-        (r) => ({ rpeScore: r.rpeScore ?? null, symptomTag: r.symptomTag ?? null }),
+      Promise.all(
+        body.freedivingLogs.map((row) =>
+          upsertAppendOnly(
+            prisma.freedivingLog,
+            userId,
+            row,
+            (r) => ({
+              tableType: r.tableType,
+              pbUsedSec: r.pbUsedSec,
+              roundsJson: r.roundsJson,
+              roundsCompleted: r.roundsCompleted,
+              durationSec: r.durationSec,
+              timestamp: new Date(r.timestamp),
+              rpeScore: r.rpeScore ?? null,
+              symptomTag: r.symptomTag ?? null,
+            }),
+            (r) => ({ rpeScore: r.rpeScore ?? null, symptomTag: r.symptomTag ?? null }),
+          ),
+        ),
       ),
-    ),
-  );
-
-  const customPresetResults = await Promise.all(
-    body.customPresets.map((row) =>
-      upsertPreset(prisma.customPreset, userId, row, (r) => ({
-        name: r.name,
-        inhaleSec: r.inhaleSec,
-        holdInSec: r.holdInSec,
-        exhaleSec: r.exhaleSec,
-        holdOutSec: r.holdOutSec,
-        cycles: r.cycles,
-        rounds: r.rounds,
-        createdAt: new Date(r.createdAt),
-        deletedAt: r.deletedAt ? new Date(r.deletedAt) : null,
-      })),
-    ),
-  );
-
-  const customFreedivingPresetResults = await Promise.all(
-    body.customFreedivingPresets.map((row) =>
-      upsertPreset(prisma.customFreedivingPreset, userId, row, (r) => ({
-        name: r.name,
-        startApneaSec: r.startApneaSec,
-        endApneaSec: r.endApneaSec,
-        startRestSec: r.startRestSec,
-        endRestSec: r.endRestSec,
-        rounds: r.rounds,
-        createdAt: new Date(r.createdAt),
-        deletedAt: r.deletedAt ? new Date(r.deletedAt) : null,
-      })),
-    ),
-  );
+      Promise.all(
+        body.customPresets.map((row) =>
+          upsertPreset(prisma.customPreset, userId, row, (r) => ({
+            name: r.name,
+            inhaleSec: r.inhaleSec,
+            holdInSec: r.holdInSec,
+            exhaleSec: r.exhaleSec,
+            holdOutSec: r.holdOutSec,
+            cycles: r.cycles,
+            rounds: r.rounds,
+            createdAt: new Date(r.createdAt),
+            deletedAt: r.deletedAt ? new Date(r.deletedAt) : null,
+          })),
+        ),
+      ),
+      Promise.all(
+        body.customFreedivingPresets.map((row) =>
+          upsertPreset(prisma.customFreedivingPreset, userId, row, (r) => ({
+            name: r.name,
+            startApneaSec: r.startApneaSec,
+            endApneaSec: r.endApneaSec,
+            startRestSec: r.startRestSec,
+            endRestSec: r.endRestSec,
+            rounds: r.rounds,
+            createdAt: new Date(r.createdAt),
+            deletedAt: r.deletedAt ? new Date(r.deletedAt) : null,
+          })),
+        ),
+      ),
+    ]);
 
   if (body.profileState) {
     const { clientUpdatedAt, ...rest } = body.profileState;

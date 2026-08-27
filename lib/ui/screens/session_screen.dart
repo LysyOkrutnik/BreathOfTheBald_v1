@@ -1,6 +1,6 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:okrutnik_breath/config/formatters.dart';
 import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/responsive.dart';
 import 'package:okrutnik_breath/config/theme.dart';
@@ -10,6 +10,7 @@ import 'package:okrutnik_breath/logic/states/session_state.dart';
 import 'package:okrutnik_breath/ui/screens/home_shell_screen.dart';
 import 'package:okrutnik_breath/ui/screens/summary_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
+import 'package:okrutnik_breath/ui/widgets/confirm_dialog.dart';
 import 'package:okrutnik_breath/ui/widgets/cycle_diagram.dart';
 import 'package:okrutnik_breath/ui/widgets/ferrofluid_painter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -403,8 +404,7 @@ class _PhaseText extends StatelessWidget {
         },
         retention: (elapsed) {
           color = AppTheme.primary;
-          subText =
-              "${elapsed.inMinutes}:${(elapsed.inSeconds % 60).toString().padLeft(2, '0')}";
+          subText = formatDurationMmSs(elapsed);
         },
         recovery: (remaining) {
           color = AppTheme.primary;
@@ -424,8 +424,7 @@ class _PhaseText extends StatelessWidget {
         },
         retention: (elapsed) {
           mainText = L10n.get(context, 'session_hold');
-          subText =
-              "${elapsed.inMinutes}:${(elapsed.inSeconds % 60).toString().padLeft(2, '0')}";
+          subText = formatDurationMmSs(elapsed);
           color = AppTheme.textDim;
         },
         recovery: (remaining) {
@@ -747,94 +746,67 @@ bool _sessionDialogOpen = false;
 void _showExitDialog(BuildContext context, SessionNotifier notifier) {
   if (_sessionDialogOpen) return;
   _sessionDialogOpen = true;
-  showDialog(
-    context: context,
-    barrierColor: Colors.black.withAlpha(160),
-    builder: (dialogContext) => BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-      child: Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.all(AppSpacing.lg),
-        child: ConstrainedBox(
-          // Dialogs have no natural width cap of their own — on a tablet
-          // this would otherwise stretch to the full inset width, spreading
-          // the button row out awkwardly.
-          constraints:
-              BoxConstraints(maxWidth: dialogContext.isTablet ? 420 : double.infinity),
-          child: Container(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.lg, vertical: AppSpacing.xl),
-          decoration: BoxDecoration(
-            color: Colors.white.withAlpha(16),
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: Border.all(color: Colors.white.withAlpha(28)),
-            boxShadow: const [
-              BoxShadow(color: Colors.black54, blurRadius: 40, spreadRadius: 8),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.priority_high_rounded, color: AppTheme.danger, size: 34),
-              const SizedBox(height: AppSpacing.lg),
-              Text(
-                L10n.get(context, 'session_exit_dialog_title'),
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w300,
-                  letterSpacing: 2.5,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                L10n.get(context, 'session_exit_dialog_body'),
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white54, fontSize: 13, height: 1.4),
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextButton(
-                      onPressed: () => Navigator.of(dialogContext).pop(),
-                      child: Text(
-                        L10n.get(context, 'session_exit_dialog_back'),
-                        style: const TextStyle(color: Colors.white70),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
-                      onPressed: () {
-                        notifier.stopSession();
-                        Navigator.of(dialogContext).pop();
-                        // The session can finish on its own while this dialog
-                        // is still open (e.g. the last round completes while
-                        // the user is deciding) — that already navigated
-                        // `context`'s route away via pushReplacement, so
-                        // reusing it here would hit a deactivated widget.
-                        if (context.mounted) {
-                          Navigator.of(context)
-                              .pushReplacement(fadeThroughRoute(const HomeShellScreen()));
-                        }
-                      },
-                      child: Text(
-                        L10n.get(context, 'session_exit_dialog_finish'),
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+  showGlassDialog(
+    context,
+    builder: (dialogContext) => Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.priority_high_rounded, color: AppTheme.danger, size: 34),
+        const SizedBox(height: AppSpacing.lg),
+        Text(
+          L10n.get(context, 'session_exit_dialog_title'),
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.w300,
+            letterSpacing: 2.5,
           ),
         ),
-      ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          L10n.get(context, 'session_exit_dialog_body'),
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: Colors.white54, fontSize: 13, height: 1.4),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        Row(
+          children: [
+            Expanded(
+              child: TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: Text(
+                  L10n.get(context, 'session_exit_dialog_back'),
+                  style: const TextStyle(color: Colors.white70),
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
+                onPressed: () {
+                  notifier.stopSession();
+                  Navigator.of(dialogContext).pop();
+                  // The session can finish on its own while this dialog
+                  // is still open (e.g. the last round completes while
+                  // the user is deciding) — that already navigated
+                  // `context`'s route away via pushReplacement, so
+                  // reusing it here would hit a deactivated widget.
+                  if (context.mounted) {
+                    Navigator.of(context)
+                        .pushReplacement(fadeThroughRoute(const HomeShellScreen()));
+                  }
+                },
+                child: Text(
+                  L10n.get(context, 'session_exit_dialog_finish'),
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     ),
   ).then((_) => _sessionDialogOpen = false);
 }
@@ -846,88 +818,64 @@ void _showExitDialog(BuildContext context, SessionNotifier notifier) {
 void _showRoundIncompleteDialog(BuildContext context, SessionNotifier notifier) {
   if (_sessionDialogOpen) return;
   _sessionDialogOpen = true;
-  showDialog(
-    context: context,
+  showGlassDialog(
+    context,
     barrierDismissible: false,
-    barrierColor: Colors.black.withAlpha(160),
     builder: (dialogContext) => PopScope(
       canPop: false,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.all(AppSpacing.lg),
-          child: ConstrainedBox(
-            constraints:
-                BoxConstraints(maxWidth: dialogContext.isTablet ? 420 : double.infinity),
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.lg, vertical: AppSpacing.xl),
-              decoration: BoxDecoration(
-                color: Colors.white.withAlpha(16),
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-                border: Border.all(color: Colors.white.withAlpha(28)),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black54, blurRadius: 40, spreadRadius: 8),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.waves_rounded, color: AppTheme.accent, size: 34),
-                  const SizedBox(height: AppSpacing.lg),
-                  Text(
-                    L10n.get(context, 'freediving_round_incomplete_title'),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w300,
-                      letterSpacing: 2.5,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Text(
-                    L10n.get(context, 'freediving_round_incomplete_body'),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white54, fontSize: 13, height: 1.4),
-                  ),
-                  const SizedBox(height: AppSpacing.xl),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextButton(
-                          onPressed: () {
-                            notifier.endSessionAfterMissedRound();
-                            Navigator.of(dialogContext).pop();
-                          },
-                          child: Text(
-                            L10n.get(context, 'freediving_round_incomplete_end'),
-                            style: const TextStyle(color: Colors.white70),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
-                          onPressed: () {
-                            notifier.continueAfterMissedRound();
-                            Navigator.of(dialogContext).pop();
-                          },
-                          child: Text(
-                            L10n.get(context, 'freediving_round_incomplete_continue'),
-                            style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.waves_rounded, color: AppTheme.accent, size: 34),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            L10n.get(context, 'freediving_round_incomplete_title'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.w300,
+              letterSpacing: 2.5,
             ),
           ),
-        ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            L10n.get(context, 'freediving_round_incomplete_body'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white54, fontSize: 13, height: 1.4),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Row(
+            children: [
+              Expanded(
+                child: TextButton(
+                  onPressed: () {
+                    notifier.endSessionAfterMissedRound();
+                    Navigator.of(dialogContext).pop();
+                  },
+                  child: Text(
+                    L10n.get(context, 'freediving_round_incomplete_end'),
+                    style: const TextStyle(color: Colors.white70),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
+                  onPressed: () {
+                    notifier.continueAfterMissedRound();
+                    Navigator.of(dialogContext).pop();
+                  },
+                  child: Text(
+                    L10n.get(context, 'freediving_round_incomplete_continue'),
+                    style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     ),
   ).then((_) => _sessionDialogOpen = false);

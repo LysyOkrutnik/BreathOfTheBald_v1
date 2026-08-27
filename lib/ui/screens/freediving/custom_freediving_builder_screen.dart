@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:okrutnik_breath/config/formatters.dart';
 import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/levels.dart';
 import 'package:okrutnik_breath/config/responsive.dart';
@@ -75,8 +76,6 @@ class _CustomFreedivingBuilderScreenState
       0,
       (s, r) =>
           s + r.apneaSec + r.restSec + FreedivingSessionTiming.perRoundOverheadSec);
-
-  String _fmt(int s) => "${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}";
 
   LevelData _buildLevel() {
     final name = _nameController.text.trim();
@@ -327,7 +326,7 @@ class _CustomFreedivingBuilderScreenState
                                             letterSpacing: 1.0)),
                                   ],
                                 ),
-                                Text(_fmt(_totalSeconds),
+                                Text(formatMmSs(_totalSeconds),
                                     style: const TextStyle(
                                       color: AppTheme.textLight,
                                       fontSize: 20,

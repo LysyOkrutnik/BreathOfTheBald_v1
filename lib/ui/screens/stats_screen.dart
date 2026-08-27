@@ -11,7 +11,9 @@ import 'package:okrutnik_breath/data/db/database.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/logic/services/gamification_service.dart';
 import 'package:okrutnik_breath/logic/wimhof/wimhof_progression.dart' show wimHofLadder;
+import 'package:okrutnik_breath/ui/widgets/empty_state.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
+import 'package:okrutnik_breath/ui/widgets/shimmer.dart';
 
 /// The level/XP/streak summary + charts — embedded directly inside the
 /// "Ty" profile tab (no nested Scaffold/background of its own).
@@ -30,31 +32,10 @@ class StatsContent extends ConsumerWidget {
     // into `sessions.isEmpty` used to flash the empty state on every cold
     // open before the first stream value arrived.
     return sessionsAsync.isLoading
-        ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
+        ? const _StatsLoadingSkeleton()
         : sessions.isEmpty
-            ? _empty(context)
+            ? const EmptyStateView(icon: Icons.insights_rounded, messageKey: 'stats_empty')
             : _content(context, sessions, profile);
-  }
-
-  Widget _empty(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.insights_rounded,
-              size: 64, color: AppTheme.textDim.withAlpha(110)),
-          const SizedBox(height: AppSpacing.md),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-            child: Text(
-              L10n.get(context, 'stats_empty'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: AppTheme.textDim, fontSize: 15),
-            ),
-          ),
-        ],
-      ).animate().fadeIn(duration: AppMotion.slow),
-    );
   }
 
   Widget _content(
@@ -201,6 +182,40 @@ class _DisciplineMastery extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// Rough silhouette of [StatsContent]'s loaded layout (a hero stat row, then
+/// a couple of chart-shaped blocks) — replaces a bare spinner so the tab
+/// doesn't just go blank while the session history / profile stream
+/// resolves.
+class _StatsLoadingSkeleton extends StatelessWidget {
+  const _StatsLoadingSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Shimmer(
+      child: ListView(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.xl),
+        children: [
+          Row(
+            children: const [
+              Expanded(child: ShimmerBox(height: 88)),
+              SizedBox(width: AppSpacing.sm),
+              Expanded(child: ShimmerBox(height: 88)),
+              SizedBox(width: AppSpacing.sm),
+              Expanded(child: ShimmerBox(height: 88)),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          const ShimmerBox(height: 160),
+          const SizedBox(height: AppSpacing.md),
+          const ShimmerBox(height: 160),
+        ],
+      ),
     );
   }
 }

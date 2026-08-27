@@ -3,6 +3,8 @@ import 'dart:developer' as developer;
 
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:okrutnik_breath/config/formatters.dart';
 import 'package:okrutnik_breath/core/sync/auth_service.dart';
 import 'package:okrutnik_breath/core/sync/profile_sync_marker.dart';
 import 'package:okrutnik_breath/core/sync/sync_api_client.dart';
@@ -127,6 +129,21 @@ class SyncService {
     return const SyncResult(SyncOutcome.success);
   }
 
+  /// The device's IANA timezone name (e.g. "Europe/Warsaw"), or null if it
+  /// can't be resolved — sent up so the server's notification cron can
+  /// compute "trained today"/streak against the user's actual calendar day
+  /// instead of always UTC. Best-effort: a sync push should never fail
+  /// outright just because this one non-essential field couldn't be read.
+  Future<String?> _localTimezoneOrNull() async {
+    try {
+      return await FlutterTimezone.getLocalTimezone();
+    } catch (e) {
+      developer.log('Could not resolve device timezone for sync',
+          name: 'SyncService', error: e);
+      return null;
+    }
+  }
+
   Future<void> _push() async {
     final sessionRepo = _ref.read(sessionRepositoryProvider);
     final freedivingRepo = _ref.read(freedivingRepositoryProvider);
@@ -134,14 +151,29 @@ class SyncService {
     final freedivingPresetRepo = _ref.read(customFreedivingRepositoryProvider);
     final wimHofRepo = _ref.read(wimHofRepositoryProvider);
 
-    final sessions = await sessionRepo.getAllSessions();
-    final logs = await freedivingRepo.getAllLogsOnce();
-    final presets = await presetRepo.getAllIncludingDeleted();
-    final freedivingPresets = await freedivingPresetRepo.getAllIncludingDeleted();
-    final freedivingProfile = await freedivingRepo.getProfile();
-    final wimHofProgress = await wimHofRepo.getProgress();
+    // These 8 reads are all independent (different tables/sources) — kicked
+    // off together instead of one `await` at a time (each call already
+    // starts its own work the moment it's invoked; only the `await` below
+    // was serializing them), so this setup pays roughly the cost of the
+    // slowest single read instead of the sum of all of them.
+    final sessionsFuture = sessionRepo.getAllSessions();
+    final logsFuture = freedivingRepo.getAllLogsOnce();
+    final presetsFuture = presetRepo.getAllIncludingDeleted();
+    final freedivingPresetsFuture = freedivingPresetRepo.getAllIncludingDeleted();
+    final freedivingProfileFuture = freedivingRepo.getProfile();
+    final wimHofProgressFuture = wimHofRepo.getProgress();
+    final profileClientUpdatedAtFuture = ProfileSyncMarker.lastChangedAt();
+    final timezoneFuture = _localTimezoneOrNull();
+
+    final sessions = await sessionsFuture;
+    final logs = await logsFuture;
+    final presets = await presetsFuture;
+    final freedivingPresets = await freedivingPresetsFuture;
+    final freedivingProfile = await freedivingProfileFuture;
+    final wimHofProgress = await wimHofProgressFuture;
     final settings = _ref.read(settingsProvider);
-    final profileClientUpdatedAt = await ProfileSyncMarker.lastChangedAt();
+    final profileClientUpdatedAt = await profileClientUpdatedAtFuture;
+    final timezone = await timezoneFuture;
 
     final body = {
       'sessions': [
@@ -150,7 +182,7 @@ class SyncService {
             {
               'id': s.syncId,
               'levelKey': s.levelKey,
-              'timestamp': s.timestamp.toUtc().toIso8601String(),
+              'timestamp': toUtcIso(s.timestamp),
               'durationSec': s.durationSec,
               'rounds': s.rounds,
               'retentionSec': s.retentionSec,
@@ -168,7 +200,7 @@ class SyncService {
               'roundsJson': l.roundsJson,
               'roundsCompleted': l.roundsCompleted,
               'durationSec': l.durationSec,
-              'timestamp': l.timestamp.toUtc().toIso8601String(),
+              'timestamp': toUtcIso(l.timestamp),
               'rpeScore': l.rpeScore,
               'symptomTag': l.symptomTag,
             },
@@ -185,8 +217,8 @@ class SyncService {
               'holdOutSec': p.holdOutSec,
               'cycles': p.cycles,
               'rounds': p.rounds,
-              'createdAt': p.createdAt.toUtc().toIso8601String(),
-              'deletedAt': p.deletedAt?.toUtc().toIso8601String(),
+              'createdAt': toUtcIso(p.createdAt),
+              'deletedAt': toUtcIsoOrNull(p.deletedAt),
             },
       ],
       'customFreedivingPresets': [
@@ -200,29 +232,30 @@ class SyncService {
               'startRestSec': p.startRestSec,
               'endRestSec': p.endRestSec,
               'rounds': p.rounds,
-              'createdAt': p.createdAt.toUtc().toIso8601String(),
-              'deletedAt': p.deletedAt?.toUtc().toIso8601String(),
+              'createdAt': toUtcIso(p.createdAt),
+              'deletedAt': toUtcIsoOrNull(p.deletedAt),
             },
       ],
       'profileState': {
         'verifiedPbSec': freedivingProfile.verifiedPbSec,
-        'verifiedPbAt': freedivingProfile.verifiedPbAt?.toUtc().toIso8601String(),
+        'verifiedPbAt': toUtcIsoOrNull(freedivingProfile.verifiedPbAt),
         'verifiedPbCo2Sec': freedivingProfile.verifiedPbCo2Sec,
-        'verifiedPbCo2At': freedivingProfile.verifiedPbCo2At?.toUtc().toIso8601String(),
-        'safetyAcknowledgedAt': freedivingProfile.safetyAcknowledgedAt?.toUtc().toIso8601String(),
+        'verifiedPbCo2At': toUtcIsoOrNull(freedivingProfile.verifiedPbCo2At),
+        'safetyAcknowledgedAt': toUtcIsoOrNull(freedivingProfile.safetyAcknowledgedAt),
         'wimHofCurrentLevelKey': wimHofProgress.currentLevelKey,
-        'wimHofCurrentLevelSetAt': wimHofProgress.currentLevelSetAt?.toUtc().toIso8601String(),
+        'wimHofCurrentLevelSetAt': toUtcIsoOrNull(wimHofProgress.currentLevelSetAt),
         'availableWeekdaysMask': SettingsNotifier.maskFromWeekdays(settings.availableWeekdays),
         'availableHourStart': settings.availableHourStart,
         'availableHourEnd': settings.availableHourEnd,
         'allowMultiplePerDay': settings.allowMultipleSessionsPerDay,
         'dailyReminderEnabled': settings.dailyReminderEnabled,
+        'timezone': timezone,
         // `Invalid ISO datetime` from the server — Zod's z.string().datetime()
         // requires a UTC "Z"/offset suffix, which Dart's toIso8601String()
         // omits for a local-time DateTime (the norm here, since these all
         // come from plain DateTime.now() calls). Every push of real data
-        // failed this validation until `.toUtc()` was added here and above.
-        'clientUpdatedAt': profileClientUpdatedAt.toUtc().toIso8601String(),
+        // failed this validation until [toUtcIso] was applied here and above.
+        'clientUpdatedAt': toUtcIso(profileClientUpdatedAt),
       },
     };
 
@@ -252,22 +285,47 @@ class SyncService {
       final hasMore = pulled['hasMore'] == true;
       if (!hasMore) return true;
 
-      final next = _maxUpdatedAt(pulled);
-      if (next == null || (since != null && !next.isAfter(since))) return false;
+      final (:min, :max) = _minMaxUpdatedAt(pulled);
+      final next = max;
+      if (next == null) return false;
+
+      // Two different stall signals, both meaning "advancing the cursor to
+      // `next` isn't provably safe":
+      // - Across pages: the cursor didn't move forward at all since last
+      //   time — only checkable from the second page on (there's no prior
+      //   `since` to compare against on the first).
+      // - Within this page: every row returned shares the exact same
+      //   `updatedAt` as this page's own max, while `hasMore` is still
+      //   true — there could be more rows tied at that same instant beyond
+      //   this page's row cap, which the server's `updatedAt > since`
+      //   filter would permanently exclude the moment `since` advances
+      //   past it. This used to only get caught starting the *second*
+      //   page — the old check only ran when `since != null`, so it always
+      //   skipped the first page entirely (going from "no cursor" to "some
+      //   cursor" looked like progress regardless). A first-ever sync
+      //   landing on a >page-size batch of identically-timestamped rows
+      //   (e.g. a server-side backfill) could silently and permanently
+      //   drop the tail of that batch.
+      final noForwardProgress = since != null && !next.isAfter(since);
+      final samePageAllTied = min != null && !min.isBefore(next);
+      if (noForwardProgress || samePageAllTied) return false;
       since = next;
     }
   }
 
-  DateTime? _maxUpdatedAt(Map<String, dynamic> pulled) {
+  ({DateTime? min, DateTime? max}) _minMaxUpdatedAt(Map<String, dynamic> pulled) {
+    DateTime? min;
     DateTime? max;
     for (final key in const ['sessions', 'freedivingLogs', 'customPresets', 'customFreedivingPresets']) {
       for (final raw in (pulled[key] as List? ?? const [])) {
         final updatedAtStr = (raw as Map<String, dynamic>)['updatedAt'] as String?;
         final updatedAt = updatedAtStr != null ? DateTime.tryParse(updatedAtStr) : null;
-        if (updatedAt != null && (max == null || updatedAt.isAfter(max))) max = updatedAt;
+        if (updatedAt == null) continue;
+        if (max == null || updatedAt.isAfter(max)) max = updatedAt;
+        if (min == null || updatedAt.isBefore(min)) min = updatedAt;
       }
     }
-    return max;
+    return (min: min, max: max);
   }
 
   Future<void> _mergePulled(Map<String, dynamic> data) async {

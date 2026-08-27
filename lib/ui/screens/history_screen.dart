@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:okrutnik_breath/config/formatters.dart';
 import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/levels.dart';
 import 'package:okrutnik_breath/config/responsive.dart';
@@ -9,6 +10,7 @@ import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/data/db/database.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
+import 'package:okrutnik_breath/ui/widgets/empty_state.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
 import 'package:okrutnik_breath/ui/widgets/shimmer.dart';
@@ -53,9 +55,9 @@ class HistoryContent extends ConsumerWidget {
 
     return historyAsync.when(
       loading: () => const _LoadingSkeleton(),
-      error: (_, __) => const _EmptyState(),
+      error: (_, __) => const EmptyStateView(icon: Icons.self_improvement, messageKey: 'history_empty'),
       data: (sessions) {
-        if (sessions.isEmpty) return const _EmptyState();
+        if (sessions.isEmpty) return const EmptyStateView(icon: Icons.self_improvement, messageKey: 'history_empty');
         return ListView.builder(
           padding: const EdgeInsets.all(AppSpacing.md),
           itemCount: sessions.length,
@@ -88,28 +90,6 @@ class _LoadingSkeleton extends StatelessWidget {
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.self_improvement,
-              size: 64, color: AppTheme.textDim.withAlpha(120)),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            L10n.get(context, 'history_empty'),
-            style: const TextStyle(color: AppTheme.textDim, fontSize: 16),
-          ),
-        ],
-      ).animate().fadeIn(duration: AppMotion.slow),
-    );
-  }
-}
-
 class _SessionCard extends StatelessWidget {
   const _SessionCard({required this.session, required this.index});
 
@@ -123,9 +103,6 @@ class _SessionCard extends StatelessWidget {
 
   Color _levelColor() =>
       LevelData.levels[session.levelKey]?.color ?? AppTheme.primary;
-
-  String _fmt(int seconds) =>
-      "${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}";
 
   @override
   Widget build(BuildContext context) {
@@ -173,7 +150,7 @@ class _SessionCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  _fmt(session.durationSec),
+                  formatMmSs(session.durationSec),
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,

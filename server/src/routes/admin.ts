@@ -699,19 +699,30 @@ router.post('/announcements', requireCsrf, async (req: AdminRequest, res) => {
   const devices = await prisma.device.findMany({ select: { id: true, fcmToken: true } });
   let okCount = 0;
   let failCount = 0;
-  for (const device of devices) {
-    const result = await sendPushNotification(device.fcmToken, title, body);
-    if (result.ok) {
-      okCount++;
-    } else {
-      failCount++;
-      // Was completely silent — an admin had no way to tell a broadcast
-      // failed for every device (e.g. Firebase credentials missing/invalid)
-      // from one that failed for a few stale tokens, since both looked
-      // identical: a redirect to "?sent=1" regardless.
-      console.error(`[announcements] send failed for device ${device.id}:`, result.error);
-      if (result.invalidToken) {
-        await prisma.device.delete({ where: { id: device.id } }).catch(() => {});
+  // Sent CONCURRENCY at a time rather than one-by-one (which made a
+  // broadcast to N devices take N sequential FCM round-trips — a
+  // multi-minute blocking admin request for a userbase in the thousands)
+  // or fully unbounded (which could fan out an unbounded number of
+  // concurrent FCM calls at once for a very large userbase).
+  const CONCURRENCY = 50;
+  for (let i = 0; i < devices.length; i += CONCURRENCY) {
+    const chunk = devices.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(
+      chunk.map((device) => sendPushNotification(device.fcmToken, title, body).then((result) => ({ device, result }))),
+    );
+    for (const { device, result } of results) {
+      if (result.ok) {
+        okCount++;
+      } else {
+        failCount++;
+        // Was completely silent — an admin had no way to tell a broadcast
+        // failed for every device (e.g. Firebase credentials missing/invalid)
+        // from one that failed for a few stale tokens, since both looked
+        // identical: a redirect to "?sent=1" regardless.
+        console.error(`[announcements] send failed for device ${device.id}:`, result.error);
+        if (result.invalidToken) {
+          await prisma.device.delete({ where: { id: device.id } }).catch(() => {});
+        }
       }
     }
   }

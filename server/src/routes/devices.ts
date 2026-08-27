@@ -27,6 +27,23 @@ router.post('/register', async (req: AuthedRequest, res) => {
     res.status(400).json({ error: 'invalid_input' });
     return;
   }
+  // Re-pointing an existing token to a different userId is intentional
+  // (see the class doc comment above) — it's what makes "log out, a family
+  // member logs into the same phone" work without erroring. That also
+  // means anyone who ever obtains another user's real fcmToken can silently
+  // redirect their push to themselves with zero friction; there's no way
+  // to distinguish that from the legitimate same-device case server-side,
+  // so this doesn't block it — it just leaves an audit trail for it, since
+  // silent account-crossing reassignment is otherwise invisible.
+  const existing = await prisma.device.findUnique({
+    where: { fcmToken: parsed.data.fcmToken },
+    select: { userId: true },
+  });
+  if (existing && existing.userId !== req.userId) {
+    console.warn(
+      `[devices] fcmToken reassigned from user ${existing.userId} to ${req.userId}`,
+    );
+  }
   await prisma.device.upsert({
     where: { fcmToken: parsed.data.fcmToken },
     create: { userId: req.userId!, fcmToken: parsed.data.fcmToken, label: parsed.data.label },

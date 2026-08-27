@@ -1,4 +1,10 @@
 class AppConstants {
+  // --- ACCOUNT VALIDATION ---
+  // Client-side pre-check only — the server independently enforces its own
+  // rules and remains the source of truth.
+  static final RegExp emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+  static const int minPasswordLength = 8;
+
   // --- AUDIO ---
   // Maximum volume for the background drone during active breathing phases.
   static const double volumeMax = 0.6;

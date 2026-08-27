@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:okrutnik_breath/config/formatters.dart';
 import 'package:okrutnik_breath/core/sync/auth_service.dart';
 import 'package:okrutnik_breath/core/sync/sync_config.dart';
 
@@ -46,14 +47,13 @@ class SyncApiClient {
 
   Future<Map<String, dynamic>> pullSync({DateTime? since}) async {
     final uri = Uri.parse('$syncApiBaseUrl/sync').replace(
-      // `.toUtc()` — a local-time DateTime's toIso8601String() has no
+      // `toUtcIso` — a local-time DateTime's toIso8601String() has no
       // "Z"/offset suffix, which the server's `since` parsing (a plain
       // `Date.parse`) then reads back as if it already were UTC. Harmless
       // for a coarse cursor filter on this server (its container clock is
       // UTC anyway), but sending real UTC is the actually-correct fix
       // rather than relying on server-local time happening to match.
-      queryParameters:
-          since != null ? {'since': since.toUtc().toIso8601String()} : null,
+      queryParameters: since != null ? {'since': toUtcIso(since)} : null,
     );
     final response = await http
         .get(uri, headers: await _headers())

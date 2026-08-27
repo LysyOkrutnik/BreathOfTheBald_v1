@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { Router } from 'express';
@@ -50,6 +51,15 @@ function randomToken(): string {
 /// this as a defense mechanism, not just a shape check.
 const TOKEN_PATTERN = /^[0-9a-f]{64}$/;
 
+/// Fixed cost-12 hash of a value nobody could ever actually submit as a
+/// password — `login` below always runs a real `bcrypt.compare` against
+/// *something*, even when no user matches the email, so a non-existent
+/// account can't be distinguished from a wrong password by response timing
+/// alone (the identical `invalid_credentials` body was already meant to
+/// prevent this, but skipping bcrypt entirely for a missing user left a
+/// timing gap the body-level fix didn't close).
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync('not-a-real-password-timing-decoy', 12);
+
 router.post('/register', authRateLimiter, async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -66,15 +76,30 @@ router.post('/register', authRateLimiter, async (req, res) => {
 
   const passwordHash = await bcrypt.hash(password, 12);
   const emailVerificationToken = randomToken();
-  const user = await prisma.user.create({
-    data: {
-      email,
-      passwordHash,
-      emailVerificationToken,
-      emailVerificationExpiresAt: new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS),
-      termsAcceptedAt: new Date(),
-    },
-  });
+  let user;
+  try {
+    user = await prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        emailVerificationToken,
+        emailVerificationExpiresAt: new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS),
+        termsAcceptedAt: new Date(),
+      },
+    });
+  } catch (err) {
+    // The `existing` check above has a TOCTOU gap: two concurrent
+    // registrations for the same email can both pass it before either
+    // inserts, so the DB's own unique constraint on `email` is the real
+    // guard. Without this catch, that constraint violation (P2002) fell
+    // through to the generic error handler as a 500 instead of the same
+    // 409 every other duplicate-email path returns.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      res.status(409).json({ error: 'email_taken' });
+      return;
+    }
+    throw err;
+  }
 
   const { subject, text } = verificationEmailBody(emailVerificationToken);
   // Best-effort — a slow/broken mail provider must never block registration
@@ -98,8 +123,12 @@ router.post('/login', authRateLimiter, async (req, res) => {
 
   const user = await prisma.user.findUnique({ where: { email } });
   // Same error for "no such user" and "wrong password" — don't leak which
-  // one it was.
-  if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+  // one it was. Always compare against *a* hash (the real one, or the fixed
+  // decoy when there's no user) so the response time doesn't leak it either
+  // — bcrypt.compare's cost is dominated by the hash's own work factor
+  // (both real and decoy use 12), not by which branch produced the hash.
+  const passwordMatches = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH);
+  if (!user || !passwordMatches) {
     res.status(401).json({ error: 'invalid_credentials' });
     return;
   }
@@ -288,6 +317,22 @@ router.post('/reset-password', authRateLimiter, async (req, res) => {
   res.json({ token: signToken(updated.id, updated.tokenVersion), userId: updated.id });
 });
 
+/// Re-authenticates a request's already-`requireAuth`'d user against their
+/// current password — needed before a sensitive account mutation
+/// (password/email change) so an already-authenticated session alone isn't
+/// enough on its own to take over the account. Returns the user row on
+/// success, null on any failure (no such user — shouldn't happen for a
+/// valid `requireAuth` token, but handled the same as a wrong password
+/// rather than distinguished) so callers can respond with the same generic
+/// `invalid_credentials` either way.
+async function verifyCurrentPassword(userId: string, currentPassword: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user || !(await bcrypt.compare(currentPassword, user.passwordHash))) {
+    return null;
+  }
+  return user;
+}
+
 router.post('/change-password', requireAuth, async (req: AuthedRequest, res) => {
   const parsed = z
     .object({ currentPassword: z.string().min(1), newPassword: z.string().min(8).max(128) })
@@ -296,8 +341,8 @@ router.post('/change-password', requireAuth, async (req: AuthedRequest, res) => 
     res.status(400).json({ error: 'invalid_input' });
     return;
   }
-  const user = await prisma.user.findUnique({ where: { id: req.userId! } });
-  if (!user || !(await bcrypt.compare(parsed.data.currentPassword, user.passwordHash))) {
+  const user = await verifyCurrentPassword(req.userId!, parsed.data.currentPassword);
+  if (!user) {
     res.status(401).json({ error: 'invalid_credentials' });
     return;
   }
@@ -330,8 +375,8 @@ router.post('/change-email', requireAuth, async (req: AuthedRequest, res) => {
     res.status(400).json({ error: 'invalid_input' });
     return;
   }
-  const user = await prisma.user.findUnique({ where: { id: req.userId! } });
-  if (!user || !(await bcrypt.compare(parsed.data.currentPassword, user.passwordHash))) {
+  const user = await verifyCurrentPassword(req.userId!, parsed.data.currentPassword);
+  if (!user) {
     res.status(401).json({ error: 'invalid_credentials' });
     return;
   }

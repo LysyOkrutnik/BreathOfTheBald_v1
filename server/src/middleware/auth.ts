@@ -23,7 +23,17 @@ function readCookie(req: Request, name: string): string | null {
     const eq = part.indexOf('=');
     if (eq === -1) continue;
     if (part.slice(0, eq).trim() === name) {
-      return decodeURIComponent(part.slice(eq + 1).trim());
+      try {
+        return decodeURIComponent(part.slice(eq + 1).trim());
+      } catch {
+        // Malformed percent-encoding — treat exactly like "no cookie sent"
+        // rather than letting a URIError escape as an unhandled rejection.
+        // requireAdmin below depends on this: every failure mode must reach
+        // its own generic 404, not fall through to app.ts's 500 handler,
+        // which would let a malformed cookie distinguish /admin/* from an
+        // unknown route by status code alone.
+        return null;
+      }
     }
   }
   return null;

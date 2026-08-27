@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:okrutnik_breath/config/formatters.dart';
 import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/responsive.dart';
 import 'package:okrutnik_breath/config/theme.dart';
@@ -13,6 +14,7 @@ import 'package:okrutnik_breath/logic/freediving/co2_o2_table_generator.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/confirm_dialog.dart';
+import 'package:okrutnik_breath/ui/widgets/exact_alarm_outcome.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/glow_halo.dart';
 import 'package:okrutnik_breath/ui/widgets/primary_button.dart';
@@ -74,6 +76,13 @@ class _MaxPbTestScreenState extends ConsumerState<MaxPbTestScreen> {
   // Save runs the whole sequence (record PB, award XP, log a session) twice.
   bool _saving = false;
   bool _resultsSaved = false;
+
+  /// Set when the last `_confirmSave` attempt threw — this is the app's
+  /// only way to set a real PB, so a failed write used to be reported to
+  /// the user as a success (the catch block only logged, `_resultsSaved`
+  /// was set unconditionally afterward) with no way to tell anything had
+  /// gone wrong or to retry.
+  bool _saveError = false;
 
   DateTime _nextTestDate = DateTime.now().add(const Duration(days: 7));
   TimeOfDay _nextTestTime = TimeOfDay.now();
@@ -167,7 +176,10 @@ class _MaxPbTestScreenState extends ConsumerState<MaxPbTestScreen> {
 
   Future<void> _confirmSave() async {
     if (_saving) return;
-    _saving = true;
+    setState(() {
+      _saving = true;
+      _saveError = false;
+    });
     final exhale = _exhaleHoldSec!;
     final inhale = _inhaleHoldSec!;
     try {
@@ -201,11 +213,25 @@ class _MaxPbTestScreenState extends ConsumerState<MaxPbTestScreen> {
       if (widget.plannedSessionId case final id?) {
         await ref.read(plannerRepositoryProvider).completePlan(id);
       }
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _resultsSaved = true;
+      });
     } catch (e, st) {
       developer.log('Failed to save PB test',
           name: 'MaxPbTestScreen', error: e, stackTrace: st);
+      // Was previously silent — the catch block only logged and execution
+      // fell through to an unconditional `_resultsSaved = true`, so a
+      // failed write (this is the app's only way to ever set a PB) still
+      // showed the user a "Saved ✓" checkmark. Now it stays retryable
+      // instead.
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _saveError = true;
+      });
     }
-    if (mounted) setState(() => _resultsSaved = true);
   }
 
   Future<void> _pickNextTestDate() async {
@@ -215,7 +241,7 @@ class _MaxPbTestScreenState extends ConsumerState<MaxPbTestScreen> {
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 180)),
     );
-    if (picked != null) setState(() => _nextTestDate = picked);
+    if (picked != null && mounted) setState(() => _nextTestDate = picked);
   }
 
   Future<void> _pickNextTestTime() async {
@@ -233,7 +259,7 @@ class _MaxPbTestScreenState extends ConsumerState<MaxPbTestScreen> {
         child: child!,
       ),
     );
-    if (picked != null) setState(() => _nextTestTime = picked);
+    if (picked != null && mounted) setState(() => _nextTestTime = picked);
   }
 
   Future<void> _scheduleNextTest() async {
@@ -268,26 +294,14 @@ class _MaxPbTestScreenState extends ConsumerState<MaxPbTestScreen> {
     // Was the only one of the three scheduleOneTime call sites with no
     // permission check at all — unconditionally reported "scheduled" even
     // when the reminder had no working exact alarm behind it.
-    final canScheduleExact = await notifications.canScheduleExactAlarms();
+    await showSchedulingOutcomeSnackBar(
+      context,
+      notifications: notifications,
+      successMessageKey: 'freediving_pb_test_scheduled_toast',
+    );
     if (!mounted) return;
-    if (!canScheduleExact) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(L10n.get(context, 'planner_saved_needs_permission')),
-        action: SnackBarAction(
-          label: L10n.get(context, 'planner_exact_alarm_allow'),
-          onPressed: () => notifications.requestExactAlarmsPermission(),
-        ),
-      ));
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content:
-              Text(L10n.get(context, 'freediving_pb_test_scheduled_toast'))));
-    }
     Navigator.of(context).pop();
   }
-
-  String _fmtSec(int seconds) =>
-      "${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}";
 
   /// True while a hold/relax/recovery is actually in progress — leaving the
   /// screen here silently discards a just-run or in-progress result, unlike
@@ -397,6 +411,8 @@ class _MaxPbTestScreenState extends ConsumerState<MaxPbTestScreen> {
           previousExhaleSec: _previousProfile?.verifiedPbCo2Sec,
           previousInhaleSec: _previousProfile?.verifiedPbSec,
           saved: _resultsSaved,
+          saving: _saving,
+          saveError: _saveError,
           onSave: _confirmSave,
           nextTestDate: _nextTestDate,
           nextTestTime: _nextTestTime,
@@ -404,7 +420,7 @@ class _MaxPbTestScreenState extends ConsumerState<MaxPbTestScreen> {
           onPickTime: _pickNextTestTime,
           onScheduleNext: _scheduleNextTest,
           onSkipSchedule: () => Navigator.of(context).pop(),
-          fmtSec: _fmtSec,
+          fmtSec: formatMmSs,
         );
     }
   }
@@ -539,10 +555,7 @@ class _HoldingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final minutes = elapsed.inMinutes;
-    final seconds = elapsed.inSeconds % 60;
-    final fmt =
-        "$minutes:${seconds.toString().padLeft(2, '0')}";
+    final fmt = formatDurationMmSs(elapsed);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -664,6 +677,8 @@ class _ResultsView extends StatelessWidget {
     required this.previousExhaleSec,
     required this.previousInhaleSec,
     required this.saved,
+    required this.saving,
+    required this.saveError,
     required this.onSave,
     required this.nextTestDate,
     required this.nextTestTime,
@@ -679,6 +694,11 @@ class _ResultsView extends StatelessWidget {
   final int? previousExhaleSec;
   final int? previousInhaleSec;
   final bool saved;
+  final bool saving;
+
+  /// Set when the last save attempt failed — shown as a retryable error
+  /// instead of the normal "Save" state, never silently treated as success.
+  final bool saveError;
   final Future<void> Function() onSave;
   final DateTime nextTestDate;
   final TimeOfDay nextTestTime;
@@ -720,13 +740,29 @@ class _ResultsView extends StatelessWidget {
           fmtSec: fmtSec,
         ),
         const SizedBox(height: AppSpacing.lg),
-        if (!saved)
+        if (!saved) ...[
           PrimaryButton(
-            label: L10n.get(context, 'freediving_pb_test_save'),
+            label: L10n.get(context,
+                saving ? 'freediving_pb_test_saving' : 'freediving_pb_test_save'),
             color: AppTheme.primary,
-            onTap: () => onSave(),
-          )
-        else ...[
+            onTap: saving ? null : () => onSave(),
+          ),
+          if (saveError) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              children: [
+                const Icon(Icons.warning_amber_rounded, color: AppTheme.danger, size: 16),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    L10n.get(context, 'freediving_pb_test_save_error'),
+                    style: const TextStyle(color: AppTheme.danger, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ] else ...[
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [

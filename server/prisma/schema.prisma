@@ -169,6 +169,14 @@ model ProfileState {
   allowMultiplePerDay     Boolean?
   dailyReminderEnabled    Boolean?
 
+  /// IANA name (e.g. "Europe/Warsaw") of the device's local timezone at
+  /// last sync — lets the notifications cron compute "trained today"/
+  /// streak/inactivity against the user's actual calendar day instead of
+  /// always UTC. Null for a client that hasn't started sending it yet (or
+  /// an unresolvable device timezone); callers fall back to UTC in that
+  /// case rather than failing.
+  timezone String?
+
   /// Set by the client to the local wall-clock time the underlying settings
   /// actually changed — the basis for last-write-wins, since Prisma's own
   /// `updatedAt` only reflects when the *row* was last written on the

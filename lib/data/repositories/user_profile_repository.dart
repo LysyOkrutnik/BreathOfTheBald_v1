@@ -38,6 +38,27 @@ class UserProfileRepository {
     await (_db.update(_db.userProfile)..where((tbl) => tbl.id.equals(1))).write(entry);
   }
 
+  /// Atomically reads the current profile and writes back whatever
+  /// [compute] derives from it — the read and the write happen inside one
+  /// Drift transaction, which SQLite serializes against any other
+  /// transaction on this app's single database connection (same reasoning
+  /// as `FreedivingRepository.getProfile`'s transaction). A plain
+  /// get-then-update let two near-simultaneous callers (e.g. a session
+  /// finishing and a cold shower logged moments later, both awarding XP)
+  /// both read the same stale `totalXp`/`dailyStreak`, so whichever write
+  /// landed second silently discarded the first caller's update instead of
+  /// building on it.
+  Future<UserProfileData> updateUserProfileAtomically(
+    UserProfileCompanion Function(UserProfileData current) compute,
+  ) {
+    return _db.transaction(() async {
+      final current = await getUserProfile();
+      await (_db.update(_db.userProfile)..where((tbl) => tbl.id.equals(1)))
+          .write(compute(current));
+      return (_db.select(_db.userProfile)..where((tbl) => tbl.id.equals(1))).getSingle();
+    });
+  }
+
   /// Part of the "reset progress" flow.
   Future<void> resetProgress() => updateUserProfile(const UserProfileCompanion(
         level: Value(1),

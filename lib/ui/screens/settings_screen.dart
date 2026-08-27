@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:okrutnik_breath/config/constants.dart';
 import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/responsive.dart';
 import 'package:okrutnik_breath/config/theme.dart';
@@ -764,12 +765,6 @@ class _AccountSection extends ConsumerStatefulWidget {
 }
 
 class _AccountSectionState extends ConsumerState<_AccountSection> {
-  static const _minPasswordLength = 8;
-
-  // Same deliberately simple check as AuthGateScreen's — good enough to
-  // catch a typo before a round trip to the server, not a full validator.
-  static final _emailFormatPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
-
   bool _loading = false;
 
   bool? _isLoggedIn;
@@ -1007,7 +1002,7 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () async {
-                      if (newController.text.length < _minPasswordLength) {
+                      if (newController.text.length < AppConstants.minPasswordLength) {
                         setDialogState(() =>
                             errorKey = 'account_error_password_too_short');
                         return;
@@ -1124,7 +1119,7 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
                         ? null
                         : () async {
                             final newEmail = emailController.text.trim();
-                            if (!_emailFormatPattern.hasMatch(newEmail)) {
+                            if (!AppConstants.emailPattern.hasMatch(newEmail)) {
                               setDialogState(() => errorKey =
                                   'account_error_invalid_email_format');
                               return;

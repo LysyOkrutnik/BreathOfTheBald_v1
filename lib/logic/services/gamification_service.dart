@@ -9,16 +9,13 @@ import 'package:okrutnik_breath/data/repositories/user_profile_repository.dart';
 /// Null for a levelKey this can't place (defensive only — every real
 /// session's levelKey should match one of these).
 String? disciplineFamilyFor(String levelKey) {
-  // Literal 'cold_shower' rather than importing cold_shower.dart's
-  // coldShowerLevelKey constant — that file already imports
-  // data_providers.dart, which imports levels.dart, which this file also
-  // imports; importing it here too would complete a cycle for one constant.
-  if (levelKey == 'cold_shower') return 'cold';
   // Freediving tables/PB test/packing/custom-freediving all key off this
   // prefix (or the exact 'custom_freediving' key) regardless of whichever
   // ExerciseType they're built with — packing in particular is
   // ExerciseType.guidedRoutine, same as the Mobility-tab exercises, but is
-  // clearly a freediving discipline, not a mobility one.
+  // clearly a freediving discipline, not a mobility one. This is the one
+  // classification the ExerciseType switch below genuinely can't make on
+  // its own; everything else (including cold_shower) resolves through it.
   if (levelKey.startsWith('freediving_') || levelKey == 'custom_freediving') {
     return 'freediving';
   }
@@ -118,24 +115,29 @@ class GamificationService {
       _applyXp((amount * bonusMultiplier).round());
 
   Future<XpResult> _applyXp(int xpEarned) async {
-    final profile = await _profileRepository.getUserProfile();
-    final newTotalXp = profile.totalXp + xpEarned;
-
-    // Derive the level purely from total XP (not the stored level) so it can
-    // never drift out of sync after a missed write.
+    int previousLevel = 1;
     int newLevel = 1;
-    while (newTotalXp >= xpToAdvanceFromLevel(newLevel)) {
-      newLevel++;
-    }
-
-    await _profileRepository.updateUserProfile(
-      UserProfileCompanion(
+    // Read-modify-write inside one atomic transaction — see
+    // updateUserProfileAtomically's doc comment for why a plain
+    // get-then-update here could silently lose one of two
+    // near-simultaneous XP awards (e.g. finishing a session and logging a
+    // cold shower moments apart).
+    await _profileRepository.updateUserProfileAtomically((profile) {
+      previousLevel = profile.level;
+      final newTotalXp = profile.totalXp + xpEarned;
+      // Derive the level purely from total XP (not the stored level) so it
+      // can never drift out of sync after a missed write.
+      newLevel = 1;
+      while (newTotalXp >= xpToAdvanceFromLevel(newLevel)) {
+        newLevel++;
+      }
+      return UserProfileCompanion(
         totalXp: Value(newTotalXp),
         level: Value(newLevel),
-      ),
-    );
+      );
+    });
 
-    return XpResult(xpEarned: xpEarned, previousLevel: profile.level, newLevel: newLevel);
+    return XpResult(xpEarned: xpEarned, previousLevel: previousLevel, newLevel: newLevel);
   }
 
   /// One missed day doesn't reset the streak — training every single day
@@ -144,43 +146,46 @@ class GamificationService {
   /// give up on a streak altogether once it's "ruined". Missing two or more
   /// days in a row still resets it.
   Future<StreakResult> updateStreak() async {
-    final profile = await _profileRepository.getUserProfile();
     final now = DateTime.now();
-    final lastSession = profile.lastSessionDate;
-
-    int newStreak;
+    var newStreak = 1;
     var graceUsed = false;
-    if (lastSession == null) {
-      newStreak = 1; // First ever session.
-    } else {
-      // Compare calendar days, not elapsed hours: a session late one evening
-      // and early the next morning are on consecutive days and must count.
-      final today = DateTime(now.year, now.month, now.day);
-      final lastDay =
-          DateTime(lastSession.year, lastSession.month, lastSession.day);
-      final dayGap = today.difference(lastDay).inDays;
 
-      if (dayGap == 0) {
-        newStreak = profile.dailyStreak; // Another session the same day.
-      } else if (dayGap == 1) {
-        newStreak = profile.dailyStreak + 1; // Consecutive day.
-      } else if (dayGap == 2) {
-        newStreak = profile.dailyStreak; // One missed day, forgiven.
-        graceUsed = true;
+    // Same atomicity reasoning as `_applyXp` — two near-simultaneous
+    // callers reading the same stale `dailyStreak` could otherwise let one
+    // update silently overwrite the other's.
+    await _profileRepository.updateUserProfileAtomically((profile) {
+      final lastSession = profile.lastSessionDate;
+      if (lastSession == null) {
+        newStreak = 1; // First ever session.
       } else {
-        newStreak = 1; // Two or more days missed; streak resets.
-      }
-    }
+        // Compare calendar days, not elapsed hours: a session late one
+        // evening and early the next morning are on consecutive days and
+        // must count.
+        final today = DateTime(now.year, now.month, now.day);
+        final lastDay =
+            DateTime(lastSession.year, lastSession.month, lastSession.day);
+        final dayGap = today.difference(lastDay).inDays;
 
-    final newBest =
-        newStreak > profile.bestStreak ? newStreak : profile.bestStreak;
-    await _profileRepository.updateUserProfile(
-      UserProfileCompanion(
+        if (dayGap == 0) {
+          newStreak = profile.dailyStreak; // Another session the same day.
+        } else if (dayGap == 1) {
+          newStreak = profile.dailyStreak + 1; // Consecutive day.
+        } else if (dayGap == 2) {
+          newStreak = profile.dailyStreak; // One missed day, forgiven.
+          graceUsed = true;
+        } else {
+          newStreak = 1; // Two or more days missed; streak resets.
+        }
+      }
+
+      final newBest =
+          newStreak > profile.bestStreak ? newStreak : profile.bestStreak;
+      return UserProfileCompanion(
         dailyStreak: Value(newStreak),
         lastSessionDate: Value(now),
         bestStreak: Value(newBest),
-      ),
-    );
+      );
+    });
 
     return StreakResult(streak: newStreak, graceUsed: graceUsed);
   }

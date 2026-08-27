@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:okrutnik_breath/config/formatters.dart';
 import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/levels.dart';
 import 'package:okrutnik_breath/config/responsive.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
 import 'package:okrutnik_breath/data/db/database.dart';
-import 'package:okrutnik_breath/data/repositories/freediving_repository.dart';
 import 'package:okrutnik_breath/logic/freediving/co2_o2_table_generator.dart';
 import 'package:okrutnik_breath/logic/freediving/pb_readiness.dart';
+import 'package:okrutnik_breath/logic/path/planned_session_launcher.dart';
 import 'package:okrutnik_breath/logic/path/training_path.dart';
 import 'package:okrutnik_breath/logic/path/weekly_plan.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
@@ -18,8 +19,11 @@ import 'package:okrutnik_breath/ui/screens/freediving/max_pb_test_screen.dart';
 import 'package:okrutnik_breath/ui/screens/intro_screen.dart';
 import 'package:okrutnik_breath/ui/screens/week_scheduling_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/cold_shower_card.dart';
+import 'package:okrutnik_breath/ui/widgets/done_marker.dart';
+import 'package:okrutnik_breath/ui/widgets/freediving_pb_gate.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
+import 'package:okrutnik_breath/ui/widgets/shimmer.dart';
 import 'package:okrutnik_breath/ui/widgets/week_plan_strip.dart';
 import 'package:okrutnik_breath/ui/widgets/week_preferences_sheet.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -52,33 +56,13 @@ class TodayScreen extends ConsumerWidget {
       case PathAction.o2Table:
         final profile = ref.read(freedivingProfileProvider).value;
         if (profile == null) return;
-        final pb = FreedivingRepository.effectivePb(
-          tableType: action.type == PathAction.co2Table
-              ? FreedivingTableType.co2
-              : FreedivingTableType.o2,
-          profile: profile,
-        );
-        if (pb <= 0) {
-          // Was a silent no-op — tapping today's CO2/O2 card with no active
-          // PB did nothing at all, unlike the identical check in the
-          // Scheduler's start flow (scheduler_screen.dart's
-          // `_startFromPlan`), which already explains itself.
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(L10n.get(context, 'freediving_locked_no_pb')),
-            action: SnackBarAction(
-              label: L10n.get(context, 'freediving_pb_test_cta'),
-              onPressed: () =>
-                  Navigator.of(context).push(fadeThroughRoute(const MaxPbTestScreen())),
-            ),
-          ));
-          return;
-        }
-        Navigator.of(context).push(fadeThroughRoute(FreedivingTableIntroScreen(
-          tableType: action.type == PathAction.co2Table
-              ? FreedivingTableType.co2
-              : FreedivingTableType.o2,
-          pbSeconds: pb,
-        )));
+        final tableType = action.type == PathAction.co2Table
+            ? FreedivingTableType.co2
+            : FreedivingTableType.o2;
+        final pb = checkFreedivingPbGate(context, tableType: tableType, profile: profile);
+        if (pb == null) return;
+        Navigator.of(context).push(fadeThroughRoute(
+            FreedivingTableIntroScreen(tableType: tableType, pbSeconds: pb)));
       case PathAction.coldShower:
         break; // Handled by the standalone ColdShowerCard control instead.
       case PathAction.rest:
@@ -107,6 +91,25 @@ class TodayScreen extends ConsumerWidget {
     final freedivingProfile = ref.watch(freedivingProfileProvider).value;
     final readiness = ref.watch(freedivingReadinessProvider);
 
+    // Scheduler sessions and Dziś's algorithmic suggestions are two
+    // genuinely independent sources — a scheduled session is a firm
+    // commitment at an exact time, a suggestion is just today's slot in the
+    // rotation. Rather than guess at a levelKey-matching rule to merge them
+    // (fragile: which one "counts" if both cover the same discipline?),
+    // today's scheduled sessions get their own short list up top, and the
+    // suggestion list below is untouched — so everything for today is at
+    // least visible in one place, without inventing equivalence logic
+    // between two systems that don't actually know about each other.
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final scheduledToday = (ref.watch(plannedSessionsProvider).value ?? const <PlannedSession>[])
+        .where((p) {
+          final d = p.scheduledAt;
+          return DateTime(d.year, d.month, d.day) == today;
+        })
+        .toList()
+      ..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
+
     return SafeArea(
       child: Center(
         child: ConstrainedBox(
@@ -119,9 +122,7 @@ class TodayScreen extends ConsumerWidget {
               ),
               Expanded(
                 child: (path == null || plan == null)
-                    ? const Center(
-                        child: CircularProgressIndicator(color: AppTheme.primary),
-                      )
+                    ? const _TodayLoadingSkeleton()
                     : ListView(
                         physics: const BouncingScrollPhysics(),
                         padding: const EdgeInsets.fromLTRB(
@@ -137,6 +138,7 @@ class TodayScreen extends ConsumerWidget {
                             actions: plan.days.first.actions,
                             isDesignatedRest: plan.days.first.isDesignatedRest,
                             onStart: (a) => _startAction(context, ref, a),
+                            scheduledToday: scheduledToday,
                           ),
                           const SizedBox(height: AppSpacing.lg),
                           _WeekSection(
@@ -314,8 +316,7 @@ class _WeekSectionState extends ConsumerState<_WeekSection> {
                   child: Text(
                     L10n
                         .get(context, 'path_week_pb_matched')
-                        .replaceFirst('{pb}',
-                            '${verifiedPbSec ~/ 60}:${(verifiedPbSec % 60).toString().padLeft(2, '0')}')
+                        .replaceFirst('{pb}', formatMmSs(verifiedPbSec))
                         .replaceFirst('{tier}', L10n.get(context, _tierLabelKey(readiness.tier))),
                     style: TextStyle(color: AppTheme.textDim.withAlpha(190), fontSize: 11),
                   ),
@@ -490,6 +491,7 @@ class _TodayCard extends ConsumerWidget {
     required this.actions,
     required this.onStart,
     this.isDesignatedRest = false,
+    this.scheduledToday = const [],
   });
   final List<PlannedAction> actions;
   final ValueChanged<PlannedAction> onStart;
@@ -498,6 +500,12 @@ class _TodayCard extends ConsumerWidget {
   /// place) but is the week's deliberately-reserved recovery day — see
   /// [DayPlan.isDesignatedRest].
   final bool isDesignatedRest;
+
+  /// Sessions explicitly scheduled for today via the Scheduler — a separate
+  /// data source from [actions] (this card's algorithmic suggestions), kept
+  /// deliberately un-merged; see the comment where the caller builds this
+  /// list.
+  final List<PlannedSession> scheduledToday;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -522,6 +530,28 @@ class _TodayCard extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.md),
+          if (scheduledToday.isNotEmpty) ...[
+            Text(
+              L10n.get(context, 'today_scheduled_section_title'),
+              style: const TextStyle(
+                color: AppTheme.textDim,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.0,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            for (var i = 0; i < scheduledToday.length; i++) ...[
+              if (i > 0) const SizedBox(height: AppSpacing.sm),
+              _ScheduledSessionRow(
+                plan: scheduledToday[i],
+                onTap: scheduledToday[i].completedAt == null
+                    ? () => startPlannedSession(context, ref, scheduledToday[i])
+                    : null,
+              ),
+            ],
+            const SizedBox(height: AppSpacing.md),
+          ],
           if (trainingActions.isEmpty)
             Text(
               L10n.get(context,
@@ -545,6 +575,98 @@ class _TodayCard extends ConsumerWidget {
   }
 }
 
+/// A session explicitly scheduled for today via the Scheduler — same row
+/// shape as [_TodayActionRow], plus a leading time badge to set it apart
+/// from a time-less suggestion. Deliberately not the Scheduler's own
+/// `_PlanTile` (that one also carries a delete button, which has no place
+/// here — deleting a plan is still a Scheduler-only action).
+class _ScheduledSessionRow extends StatelessWidget {
+  const _ScheduledSessionRow({required this.plan, required this.onTap});
+  final PlannedSession plan;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final level = LevelData.levels[plan.levelKey];
+    final color = level?.color ?? AppTheme.primary;
+    final name = level != null ? L10n.get(context, level.title) : plan.levelKey;
+    final time = TimeOfDay.fromDateTime(plan.scheduledAt).format(context);
+    final done = plan.completedAt != null;
+
+    return Opacity(
+      opacity: done ? DoneMarker.dimOpacity : 1.0,
+      child: PressableScale(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+              vertical: AppSpacing.sm, horizontal: AppSpacing.md),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            color: Colors.white.withAlpha(14),
+          ),
+          child: Row(
+            children: [
+              Text(
+                time,
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(
+                  name,
+                  style: TextStyle(
+                    color: AppTheme.textLight,
+                    fontSize: 14,
+                    decoration: DoneMarker.decoration(done),
+                    decorationColor: AppTheme.textDim,
+                  ),
+                ),
+              ),
+              if (done)
+                DoneMarker.icon
+              else
+                Icon(Icons.chevron_right_rounded, color: color.withAlpha(200), size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Rough silhouette of the loaded Dziś layout (profile header, today's
+/// card, week section) — shown while [trainingPathProvider]/
+/// [weeklyPlanProvider] resolve, instead of leaving the whole tab blank
+/// behind a bare spinner.
+class _TodayLoadingSkeleton extends StatelessWidget {
+  const _TodayLoadingSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Shimmer(
+      child: ListView(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.xl),
+        children: const [
+          ShimmerBox(height: 56, borderRadius: 28),
+          SizedBox(height: AppSpacing.lg),
+          ShimmerBox(height: 180),
+          SizedBox(height: AppSpacing.lg),
+          ShimmerBox(height: 120),
+          SizedBox(height: AppSpacing.lg),
+          ShimmerBox(height: 140),
+        ],
+      ),
+    );
+  }
+}
+
 class _TodayActionRow extends StatelessWidget {
   const _TodayActionRow({required this.action, required this.onTap, this.done = false});
   final PlannedAction action;
@@ -561,7 +683,7 @@ class _TodayActionRow extends StatelessWidget {
     final languageCode = Localizations.localeOf(context).languageCode;
     final color = plannedActionColor(action);
     return Opacity(
-      opacity: done ? 0.6 : 1.0,
+      opacity: done ? DoneMarker.dimOpacity : 1.0,
       child: PressableScale(
         onTap: onTap,
         child: Container(
@@ -581,13 +703,13 @@ class _TodayActionRow extends StatelessWidget {
                   style: TextStyle(
                     color: AppTheme.textLight,
                     fontSize: 14,
-                    decoration: done ? TextDecoration.lineThrough : null,
+                    decoration: DoneMarker.decoration(done),
                     decorationColor: AppTheme.textDim,
                   ),
                 ),
               ),
               if (done)
-                const Icon(Icons.check_circle_rounded, color: AppTheme.primary, size: 20)
+                DoneMarker.icon
               else
                 Icon(Icons.chevron_right_rounded, color: color.withAlpha(200), size: 20),
             ],

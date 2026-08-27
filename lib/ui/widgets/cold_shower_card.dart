@@ -34,6 +34,11 @@ class _ColdShowerCardState extends ConsumerState<ColdShowerCard> {
 
   int? _durationSec;
 
+  /// Guards `_log` against a fast double-tap logging two showers for one —
+  /// the row has no other disabled/pressed visual state to communicate
+  /// "already handling this", so the guard is purely in the handler.
+  bool _logging = false;
+
   // A first-time default of 60s contradicted the app's own advice
   // (coldshower_warning3/guide_coldshower_warning1: "never start cold,
   // ease in gradually") — a brand-new user with no history yet now starts
@@ -158,17 +163,23 @@ class _ColdShowerCardState extends ConsumerState<ColdShowerCard> {
   }
 
   Future<void> _log(BuildContext context, WidgetRef ref) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final result = await logColdShowerSession(ref, durationSec: _durationFor(ref));
-    if (context.mounted) {
-      messenger.showSnackBar(SnackBar(
-        content: Text(L10n.get(context, 'coldshower_logged_toast')),
-        duration: const Duration(seconds: 5),
-        action: SnackBarAction(
-          label: L10n.get(context, 'common_undo'),
-          onPressed: () => undoColdShowerSession(ref, result),
-        ),
-      ));
+    if (_logging) return;
+    _logging = true;
+    try {
+      final messenger = ScaffoldMessenger.of(context);
+      final result = await logColdShowerSession(ref, durationSec: _durationFor(ref));
+      if (context.mounted) {
+        messenger.showSnackBar(SnackBar(
+          content: Text(L10n.get(context, 'coldshower_logged_toast')),
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: L10n.get(context, 'common_undo'),
+            onPressed: () => undoColdShowerSession(ref, result),
+          ),
+        ));
+      }
+    } finally {
+      _logging = false;
     }
   }
 

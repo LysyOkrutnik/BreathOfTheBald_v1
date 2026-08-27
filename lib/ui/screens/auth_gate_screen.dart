@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:okrutnik_breath/config/constants.dart';
 import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
@@ -30,11 +31,6 @@ class AuthGateScreen extends ConsumerStatefulWidget {
 class _AuthGateScreenState extends ConsumerState<AuthGateScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-
-  // A deliberately simple format check — good enough to catch typos before
-  // a round trip to the server, not a full RFC 5322 validator.
-  static final _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
-  static const _minPasswordLength = 8;
 
   bool _loading = false;
   bool _registering = false;
@@ -65,10 +61,10 @@ class _AuthGateScreenState extends ConsumerState<AuthGateScreen> {
 
   String? _validationErrorKey() {
     final email = _emailController.text.trim();
-    if (!_emailPattern.hasMatch(email)) {
+    if (!AppConstants.emailPattern.hasMatch(email)) {
       return 'account_error_invalid_email_format';
     }
-    if (_passwordController.text.length < _minPasswordLength) {
+    if (_passwordController.text.length < AppConstants.minPasswordLength) {
       return 'account_error_password_too_short';
     }
     return null;

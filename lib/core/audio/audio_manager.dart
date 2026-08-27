@@ -94,11 +94,23 @@ class AudioManager {
   Future<void> playGong() => _replay(_gongPlayer);
 
   /// Restarts a pre-loaded cue from the beginning without re-decoding it.
+  /// `play()` itself stays fire-and-forget deliberately — its Future only
+  /// completes once the *whole cue finishes playing*, and cues fire as
+  /// often as every ~700ms; awaiting it here would stall whatever phase
+  /// transition triggered this cue until playback ends. It still needs its
+  /// own `catchError`, though — `unawaited()` opts a future out of the
+  /// surrounding try/catch entirely, so a rejection from `play()` itself
+  /// (audio focus loss, or the player mid-`dispose()` while a cue is still
+  /// in flight) used to surface as an unhandled async exception instead of
+  /// the same quiet log every other failure path in this file gets.
   Future<void> _replay(AudioPlayer player) async {
     if (!soundEnabled) return;
     try {
       await player.seek(Duration.zero);
-      unawaited(player.play());
+      unawaited(player.play().catchError((Object e, StackTrace st) {
+        developer.log('SFX playback failed',
+            name: 'AudioManager', error: e, stackTrace: st);
+      }));
     } catch (e, st) {
       developer.log('SFX playback failed',
           name: 'AudioManager', error: e, stackTrace: st);

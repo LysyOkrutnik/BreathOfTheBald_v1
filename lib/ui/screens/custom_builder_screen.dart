@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:okrutnik_breath/config/formatters.dart';
 import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/levels.dart';
 import 'package:okrutnik_breath/config/responsive.dart';
@@ -82,8 +83,6 @@ class _CustomBuilderScreenState extends ConsumerState<CustomBuilderScreen> {
   static const int _hyperventilationWarningCycles = 100;
   bool get _exceedsHyperventilationThreshold =>
       _cycles * _rounds > _hyperventilationWarningCycles;
-
-  String _fmt(int s) => "${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}";
 
   LevelData _buildLevel() {
     final name = _nameController.text.trim();
@@ -264,7 +263,7 @@ class _CustomBuilderScreenState extends ConsumerState<CustomBuilderScreen> {
                             onChanged: (v) => setState(() => _rounds = v),
                           ),
                           const SizedBox(height: AppSpacing.lg),
-                          _TotalTime(label: L10n.get(context, 'custom_total'), value: _fmt(_totalSeconds)),
+                          _TotalTime(label: L10n.get(context, 'custom_total'), value: formatMmSs(_totalSeconds)),
                           const SizedBox(height: AppSpacing.lg),
                           Row(
                             children: [

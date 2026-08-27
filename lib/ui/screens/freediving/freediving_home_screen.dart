@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:okrutnik_breath/config/formatters.dart';
 import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/responsive.dart';
 import 'package:okrutnik_breath/config/theme.dart';
@@ -22,6 +23,7 @@ import 'package:okrutnik_breath/ui/screens/session_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/confirm_dialog.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
+import 'package:okrutnik_breath/ui/widgets/shimmer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// The "Freediving" bottom-nav tab. Only ever shown as a shell tab root —
@@ -53,9 +55,7 @@ class FreedivingHomeScreen extends ConsumerWidget {
               ),
               Expanded(
                 child: profileAsync.when(
-                  loading: () => const Center(
-                    child: CircularProgressIndicator(color: AppTheme.danger),
-                  ),
+                  loading: () => const _FreedivingLoadingSkeleton(),
                   error: (_, __) => const SizedBox.shrink(),
                   data: (profile) {
                     if (profile == null || profile.safetyAcknowledgedAt == null) {
@@ -72,6 +72,30 @@ class FreedivingHomeScreen extends ConsumerWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Rough silhouette of the loaded Freediving tab (PB card, a couple of
+/// table cards) — shown while the freediving profile stream resolves,
+/// instead of leaving the whole tab blank behind a bare spinner.
+class _FreedivingLoadingSkeleton extends StatelessWidget {
+  const _FreedivingLoadingSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Shimmer(
+      child: ListView(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(0, AppSpacing.md, 0, AppSpacing.xl),
+        children: const [
+          ShimmerBox(height: 150),
+          SizedBox(height: AppSpacing.lg),
+          ShimmerBox(height: 110),
+          SizedBox(height: AppSpacing.md),
+          ShimmerBox(height: 110),
+        ],
       ),
     );
   }
@@ -502,7 +526,7 @@ class _PbCard extends StatelessWidget {
                 Icon(Icons.timer_outlined, color: AppTheme.primary, size: 22),
                 const SizedBox(width: AppSpacing.md),
                 Text(
-                  '${verified ~/ 60}:${(verified % 60).toString().padLeft(2, '0')}',
+                  formatMmSs(verified),
                   style: const TextStyle(
                     color: AppTheme.textLight,
                     fontSize: 26,
@@ -546,8 +570,7 @@ class _PbCard extends StatelessWidget {
                   Icon(Icons.timer_outlined, color: AppTheme.accent, size: 18),
                   const SizedBox(width: AppSpacing.md),
                   Text(
-                    '${profile.verifiedPbCo2Sec! ~/ 60}:'
-                    '${(profile.verifiedPbCo2Sec! % 60).toString().padLeft(2, '0')}',
+                    formatMmSs(profile.verifiedPbCo2Sec!),
                     style: const TextStyle(
                       color: AppTheme.textLight,
                       fontSize: 18,

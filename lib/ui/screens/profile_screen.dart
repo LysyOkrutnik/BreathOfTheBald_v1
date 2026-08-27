@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:okrutnik_breath/config/formatters.dart';
 import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/theme.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
@@ -13,6 +14,7 @@ import 'package:okrutnik_breath/ui/screens/stats_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/confirm_dialog.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
+import 'package:okrutnik_breath/ui/widgets/shimmer.dart';
 
 /// The "Ty" bottom-nav tab — replaces the old "Więcej" grab-bag. Level/XP/
 /// streak, session history and the new Wyzwania (Challenges) leaderboard are
@@ -192,7 +194,7 @@ class ChallengesContent extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final challengesAsync = ref.watch(challengesProvider);
     return challengesAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator(color: AppTheme.primary)),
+      loading: () => const _ChallengesLoadingSkeleton(),
       error: (_, __) => Center(
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),
@@ -221,6 +223,47 @@ class ChallengesContent extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _LeaderboardLoadingSkeleton extends StatelessWidget {
+  const _LeaderboardLoadingSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Shimmer(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+        child: Column(
+          children: List.generate(
+            5,
+            (_) => const Padding(
+              padding: EdgeInsets.only(bottom: AppSpacing.sm),
+              child: ShimmerBox(height: 20, borderRadius: 6),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChallengesLoadingSkeleton extends StatelessWidget {
+  const _ChallengesLoadingSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Shimmer(
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: 3,
+        itemBuilder: (_, __) => const Padding(
+          padding: EdgeInsets.only(bottom: AppSpacing.md),
+          child: ShimmerBox(height: 92),
+        ),
+      ),
     );
   }
 }
@@ -332,9 +375,7 @@ class _LeaderboardView extends ConsumerWidget {
       case 'STREAK':
         return '$value ${L10n.get(context, 'challenges_metric_streak_unit')}';
       case 'TOTAL_RETENTION_SEC':
-        final minutes = value ~/ 60;
-        final seconds = value % 60;
-        return '$minutes:${seconds.toString().padLeft(2, '0')}';
+        return formatMmSs(value);
       default:
         return '$value ${L10n.get(context, 'challenges_metric_sessions_unit')}';
     }
@@ -353,10 +394,7 @@ class _LeaderboardView extends ConsumerWidget {
         ),
         const SizedBox(height: AppSpacing.lg),
         entriesAsync.when(
-          loading: () => const Padding(
-            padding: EdgeInsets.all(AppSpacing.lg),
-            child: CircularProgressIndicator(color: AppTheme.primary),
-          ),
+          loading: () => const _LeaderboardLoadingSkeleton(),
           error: (_, __) => Padding(
             padding: const EdgeInsets.all(AppSpacing.lg),
             child: Text(L10n.get(context, 'challenges_error'),

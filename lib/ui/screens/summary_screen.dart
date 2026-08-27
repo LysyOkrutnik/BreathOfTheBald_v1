@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:okrutnik_breath/config/formatters.dart';
 import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/levels.dart';
 import 'package:okrutnik_breath/config/responsive.dart';
@@ -96,9 +97,6 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
     }
   }
 
-  String _fmt(Duration d) =>
-      "${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}";
-
   /// A guided-routine hold of fixed duration (e.g. Uddiyana's 7s vacuum,
   /// repeated identically every round by construction) logs the exact same
   /// value N times — showing N identical "Round X: 7s" chips reads as
@@ -111,7 +109,7 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
       return [
         _RetentionChip(
           label:
-              "${logs.length} ${L10n.get(context, 'summary_retention_fixed_count_suffix')} ${_fmt(logs.first)}",
+              "${logs.length} ${L10n.get(context, 'summary_retention_fixed_count_suffix')} ${formatDurationMmSs(logs.first)}",
         ),
       ];
     }
@@ -119,7 +117,7 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
       for (final e in logs.asMap().entries)
         _RetentionChip(
           label:
-              "${L10n.get(context, 'summary_retention_round')} ${e.key + 1}: ${_fmt(e.value)}",
+              "${L10n.get(context, 'summary_retention_round')} ${e.key + 1}: ${formatDurationMmSs(e.value)}",
         ),
     ];
   }
@@ -318,7 +316,7 @@ class _SummaryScreenState extends ConsumerState<SummaryScreen> {
                       _StatRow(
                         icon: Icons.timer_outlined,
                         label: L10n.get(context, 'summary_stat_duration'),
-                        value: _fmt(duration),
+                        value: formatDurationMmSs(duration),
                         delay: 300,
                       ),
                       if (state.totalRounds > 1) ...[
@@ -749,9 +747,6 @@ class _ContractionSummaryCard extends StatelessWidget {
   const _ContractionSummaryCard({required this.summary});
   final RoundContractionSummary summary;
 
-  String _fmt(int seconds) =>
-      "${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}";
-
   @override
   Widget build(BuildContext context) {
     return GlassCard(
@@ -775,7 +770,7 @@ class _ContractionSummaryCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${_fmt(summary.averageFirstContractionSec)} '
+                  '${formatMmSs(summary.averageFirstContractionSec)} '
                   '(${summary.roundsMarked}/${summary.totalRounds} ${L10n.get(context, 'summary_contraction_rounds')})',
                   style: const TextStyle(
                     color: AppTheme.textLight,

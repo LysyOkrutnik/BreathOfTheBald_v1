@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:okrutnik_breath/config/l10n.dart';
@@ -14,6 +15,7 @@ import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/ui/screens/freediving/max_pb_test_screen.dart';
 import 'package:okrutnik_breath/config/transitions.dart';
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
+import 'package:okrutnik_breath/ui/widgets/exact_alarm_outcome.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
 import 'package:okrutnik_breath/ui/widgets/week_plan_strip.dart' show plannedActionColor, plannedActionIcon;
@@ -145,7 +147,7 @@ class _WeekSchedulingScreenState extends ConsumerState<WeekSchedulingScreen> {
         child: child!,
       ),
     );
-    if (picked == null) return;
+    if (picked == null || !mounted) return;
     setState(() {
       session.time = picked;
       session.skipped = false;
@@ -207,13 +209,15 @@ class _WeekSchedulingScreenState extends ConsumerState<WeekSchedulingScreen> {
     // Bulk-planning used to skip this entirely — a whole week's worth of
     // reminders could silently never fire on a stricter Android build,
     // with no indication why, unlike the one-by-one Scheduler add flow
-    // which already checks this.
-    final canScheduleExact = await notifications.canScheduleExactAlarms();
+    // which already checks this. This also used to be the one of the
+    // three call sites missing the "ALLOW" snackbar action the other two
+    // had — just swapped the success message's text, nothing more.
+    await showSchedulingOutcomeSnackBar(
+      context,
+      notifications: notifications,
+      successMessageKey: 'path_week_planned_toast',
+    );
     if (!mounted) return;
-    messenger.showSnackBar(SnackBar(
-      content: Text(L10n.get(
-          context, canScheduleExact ? 'path_week_planned_toast' : 'planner_saved_needs_permission')),
-    ));
     Navigator.of(context).pop();
   }
 
@@ -279,7 +283,16 @@ class _WeekSchedulingScreenState extends ConsumerState<WeekSchedulingScreen> {
                     const SizedBox(height: AppSpacing.md),
                     Expanded(
                       child: _sessions.isEmpty
-                          ? const SizedBox.shrink()
+                          ? Center(
+                              // The "why empty" explanation already sits in
+                              // the caption above — this is just a visual
+                              // anchor for the otherwise-blank body, not a
+                              // second copy of the message.
+                              child: Icon(Icons.event_available_outlined,
+                                      size: 64, color: AppTheme.textDim.withAlpha(90))
+                                  .animate()
+                                  .fadeIn(duration: AppMotion.slow),
+                            )
                           : ListView(
                               physics: const BouncingScrollPhysics(),
                               padding: const EdgeInsets.fromLTRB(

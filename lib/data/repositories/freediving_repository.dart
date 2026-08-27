@@ -12,6 +12,15 @@ class FreedivingRepository {
 
   final AppDatabase _db;
 
+  /// Custom tables, packing, and Uddiyana have no PB cap and no baseline PB
+  /// to adjust — used to be an inline `custom || packing` check duplicated
+  /// verbatim at both RPE- and symptom-driven adjustment sites; a table
+  /// type added in future only needs to be listed here once.
+  static bool _hasNoPbBaseline(FreedivingTableType t) =>
+      t == FreedivingTableType.custom ||
+      t == FreedivingTableType.packing ||
+      t == FreedivingTableType.uddiyana;
+
   static DateTime? _laterOf(DateTime? a, DateTime? b) {
     if (a == null) return b;
     if (b == null) return a;
@@ -23,6 +32,7 @@ class FreedivingRepository {
         FreedivingTableType.o2 => 'o2',
         FreedivingTableType.custom => 'custom',
         FreedivingTableType.packing => 'packing',
+        FreedivingTableType.uddiyana => 'uddiyana',
       };
 
   /// Mirrors the Wim Hof ladder's detraining rollback for freediving's
@@ -200,13 +210,9 @@ class FreedivingRepository {
           .write(FreedivingSessionLogCompanion(rpeScore: Value(rpeScore)));
     }
 
-    // Custom tables and packing have no PB cap and no baseline PB to
-    // adjust — recording the rating on the log row above is all there is
-    // to do for them.
-    if (tableType == FreedivingTableType.custom ||
-        tableType == FreedivingTableType.packing) {
-      return;
-    }
+    // Recording the rating on the log row above is all there is to do for
+    // a type with no baseline PB to adjust.
+    if (_hasNoPbBaseline(tableType)) return;
 
     final profile = await getProfile();
     // Both table types are safety-capped against the same real, verified
@@ -280,12 +286,9 @@ class FreedivingRepository {
         .where((l) => _concerningSymptoms.contains(l.symptomTag))
         .isNotEmpty;
     if (!priorConcerning) return; // First report — not a pattern yet.
-    // Custom tables and packing have no baseline PB to ease — the tag is
-    // still recorded above as a pure safety signal.
-    if (tableType == FreedivingTableType.custom ||
-        tableType == FreedivingTableType.packing) {
-      return;
-    }
+    // A type with no baseline PB has nothing to ease — the tag is still
+    // recorded above as a pure safety signal.
+    if (_hasNoPbBaseline(tableType)) return;
 
     final profile = await getProfile();
     final verifiedPb = profile.verifiedPbSec;

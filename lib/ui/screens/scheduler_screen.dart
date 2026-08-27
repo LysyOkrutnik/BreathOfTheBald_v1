@@ -8,20 +8,17 @@ import 'package:okrutnik_breath/config/l10n.dart';
 import 'package:okrutnik_breath/config/levels.dart';
 import 'package:okrutnik_breath/config/responsive.dart';
 import 'package:okrutnik_breath/config/theme.dart';
-import 'package:okrutnik_breath/config/transitions.dart';
 import 'package:okrutnik_breath/core/notifications/notification_service.dart';
 import 'package:okrutnik_breath/data/db/database.dart';
-import 'package:okrutnik_breath/data/repositories/freediving_repository.dart';
-import 'package:okrutnik_breath/logic/freediving/co2_o2_table_generator.dart';
-import 'package:okrutnik_breath/logic/path/cold_shower.dart';
+import 'package:okrutnik_breath/logic/path/planned_session_launcher.dart';
 import 'package:okrutnik_breath/logic/providers/data_providers.dart';
 import 'package:okrutnik_breath/logic/wimhof/wimhof_progression.dart'
     show kHardWimHofLevels;
-import 'package:okrutnik_breath/ui/screens/freediving/max_pb_test_screen.dart';
-import 'package:okrutnik_breath/ui/screens/intro_screen.dart';
 import 'package:okrutnik_breath/ui/widgets/app_background.dart';
 import 'package:okrutnik_breath/ui/widgets/confirm_dialog.dart';
 import 'package:okrutnik_breath/ui/widgets/day_timeline.dart';
+import 'package:okrutnik_breath/ui/widgets/done_marker.dart';
+import 'package:okrutnik_breath/ui/widgets/exact_alarm_outcome.dart';
 import 'package:okrutnik_breath/ui/widgets/glass_card.dart';
 import 'package:okrutnik_breath/ui/widgets/month_calendar.dart';
 import 'package:okrutnik_breath/ui/widgets/screen_header.dart';
@@ -124,7 +121,7 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen> {
       plansLoading: plansAsync.isLoading,
       onAdd: () => _showAddSheet(context),
       onDelete: _deletePlan,
-      onStart: _startFromPlan,
+      onStart: (plan) => startPlannedSession(context, ref, plan),
       // In the single-pane phone layout the month grid above already
       // leaves little headroom, so the timeline gets a fixed preview height
       // (its own internal scroll) and the whole calendar + day panel column
@@ -210,67 +207,6 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen> {
   /// levels start unchanged. (The scheduler's own add sheet excludes these
   /// from the plannable list; both branches exist because "Twoja Ścieżka"
   /// can plan them directly.)
-  Future<void> _startFromPlan(PlannedSession plan) async {
-    final level = LevelData.levels[plan.levelKey];
-    if (level == null) return;
-
-    if (level.key == 'freediving_pb_test') {
-      Navigator.of(context)
-          .push(fadeThroughRoute(MaxPbTestScreen(plannedSessionId: plan.id)));
-      return;
-    }
-    if (level.key == coldShowerLevelKey) {
-      // No guided screen for this one either — logging it *is* "starting" it,
-      // so it's done the instant this returns rather than waiting on a
-      // session lifecycle that doesn't apply here.
-      final messenger = ScaffoldMessenger.of(context);
-      final result = await logColdShowerSession(ref);
-      unawaited(ref.read(plannerRepositoryProvider).completePlan(plan.id));
-      if (mounted) {
-        messenger.showSnackBar(SnackBar(
-          content: Text(L10n.get(context, 'coldshower_logged_toast')),
-          duration: const Duration(seconds: 5),
-          action: SnackBarAction(
-            label: L10n.get(context, 'common_undo'),
-            onPressed: () => undoColdShowerSession(ref, result),
-          ),
-        ));
-      }
-      return;
-    }
-
-    var toStart = level;
-    if (level.type == ExerciseType.co2Table ||
-        level.type == ExerciseType.o2Table) {
-      final profile = await ref.read(freedivingRepositoryProvider).getProfile();
-      final tableType = level.type == ExerciseType.co2Table
-          ? FreedivingTableType.co2
-          : FreedivingTableType.o2;
-      final pb = FreedivingRepository.effectivePb(
-          tableType: tableType, profile: profile);
-      if (pb <= 0) {
-        // Was a silent no-op — tapping a planned CO2/O2 table with no PB yet
-        // did nothing at all, with no indication why.
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(L10n.get(context, 'freediving_locked_no_pb')),
-            action: SnackBarAction(
-              label: L10n.get(context, 'freediving_pb_test_cta'),
-              onPressed: () => Navigator.of(context)
-                  .push(fadeThroughRoute(const MaxPbTestScreen())),
-            ),
-          ));
-        }
-        return;
-      }
-      toStart = LevelData.freedivingTable(tableType: tableType, pbSeconds: pb);
-    }
-    if (mounted) {
-      Navigator.of(context).push(
-          fadeThroughRoute(IntroScreen(level: toStart, plannedSessionId: plan.id)));
-    }
-  }
-
   Future<void> _deletePlan(PlannedSession plan) async {
     final confirmed = await showGlassConfirm(
       context,
@@ -413,7 +349,9 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen> {
                                 child: child!,
                               ),
                             );
-                            if (picked != null) setSheet(() => time = picked);
+                            if (picked != null && sheetContext.mounted) {
+                              setSheet(() => time = picked);
+                            }
                           },
                           child: GlassCard(
                             padding: const EdgeInsets.symmetric(
@@ -549,7 +487,6 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen> {
     final reminderTitle = L10n.get(context, 'planner_reminder_title');
     final levelName = L10n.get(context, level.title);
     final timeStr = time.format(context);
-    final savedMessage = L10n.get(context, 'planner_saved');
 
     try {
       final planId = await ref.read(plannerRepositoryProvider).addPlan(
@@ -570,23 +507,12 @@ class _SchedulerScreenState extends ConsumerState<SchedulerScreen> {
       // (asking beforehand read as premature), but that means this first
       // save might just have silently failed to schedule a working reminder
       // — check right here instead of leaving it to be silently discovered.
-      final canScheduleExact = await notifications.canScheduleExactAlarms();
-      if (!mounted) return;
-      if (!canScheduleExact) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(L10n.get(context, 'planner_saved_needs_permission')),
-          action: SnackBarAction(
-            label: L10n.get(context, 'planner_exact_alarm_allow'),
-            onPressed: () {
-              notifications.requestExactAlarmsPermission();
-              _checkExactAlarmPermission();
-            },
-          ),
-        ));
-      } else {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(savedMessage)));
-      }
+      await showSchedulingOutcomeSnackBar(
+        context,
+        notifications: notifications,
+        successMessageKey: 'planner_saved',
+        onAllowPressed: _checkExactAlarmPermission,
+      );
     } catch (e, st) {
       developer.log('Error saving plan',
           name: 'SchedulerScreen', error: e, stackTrace: st);
@@ -833,7 +759,7 @@ class _PlanTile extends StatelessWidget {
     // used to look pixel-identical to an untouched one, with no way to tell
     // "already done" from "still upcoming" on the calendar.
     return Opacity(
-      opacity: done ? 0.55 : 1.0,
+      opacity: done ? DoneMarker.dimOpacity : 1.0,
       child: GlassCard(
         gradient: done ? null : AppTheme.cardGradient(color),
         padding: const EdgeInsets.symmetric(
@@ -857,7 +783,7 @@ class _PlanTile extends StatelessWidget {
                   color: AppTheme.textLight,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  decoration: done ? TextDecoration.lineThrough : null,
+                  decoration: DoneMarker.decoration(done),
                   decorationColor: AppTheme.textDim,
                 ),
               ),
@@ -865,8 +791,7 @@ class _PlanTile extends StatelessWidget {
             if (done)
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                child:
-                    Icon(Icons.check_circle_rounded, color: AppTheme.primary, size: 20),
+                child: DoneMarker.icon,
               )
             else if (level != null)
               IconButton(

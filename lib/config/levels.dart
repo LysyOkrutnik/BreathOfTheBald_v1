@@ -123,19 +123,13 @@ int packingGulpCountFor(int completedSessions) {
 /// open-ended/user-timed and have no LevelData entry at all to build this
 /// estimate from.
 int estimatedDurationSecForLevel(LevelData level) {
-  // Both keyed onto an existing ExerciseType purely so they can flow
-  // through generic level-based screens (IntroScreen etc.) — neither is
-  // actually that type, so each needs its own estimate before falling into
-  // the type-based switch below, which would otherwise misclassify them
-  // (freediving_pb_test's LevelData entry uses ExerciseType.co2Table as a
-  // borrowed placeholder, which the switch would otherwise read as a real,
+  // Checked before the type-based switch below, which would otherwise
+  // misclassify an open-ended level keyed onto a borrowed ExerciseType
+  // purely so it can flow through generic level-based screens (e.g.
+  // freediving_pb_test's LevelData entry uses ExerciseType.co2Table as a
+  // placeholder, which the switch would otherwise read as a real,
   // fixed-schedule CO2 table and return 0 for).
-  if (level.key == 'freediving_pb_test') {
-    return 5 * 60; // Genuinely open-ended (a max-effort hold) — rough guess.
-  }
-  if (level.key == 'cold_shower') {
-    return 60; // No fixed session shape either — rough default.
-  }
+  if (level.openEndedEstimateSec case final sec?) return sec;
 
   switch (level.type) {
     case ExerciseType.wimHof:
@@ -229,6 +223,37 @@ class LevelData {
   /// another bullet in the numbered steps above. Null shows no banner.
   final String? introWarningKey;
 
+  /// Set only for the exercises with no fixed session shape at all
+  /// (`freediving_pb_test`, `cold_shower`) — driven by their own bespoke
+  /// screen/flow instead of the generic session engine, so a genuine
+  /// duration can never be known ahead of time. A rough, documented-as-a-
+  /// guess fallback (seconds) for calendar/duration-estimation purposes
+  /// only, never shown to the user as a real session length. Replaces what
+  /// used to be independent `level.key == 'freediving_pb_test'`/
+  /// `'cold_shower'` string checks with their own hardcoded numbers in
+  /// `estimatedDurationSecForLevel` — a third such exercise only needs
+  /// this one field set now, instead of a new branch added there.
+  final int? openEndedEstimateSec;
+
+  /// Extra recovery time (seconds) added on top of the classic method's
+  /// fixed 15s, on this level's own *final* round only — 0 for every level
+  /// except guru, whose 5th and final round caps 4 prior rounds of
+  /// hyperventilation+retention with the most cumulative load anywhere in
+  /// the ladder. A data field instead of a `level.key == 'guru'` string
+  /// check inside the shared Wim Hof recovery timer.
+  final int finalRoundExtraRecoverySec;
+
+  /// Whether finishing this session should log a safety check-in
+  /// (symptom-pattern tracking that can ease the working PB the same way a
+  /// "brutal" RPE rating would) — true for exercises with a genuine
+  /// breath-hold risk profile but no PB of their own to cap against
+  /// (packing, Uddiyana Bandha's vacuum hold), same real risk category the
+  /// audit called out for the CO2/O2 tables next to them. A data field
+  /// instead of a `level.key == 'freediving_packing'` string check bolted
+  /// onto session teardown — a future exercise with the same risk profile
+  /// just needs this flag set, instead of a new branch added there.
+  final bool recordsSafetyLog;
+
   const LevelData({
     required this.title,
     required this.subtitle,
@@ -252,6 +277,9 @@ class LevelData {
     required this.instructionDescriptionKey,
     required this.instructionStepKeys,
     this.introWarningKey,
+    this.openEndedEstimateSec,
+    this.finalRoundExtraRecoverySec = 0,
+    this.recordsSafetyLog = false,
   });
 
   /// Builds a runtime [LevelData] for a user-defined custom pattern. [cycles]
@@ -382,7 +410,11 @@ class LevelData {
       title: isCo2 ? 'freediving_co2_title' : 'freediving_o2_title',
       subtitle: isCo2 ? 'freediving_co2_subtitle' : 'freediving_o2_subtitle',
       type: isCo2 ? ExerciseType.co2Table : ExerciseType.o2Table,
-      totalRounds: rounds,
+      // From the actually-generated list, not the raw `rounds` input —
+      // the generator clamps a `rounds < 2` input up to 2 internally (a
+      // stored/synced source could pass one), so using the input directly
+      // here could disagree with `freedivingRounds.length` below.
+      totalRounds: generatedRounds.length,
       freedivingRounds: generatedRounds,
       freedivingPbUsedSec: pbSeconds,
       color: isCo2 ? const Color(0xFF4FC3F7) : const Color(0xFFFF7043),
@@ -496,6 +528,10 @@ class LevelData {
       totalRounds: 5,
       totalBreaths: 60,
       breathPace: Duration(milliseconds: 1800),
+      // Round 5 (index 4, the last) caps 4 prior rounds of the ladder's
+      // most cumulative load with a few extra seconds of recovery — see
+      // the field's own doc comment.
+      finalRoundExtraRecoverySec: 10,
       cycleSteps: [
         CycleStep(labelKey: "session_breathing_phase", countLabel: "×60"),
         CycleStep(labelKey: "session_hold"),
@@ -646,6 +682,7 @@ class LevelData {
       instructionTitleKey: "freediving_pb_test_title",
       instructionDescriptionKey: "freediving_pb_test_intro",
       instructionStepKeys: [],
+      openEndedEstimateSec: 5 * 60,
     ),
     'cold_shower': LevelData(
       key: 'cold_shower',
@@ -656,6 +693,7 @@ class LevelData {
       instructionTitleKey: "coldshower_title",
       instructionDescriptionKey: "coldshower_title",
       instructionStepKeys: [],
+      openEndedEstimateSec: 60,
     ),
 
     // --- LUNG MOBILITY / DIAPHRAGM (guidedRoutine) ---
@@ -704,6 +742,11 @@ class LevelData {
         "guide_uddiyana_step5",
       ],
       introWarningKey: "warning_uddiyana",
+      // The vacuum hold below carries genuine risk (same category the
+      // audit called out for packing/CO2/O2), so it gets the same
+      // safety-signal logging even though it's a guidedRoutine with no PB
+      // of its own to log against.
+      recordsSafetyLog: true,
       guidedSteps: [
         GuidedStep(labelKey: "guided_uddiyana_inhale", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: true, cycleStepIndex: 0),
         GuidedStep(labelKey: "guided_uddiyana_exhale", durationSec: 3, phase: GuidedStepPhase.breath, isInhale: false, cycleStepIndex: 1),
@@ -843,6 +886,9 @@ class LevelData {
       type: ExerciseType.guidedRoutine,
       totalRounds: 1,
       color: Color(0xFFEF5350),
+      // Carries the same real risks (barotrauma, gas embolism, blackout)
+      // the audit called out for the CO2/O2 tables next to it.
+      recordsSafetyLog: true,
       instructionTitleKey: "exercise_packing_title",
       instructionDescriptionKey: "exercise_packing_subtitle",
       instructionStepKeys: [

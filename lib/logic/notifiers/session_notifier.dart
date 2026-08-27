@@ -17,6 +17,34 @@ import 'package:okrutnik_breath/logic/providers/settings_provider.dart';
 import 'package:okrutnik_breath/logic/states/session_state.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
+/// One step of a fixed breathing pattern (box breathing, 4-7-8) — see
+/// [SessionNotifier._runPhaseCycle].
+class _BreathPhase {
+  const _BreathPhase({
+    required this.label,
+    required this.desc,
+    required this.isBig,
+    required this.isInhaling,
+    required this.duration,
+    this.signal,
+    this.haptic = false,
+  });
+
+  final String label;
+  final String desc;
+  final bool isBig;
+  final bool isInhaling;
+  final Duration duration;
+
+  /// Whether to play the inhale/exhale breath signal on entering this phase
+  /// (`true`/`false`), or nothing (`null`).
+  final bool? signal;
+
+  /// Whether to play a plain haptic tick on entering this phase (used for
+  /// hold phases, which have no inhale/exhale signal of their own).
+  final bool haptic;
+}
+
 final sessionProvider = StateNotifierProvider<SessionNotifier, SessionState>((ref) {
   final audioManager = ref.read(audioManagerProvider);
   return SessionNotifier(audioManager, ref);
@@ -436,12 +464,19 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
         return;
       }
       final elapsed = DateTime.now().difference(start);
+      // Update state with the real `elapsed` *before* checking completion —
+      // `_finishFreedivingHold` reads the hold's duration back out of
+      // `state.phase`'s retention value, so on the tick that actually
+      // reaches `target`, that value needs to already reflect this tick's
+      // elapsed time. The old order skipped this update whenever the target
+      // was reached (only the `else` path updated state), so every fully
+      // completed hold logged the *previous* tick's elapsed time — up to
+      // ~1s short of the real/planned duration.
+      state = state.copyWith(phase: SessionPhase.retention(elapsed: elapsed));
       if (elapsed >= target) {
         t.cancel();
         _finishFreedivingHold(completedFull: true);
-        return;
       }
-      state = state.copyWith(phase: SessionPhase.retention(elapsed: elapsed));
     });
   }
 
@@ -861,14 +896,13 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
 
   void _startRecovery() {
     try { _audioManager.playInhale(); _audioManager.unduckDrone(); } catch (_) {}
-    // Recovery is a fixed 15s at every level/round by classic-method design
-    // — except guru's 5th and final round, which caps 4 prior rounds of
-    // hyperventilation+retention with the most cumulative load anywhere in
-    // the ladder. A few extra seconds there specifically, not a change to
-    // the method's core rhythm everywhere else.
-    final isGuruFinalRecovery =
-        _currentLevel!.key == 'guru' && state.currentRound == 4;
-    int sec = isGuruFinalRecovery ? 25 : 15;
+    // Recovery is a fixed 15s at every level/round by classic-method
+    // design, plus this level's own `finalRoundExtraRecoverySec` (only
+    // guru sets one, non-zero) on its own final round specifically — not a
+    // change to the method's core rhythm everywhere else.
+    final level = _currentLevel!;
+    final isFinalRound = state.currentRound == level.totalRounds - 1;
+    int sec = 15 + (isFinalRound ? level.finalRoundExtraRecoverySec : 0);
     state = state.copyWith(
         cycleStepIndex: 2, phase: SessionPhase.recovery(remaining: Duration(seconds: sec)));
 
@@ -940,61 +974,119 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
   // ==========================================================
   // 2. BOX BREATHING (SNIPER)
   // ==========================================================
-  Future<void> _startBoxBreathing(LevelData level) async {
-    final int loops = level.loopCount ?? 16;
-
-    for (int i = 1; i <= loops; i++) {
-      if (!_isRunning) return;
-      state = state.copyWith(currentRound: 1, totalRounds: 1);
-
-      _updateCustomState("session_inhale", "session_box_inhale_desc", isBig: true, isInhaling: true, duration: const Duration(seconds: 4), index: i, cycleStepIndex: 0);
-      _playBreathSignal(isInhale: true, progress: 1.0);
-      await Future.delayed(const Duration(seconds: 4));
-      if (!_isRunning) return;
-
-      _updateCustomState("session_hold", "session_box_hold_full_desc", isBig: true, isInhaling: true, duration: const Duration(seconds: 4), index: i, cycleStepIndex: 1);
-      // A light cue that the hold phase actually started — every other
-      // "hold" moment in the app signals its start; box breathing's two
-      // holds had none, leaving eyes-closed practice with no feedback that
-      // the phase changed.
-      try { _hapticEngine.playTick(); } catch (_) {}
-      await Future.delayed(const Duration(seconds: 4));
-      if (!_isRunning) return;
-
-      _updateCustomState("session_exhale", "session_box_exhale_desc", isBig: false, isInhaling: false, duration: const Duration(seconds: 4), index: i, cycleStepIndex: 2);
-      _playBreathSignal(isInhale: false, progress: 1.0);
-      await Future.delayed(const Duration(seconds: 4));
-      if (!_isRunning) return;
-
-      _updateCustomState("session_hold", "session_box_hold_empty_desc", isBig: false, isInhaling: false, duration: const Duration(seconds: 4), index: i, cycleStepIndex: 3);
-      try { _hapticEngine.playTick(); } catch (_) {}
-      await Future.delayed(const Duration(seconds: 4));
-    }
-    _finishSession();
-  }
+  Future<void> _startBoxBreathing(LevelData level) => _runPhaseCycle(
+        loops: level.loopCount ?? 16,
+        resetToSingleRound: true,
+        phases: const [
+          _BreathPhase(
+            label: "session_inhale",
+            desc: "session_box_inhale_desc",
+            isBig: true,
+            isInhaling: true,
+            duration: Duration(seconds: 4),
+            signal: true,
+          ),
+          _BreathPhase(
+            label: "session_hold",
+            desc: "session_box_hold_full_desc",
+            isBig: true,
+            isInhaling: true,
+            duration: Duration(seconds: 4),
+            // A light cue that the hold phase actually started — every
+            // other "hold" moment in the app signals its start; box
+            // breathing's two holds had none, leaving eyes-closed practice
+            // with no feedback that the phase changed.
+            haptic: true,
+          ),
+          _BreathPhase(
+            label: "session_exhale",
+            desc: "session_box_exhale_desc",
+            isBig: false,
+            isInhaling: false,
+            duration: Duration(seconds: 4),
+            signal: false,
+          ),
+          _BreathPhase(
+            label: "session_hold",
+            desc: "session_box_hold_empty_desc",
+            isBig: false,
+            isInhaling: false,
+            duration: Duration(seconds: 4),
+            haptic: true,
+          ),
+        ],
+      );
 
   // ==========================================================
   // 3. RELAX 4-7-8
   // ==========================================================
-  Future<void> _startRelax478(LevelData level) async {
-    final int loops = level.loopCount ?? 32;
+  Future<void> _startRelax478(LevelData level) => _runPhaseCycle(
+        loops: level.loopCount ?? 32,
+        phases: const [
+          _BreathPhase(
+            label: "session_inhale",
+            desc: "session_relax_inhale_desc",
+            isBig: true,
+            isInhaling: true,
+            duration: Duration(seconds: 4),
+            signal: true,
+          ),
+          _BreathPhase(
+            label: "session_hold",
+            desc: "session_relax_hold_desc",
+            isBig: true,
+            isInhaling: true,
+            duration: Duration(seconds: 7),
+            haptic: true,
+          ),
+          _BreathPhase(
+            label: "session_exhale",
+            desc: "session_relax_exhale_desc",
+            isBig: false,
+            isInhaling: false,
+            duration: Duration(seconds: 8),
+            signal: false,
+          ),
+        ],
+      );
 
+  /// Shared driver for a fixed breathing pattern (box breathing, 4-7-8)
+  /// repeated for [loops] cycles — each cycle steps through [phases] in
+  /// order, updating the session UI, playing the phase's cue (a breath
+  /// signal or a plain haptic tick), and waiting out its duration.
+  Future<void> _runPhaseCycle({
+    required int loops,
+    required List<_BreathPhase> phases,
+    bool resetToSingleRound = false,
+  }) async {
     for (int i = 1; i <= loops; i++) {
       if (!_isRunning) return;
-
-      _updateCustomState("session_inhale", "session_relax_inhale_desc", isBig: true, isInhaling: true, duration: const Duration(seconds: 4), index: i, cycleStepIndex: 0);
-      _playBreathSignal(isInhale: true, progress: 1.0);
-      await Future.delayed(const Duration(seconds: 4));
-      if (!_isRunning) return;
-
-      _updateCustomState("session_hold", "session_relax_hold_desc", isBig: true, isInhaling: true, duration: const Duration(seconds: 7), index: i, cycleStepIndex: 1);
-      try { _hapticEngine.playTick(); } catch (_) {}
-      await Future.delayed(const Duration(seconds: 7));
-      if (!_isRunning) return;
-
-      _updateCustomState("session_exhale", "session_relax_exhale_desc", isBig: false, isInhaling: false, duration: const Duration(seconds: 8), index: i, cycleStepIndex: 2);
-      _playBreathSignal(isInhale: false, progress: 1.0);
-      await Future.delayed(const Duration(seconds: 8));
+      if (resetToSingleRound) {
+        state = state.copyWith(currentRound: 1, totalRounds: 1);
+      }
+      for (var stepIndex = 0; stepIndex < phases.length; stepIndex++) {
+        final phase = phases[stepIndex];
+        _updateCustomState(
+          phase.label,
+          phase.desc,
+          isBig: phase.isBig,
+          isInhaling: phase.isInhaling,
+          duration: phase.duration,
+          index: i,
+          cycleStepIndex: stepIndex,
+        );
+        if (phase.signal != null) {
+          _playBreathSignal(isInhale: phase.signal!, progress: 1.0);
+        }
+        if (phase.haptic) {
+          try { _hapticEngine.playTick(); } catch (_) {}
+        }
+        await Future.delayed(phase.duration);
+        // Matches the original hand-rolled loops: skipping the check after
+        // a cycle's last phase is fine — the next cycle's top-of-loop check
+        // (or, on the final cycle, nothing at all) covers it.
+        if (stepIndex < phases.length - 1 && !_isRunning) return;
+      }
     }
     _finishSession();
   }
@@ -1200,7 +1292,15 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
     lastFreedivingContractionSummary = (level?.type.isFreedivingTable ?? false)
         ? RoundContractionSummary.fromRounds(contractionsByRound)
         : null;
-    _lastSessionIdCompleter = Completer<int?>();
+    // Captured into a local so the background persist below completes
+    // *this* session's own completer specifically — reading back through
+    // `_lastSessionIdCompleter` (a mutable field) at completion time would
+    // instead complete whatever the *field* currently holds, which a
+    // second session finishing first (before this one's persist resolves)
+    // would have already reassigned. That mixed up which session's id
+    // reached which summary screen's RPE prompt.
+    final completer = Completer<int?>();
+    _lastSessionIdCompleter = completer;
 
     state = state.copyWith(
       phase: const SessionPhase.finished(),
@@ -1211,9 +1311,9 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
     // background so a slow disk write never blocks the transition.
     if (level != null) {
       unawaited(_persistSessionResults(level, duration, totalRounds, retentionLogs,
-          freedivingRoundsCompleted, contractionsByRound));
+          freedivingRoundsCompleted, contractionsByRound, completer));
     } else {
-      _lastSessionIdCompleter.complete(null);
+      completer.complete(null);
     }
 
     if (_plannedSessionId case final id?) {
@@ -1230,6 +1330,7 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
     List<Duration> retentionLogs,
     int freedivingRoundsCompleted,
     List<RoundContraction> contractionsByRound,
+    Completer<int?> completer,
   ) async {
     try {
       final totalRetention =
@@ -1335,8 +1436,8 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
             retentionSec: totalRetention,
             xpEarned: xpResult.xpEarned,
           );
-      if (!_lastSessionIdCompleter.isCompleted) {
-        _lastSessionIdCompleter.complete(sessionId);
+      if (!completer.isCompleted) {
+        completer.complete(sessionId);
       }
 
       if (isFreedivingTable && level.freedivingRounds != null) {
@@ -1357,14 +1458,20 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
               durationSec: duration.inSeconds,
               contractions: contractionsByRound,
             );
-      } else if (level.key == 'freediving_packing' && retentionLogs.isNotEmpty) {
-        // Packing carries the same real risks the audit called out for
-        // CO2/O2 tables (barotrauma, gas embolism, blackout) and has a
-        // genuine breath-hold — it deserves the same safety-signal logging,
-        // even though it's a guidedRoutine, not a table, and has no PB of
-        // its own to log against.
+      } else if (level.recordsSafetyLog && retentionLogs.isNotEmpty) {
+        // Packing/Uddiyana carry the same real risks the audit called out
+        // for CO2/O2 tables (barotrauma, gas embolism, blackout for
+        // packing; a genuine vacuum hold for Uddiyana) — they get the same
+        // safety-signal logging even though they're a guidedRoutine, not a
+        // table, and have no PB of their own to log against. Only the
+        // session's first hold is logged (Uddiyana has one per round,
+        // packing just one total) — this only needs to be *a*
+        // representative sample for the post-session symptom check-in to
+        // attach to, not a complete record of every hold.
         await _ref.read(freedivingRepositoryProvider).logTableSession(
-              tableType: FreedivingTableType.packing,
+              tableType: level.key == 'freediving_packing'
+                  ? FreedivingTableType.packing
+                  : FreedivingTableType.uddiyana,
               pbUsedSec: 0,
               rounds: [
                 BreathHoldRound(
@@ -1381,8 +1488,8 @@ class SessionNotifier extends StateNotifier<SessionState> with WidgetsBindingObs
     } catch (e, st) {
       developer.log('Failed to persist session results',
           name: 'SessionNotifier', error: e, stackTrace: st);
-      if (!_lastSessionIdCompleter.isCompleted) {
-        _lastSessionIdCompleter.complete(null);
+      if (!completer.isCompleted) {
+        completer.complete(null);
       }
     }
   }

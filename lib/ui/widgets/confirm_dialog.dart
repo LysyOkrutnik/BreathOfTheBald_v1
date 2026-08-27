@@ -11,9 +11,11 @@ Future<T?> showGlassDialog<T>(
   BuildContext context, {
   required WidgetBuilder builder,
   double? maxWidth,
+  bool barrierDismissible = true,
 }) {
   return showDialog<T>(
     context: context,
+    barrierDismissible: barrierDismissible,
     barrierColor: Colors.black.withAlpha(160),
     builder: (dialogContext) => BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
